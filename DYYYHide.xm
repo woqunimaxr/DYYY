@@ -25,7 +25,7 @@
 
     if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideComment"]) {
         // 设置视图完全透明，但保留其在视图层级中的位置
-        self.alpha = 0.0;
+        self.alpha = 0.01;
         // 禁止视图接收触摸事件
         self.userInteractionEnabled = NO;
         return;
