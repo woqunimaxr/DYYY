@@ -21,12 +21,19 @@
 
 %hook AWECommentInputBackgroundView
 - (void)layoutSubviews {
-	%orig;
+    %orig;
 
-	if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideComment"]) {
-		[self removeFromSuperview];
-		return;
-	}
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideComment"]) {
+        // 设置视图完全透明，但保留其在视图层级中的位置
+        self.alpha = 0.0;
+        // 禁止视图接收触摸事件
+        self.userInteractionEnabled = NO;
+        return;
+    } else {
+        // 恢复视图可见性和交互（如果之前被隐藏）
+        self.alpha = 1.0;
+        self.userInteractionEnabled = YES;
+    }
 }
 %end
 
