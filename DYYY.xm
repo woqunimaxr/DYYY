@@ -1946,11 +1946,40 @@ static CGFloat rightLabelRightMargin = -1;
 %hook AWEFeedGuideManager
 
 - (bool)enableAutoplay {
-	BOOL featureEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYisEnableAutoPlay"];
-	if (!featureEnabled) {
-		return %orig;
-	}
-	return YES;
+    BOOL featureEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYisEnableAutoPlay"];
+    if (!featureEnabled) {
+        return %orig;
+    }
+    
+    // 判断当前是否为推荐页
+    UIViewController *currentVC = [self currentViewController];
+    if ([currentVC isKindOfClass:NSClassFromString(@"AWERecommendFeedViewController")]) {
+        return YES; // 推荐页强制开启自动播放
+    }
+    
+    return %orig; // 非推荐页使用原逻辑
+}
+
+// 获取当前可见的ViewController
+- (UIViewController *)currentViewController {
+    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+    UIViewController *vc = keyWindow.rootViewController;
+    
+    while (1) {
+        if (vc.presentedViewController) {
+            vc = vc.presentedViewController;
+        } else if ([vc isKindOfClass:[UINavigationController class]]) {
+            UINavigationController *nav = (UINavigationController *)vc;
+            vc = nav.topViewController;
+        } else if ([vc isKindOfClass:[UITabBarController class]]) {
+            UITabBarController *tab = (UITabBarController *)vc;
+            vc = tab.selectedViewController;
+        } else {
+            break;
+        }
+    }
+    
+    return vc;
 }
 
 %end
