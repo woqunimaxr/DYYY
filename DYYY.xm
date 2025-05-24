@@ -1942,15 +1942,23 @@ static CGFloat rightLabelRightMargin = -1;
 }
 
 %end
-
+//自动播放
 %hook AWEFeedGuideManager
 
 - (bool)enableAutoplay {
-	BOOL featureEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYisEnableAutoPlay"];
-	if (!featureEnabled) {
-		return %orig;
-	}
-	return YES;
+    // 获取当前顶部视图控制器
+    UIViewController *topVC = [DYYYManager getActiveTopController];
+    
+    // 判断是否为首页推荐页控制器（根据实际项目中首页控制器类名调整）
+    BOOL isHomeRecommendVC = [topVC isKindOfClass:%c(AWEAwemePlayVideoViewController)];
+    
+    // 仅当在首页推荐页且功能启用时返回YES
+    BOOL featureEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYisEnableAutoPlay"];
+    if (featureEnabled && isHomeRecommendVC) {
+        return YES;
+    }
+    
+    return %orig;
 }
 
 %end
