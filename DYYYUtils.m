@@ -224,7 +224,7 @@ UIViewController *topView(void) {
     }
     
     NSArray *images = [self getImagesFromYYAnimatedImageView:imageView];
-    return 0.1 * (images ? images.count : 10);
+    return 0 * (images ? images.count : 10);
 }
 
 + (BOOL)createGIFWithImages:(NSArray *)images duration:(CGFloat)duration path:(NSString *)path progress:(void(^)(float progress))progressBlock {
