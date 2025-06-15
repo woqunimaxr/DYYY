@@ -224,14 +224,14 @@ UIViewController *topView(void) {
     }
     
     NSArray *images = [self getImagesFromYYAnimatedImageView:imageView];
-    return 0 * (images ? images.count : 10);
+    return 0.1 * (images ? images.count : 10);
 }
 
 + (BOOL)createGIFWithImages:(NSArray *)images duration:(CGFloat)duration path:(NSString *)path progress:(void(^)(float progress))progressBlock {
     if (images.count == 0) return NO;
     
     // 计算每帧延迟时间
-    float frameDuration = duration / images.count;
+    float frameDuration = 0.0;
     
     // 创建GIF文件
     CGImageDestinationRef destination = CGImageDestinationCreateWithURL(
