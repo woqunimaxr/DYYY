@@ -599,6 +599,7 @@ static NSString *DYYYCommitInlineTextInput(AWESettingItemModel *itemModel, NSStr
             return nil;
         }
         value = [NSString stringWithFormat:@"%ld", (long)MAX(number, 0)];
+        [DYYYSettingsHelper setUserDefaults:value forKey:identifier];
     } else if ([identifier isEqualToString:@"DYYYEnableFloatClearButtonSize"]) {
         NSInteger size = value.integerValue;
         if (size < 20 || size > 60) {
