@@ -115,8 +115,7 @@
         self.contentView.frame = frame;
 
         // 初始状态
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
     }
     return self;
 }
@@ -132,13 +131,9 @@
     [window addSubview:self];
 
     __weak __typeof(self) weakSelf = self;
-    [UIView animateWithDuration:0.12
-        animations:^{
-          self.alpha = 1;
-          self.contentView.alpha = 1.0;
-          self.contentView.transform = CGAffineTransformIdentity;
-        }
-        completion:^(BOOL finished) {
+    [DYYYUtils animateModalOverlayViewIn:self
+                            contentView:self.contentView
+                             completion:^(__unused BOOL finished) {
           __strong __typeof(weakSelf) strongSelf = weakSelf;
           if (!strongSelf) {
               return;
@@ -159,21 +154,24 @@
 }
 
 - (void)dismiss {
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
     [self stopCountdownTimer];
 
     __weak __typeof(self) weakSelf = self;
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.alpha = 0;
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-        }
-        completion:^(BOOL finished) {
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                              completion:^(__unused BOOL finished) {
           __strong __typeof(weakSelf) strongSelf = weakSelf;
           if (!strongSelf) {
               return;
           }
           [strongSelf removeFromSuperview];
+          if (completion) {
+              completion();
+          }
         }];
 }
 
@@ -182,11 +180,9 @@
 }
 
 - (void)confirmTapped {
-    [self dismiss];
-    // 延迟执行关闭
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [self dismissWithCompletion:^{
       exit(0);
-    });
+    }];
 }
 
 - (void)startCountdownTimer {

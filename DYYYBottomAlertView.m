@@ -53,22 +53,34 @@
         });
     }
 
+    __block DYYYAlertActionHandler pendingAction = nil;
+    __block BOOL didRunPendingAction = NO;
+    void (^executePendingActionIfNeeded)(void) = ^{
+      if (didRunPendingAction || !pendingAction) {
+          return;
+      }
+      didRunPendingAction = YES;
+      DYYYAlertActionHandler action = pendingAction;
+      pendingAction = nil;
+      action();
+    };
+    void (^schedulePendingActionFallback)(void) = ^{
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), executePendingActionIfNeeded);
+    };
+
     DYYYAlertActionHandler wrappedCancelAction = ^{
-      if (cancelAction)
-          cancelAction();
+      pendingAction = [cancelAction copy];
+      schedulePendingActionFallback();
     };
 
     DYYYAlertActionHandler wrappedCloseActionBlock = ^{
-      if (closeAction) {
-          closeAction();
-      } else {
-          wrappedCancelAction();
-      }
+      pendingAction = closeAction ? [closeAction copy] : [cancelAction copy];
+      schedulePendingActionFallback();
     };
 
     DYYYAlertActionHandler wrappedConfirmAction = ^{
-      if (confirmAction)
-          confirmAction();
+      pendingAction = [confirmAction copy];
+      schedulePendingActionFallback();
     };
 
     vc.closeButtonClickedBlock = wrappedCloseActionBlock;
@@ -91,6 +103,7 @@
     } else {
         [vc setUseCardUIStyle:YES];
     }
+    vc.afterDismissBlock = executePendingActionIfNeeded;
 
     UIViewController *topVC = [DYYYUtils topView];
     if (topVC && [vc respondsToSelector:@selector(presentOnViewController:)] && ![topVC isBeingPresented] && ![topVC isBeingDismissed]) {

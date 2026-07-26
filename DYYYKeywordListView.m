@@ -2,7 +2,7 @@
 #import "DYYYCustomInputView.h"
 #import "DYYYUtils.h"
 
-@interface DYYYKeywordListView ()
+@interface DYYYKeywordListView () <UIGestureRecognizerDelegate>
 
 @property(nonatomic, strong) UIVisualEffectView *blurView;
 @property(nonatomic, strong) UIView *contentView;
@@ -42,16 +42,15 @@
         self.blurView.alpha = isDarkMode ? 0.3 : 0.2;
         [self addSubview:self.blurView];
 
-        // 创建内容视图 - 根据模式设置背景色
-        self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, 350)];
-        CGFloat screenHeight = UIScreen.mainScreen.bounds.size.height;
+        // 创建内容视图 - 为底部操作区预留完整空间，并兼容较矮屏幕
+        CGFloat screenHeight = CGRectGetHeight(self.bounds);
+        CGFloat contentHeight = MIN(430.0, MAX(320.0, screenHeight - 80.0));
+        self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, contentHeight)];
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 3);
         self.originalFrame = self.contentView.frame;
         self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
         [self addSubview:self.contentView];
 
         // 主标题 - 根据模式设置文本颜色
@@ -63,8 +62,13 @@
         self.titleLabel.font = [UIFont systemFontOfSize:18 weight:UIFontWeightMedium];
         [self.contentView addSubview:self.titleLabel];
 
+        CGFloat buttonContainerHeight = 55.5;
+        CGFloat buttonSeparatorY = contentHeight - buttonContainerHeight - 0.5;
+        CGFloat addButtonY = buttonSeparatorY - 50.0;
+        CGFloat tableHeight = MAX(100.0, addButtonY - 64.0);
+
         // 表格视图 - 根据模式设置背景色和分隔线颜色
-        self.keywordsTableView = [[UITableView alloc] initWithFrame:CGRectMake(20, 54, 260, 260)];
+        self.keywordsTableView = [[UITableView alloc] initWithFrame:CGRectMake(20, 54, 260, tableHeight)];
         self.keywordsTableView.delegate = self;
         self.keywordsTableView.dataSource = self;
         self.keywordsTableView.backgroundColor =
@@ -79,7 +83,7 @@
 
         // 添加按钮 - 根据模式设置背景色
         self.addButton = [UIButton buttonWithType:UIButtonTypeSystem];
-        self.addButton.frame = CGRectMake(20, 324, 260, 40);
+        self.addButton.frame = CGRectMake(20, addButtonY, 260, 40);
         self.addButton.backgroundColor =
             isDarkMode ? [UIColor colorWithRed:45 / 255.0 green:45 / 255.0 blue:45 / 255.0 alpha:1.0] : [UIColor colorWithRed:245 / 255.0 green:245 / 255.0 blue:245 / 255.0 alpha:1.0];
         self.addButton.layer.cornerRadius = 8;
@@ -90,13 +94,13 @@
         [self.contentView addSubview:self.addButton];
 
         // 添加内容和按钮之间的分割线 - 根据模式设置颜色
-        UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, 374, 300, 0.5)];
+        UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, buttonSeparatorY, 300, 0.5)];
         contentButtonSeparator.backgroundColor =
             isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
         [self.contentView addSubview:contentButtonSeparator];
 
         // 按钮容器
-        UIView *buttonContainer = [[UIView alloc] initWithFrame:CGRectMake(0, contentButtonSeparator.frame.origin.y + 0.5, 300, 55.5)];
+        UIView *buttonContainer = [[UIView alloc] initWithFrame:CGRectMake(0, contentButtonSeparator.frame.origin.y + 0.5, 300, buttonContainerHeight)];
         [self.contentView addSubview:buttonContainer];
 
         // 取消按钮 - 根据模式设置文本颜色
@@ -127,12 +131,16 @@
         [self.confirmButton addTarget:self action:@selector(confirmTapped) forControlEvents:UIControlEventTouchUpInside];
         [buttonContainer addSubview:self.confirmButton];
 
-        // 更新内容视图高度
-        CGRect frame = self.contentView.frame;
-        frame.size.height = buttonContainer.frame.origin.y + buttonContainer.frame.size.height - 85;
-        self.contentView.frame = frame;
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 2);
         self.originalFrame = self.contentView.frame;
+
+        UITapGestureRecognizer *backgroundTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(backgroundTapped:)];
+        backgroundTap.delegate = self;
+        backgroundTap.cancelsTouchesInView = NO;
+        [self addGestureRecognizer:backgroundTap];
+        self.accessibilityViewIsModal = YES;
+
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
     }
     return self;
 }
@@ -147,23 +155,22 @@
     }
     [window addSubview:self];
 
-    [UIView animateWithDuration:0.12
-                     animations:^{
-                       self.contentView.alpha = 1.0;
-                       self.contentView.transform = CGAffineTransformIdentity;
-                     }];
+    [DYYYUtils animateModalOverlayViewIn:self contentView:self.contentView completion:nil];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-          self.blurView.alpha = 0;
-        }
-        completion:^(BOOL finished) {
-          [self removeFromSuperview];
-        }];
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                              completion:^(__unused BOOL finished) {
+                                [self removeFromSuperview];
+                                if (completion) {
+                                    completion();
+                                }
+                              }];
 }
 
 - (void)addKeywordTapped {
@@ -171,34 +178,66 @@
 
     __weak __typeof(self) weakSelf = self;
     inputView.onConfirm = ^(NSString *text) {
-      if (text.length > 0) {
-          // 使用逗号分隔多个过滤项
-          NSArray *newKeywords = [text componentsSeparatedByString:@","];
-          for (NSString *keyword in newKeywords) {
-              NSString *trimmedKeyword = [keyword stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-              if (trimmedKeyword.length > 0) {
-                  [weakSelf.keywords addObject:trimmedKeyword];
-              }
-          }
-          [weakSelf.keywordsTableView reloadData];
+      __strong __typeof(weakSelf) strongSelf = weakSelf;
+      if (!strongSelf || text.length == 0) {
+          return;
       }
+
+      NSMutableArray<NSString *> *itemsToAdd = [NSMutableArray array];
+      for (NSString *keyword in [text componentsSeparatedByString:@","]) {
+          NSString *trimmedKeyword = [keyword stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+          if (trimmedKeyword.length > 0) {
+              [itemsToAdd addObject:trimmedKeyword];
+          }
+      }
+      if (itemsToAdd.count == 0) {
+          return;
+      }
+
+      NSUInteger firstIndex = strongSelf.keywords.count;
+      [strongSelf.keywords addObjectsFromArray:itemsToAdd];
+      NSMutableArray<NSIndexPath *> *indexPaths = [NSMutableArray arrayWithCapacity:itemsToAdd.count];
+      for (NSUInteger index = 0; index < itemsToAdd.count; index++) {
+          [indexPaths addObject:[NSIndexPath indexPathForRow:(NSInteger)(firstIndex + index) inSection:0]];
+      }
+      [strongSelf.keywordsTableView insertRowsAtIndexPaths:indexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
     };
 
     [inputView show];
 }
 
 - (void)confirmTapped {
-    if (self.onConfirm) {
-        self.onConfirm([self.keywords copy]);
-    }
-    [self dismiss];
+    NSArray *keywords = [self.keywords copy];
+    void (^confirmAction)(NSArray *) = [self.onConfirm copy];
+    [self dismissWithCompletion:^{
+      if (confirmAction) {
+          confirmAction(keywords);
+      }
+    }];
 }
 
 - (void)cancelTapped {
-    if (self.onCancel) {
-        self.onCancel();
+    void (^cancelAction)(void) = [self.onCancel copy];
+    [self dismissWithCompletion:^{
+      if (cancelAction) {
+          cancelAction();
+      }
+    }];
+}
+
+- (void)backgroundTapped:(UITapGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer.state == UIGestureRecognizerStateEnded) {
+        [self cancelTapped];
     }
-    [self dismiss];
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    return ![touch.view isDescendantOfView:self.contentView];
+}
+
+- (BOOL)accessibilityPerformEscape {
+    [self cancelTapped];
+    return YES;
 }
 
 #pragma mark - UITableViewDataSource
@@ -276,7 +315,7 @@
     inputView.onConfirm = ^(NSString *text) {
       if (text.length > 0) {
           weakSelf.keywords[indexPath.row] = text;
-          [weakSelf.keywordsTableView reloadRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationNone];
+          [weakSelf.keywordsTableView reloadRowsAtIndexPaths:@[ indexPath ] withRowAnimation:UITableViewRowAnimationAutomatic];
       }
     };
 
@@ -287,7 +326,13 @@
     NSInteger index = sender.tag;
     if (index < self.keywords.count) {
         [self.keywords removeObjectAtIndex:index];
-        [self.keywordsTableView reloadData];
+        [self.keywordsTableView deleteRowsAtIndexPaths:@[ [NSIndexPath indexPathForRow:index inSection:0] ] withRowAnimation:UITableViewRowAnimationAutomatic];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          for (NSIndexPath *indexPath in self.keywordsTableView.indexPathsForVisibleRows) {
+              UITableViewCell *cell = [self.keywordsTableView cellForRowAtIndexPath:indexPath];
+              cell.accessoryView.tag = indexPath.row;
+          }
+        });
     }
 }
 

@@ -75,8 +75,6 @@ static const int kDYYYButtonsPerRow = 10;
         self.contentView.backgroundColor = DYYYColor([UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0], [UIColor whiteColor], self.darkMode);
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
         [self addSubview:self.contentView];
 
         // 主标题 - 根据模式设置文本颜色
@@ -180,6 +178,7 @@ static const int kDYYYButtonsPerRow = 10;
         self.contentView.frame = frame;
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 2);
         self.originalFrame = self.contentView.frame;
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
     }
     return self;
 }
@@ -407,42 +406,46 @@ static const int kDYYYButtonsPerRow = 10;
     }
     [window addSubview:self];
 
-    [UIView animateWithDuration:0.12
-                     animations:^{
-                       self.contentView.alpha = 1.0;
-                       self.contentView.transform = CGAffineTransformIdentity;
-                     }];
+    [DYYYUtils animateModalOverlayViewIn:self contentView:self.contentView completion:nil];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-          self.blurView.alpha = 0;
-        }
-        completion:^(BOOL finished) {
-          [self removeFromSuperview];
-        }];
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                              completion:^(__unused BOOL finished) {
+                                [self removeFromSuperview];
+                                if (completion) {
+                                    completion();
+                                }
+                              }];
 }
 
 #pragma mark - Button Actions
 
 // 修改确认和取消方法
 - (void)confirmTapped {
-    if (self.onConfirm && self.selectedText.length > 0) {
-        self.onConfirm([self.selectedText copy]);
-    }
+    NSString *selectedText = [self.selectedText copy];
+    void (^confirmAction)(NSString *) = [self.onConfirm copy];
     [self resetSelection];  // 重置选择状态
-    [self dismiss];
+    [self dismissWithCompletion:^{
+      if (confirmAction && selectedText.length > 0) {
+          confirmAction(selectedText);
+      }
+    }];
 }
 
 - (void)cancelTapped {
-    if (self.onCancel) {
-        self.onCancel();
-    }
+    void (^cancelAction)(void) = [self.onCancel copy];
     [self resetSelection];  // 重置选择状态
-    [self dismiss];
+    [self dismissWithCompletion:^{
+      if (cancelAction) {
+          cancelAction();
+      }
+    }];
 }
 
 // 过滤关键词按钮点击处理

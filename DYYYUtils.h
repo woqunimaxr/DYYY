@@ -104,6 +104,33 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (BOOL)usesDouyinLightBackground;
 
+/**
+ * 准备全屏模态浮层的初始状态。调用方完成视图组装后、添加到窗口前调用。
+ */
++ (void)prepareModalOverlayView:(UIView *)overlayView contentView:(UIView *)contentView;
+
+/**
+ * 以统一的淡入和轻微弹性缩放显示全屏模态浮层。
+ */
++ (void)animateModalOverlayViewIn:(UIView *)overlayView
+                      contentView:(UIView *)contentView
+                       completion:(void (^_Nullable)(BOOL finished))completion;
+
+/**
+ * 以统一的淡出和轻微位移动画关闭全屏模态浮层。
+ */
++ (void)animateModalOverlayViewOut:(UIView *)overlayView
+                       contentView:(UIView *)contentView
+                        completion:(void (^_Nullable)(BOOL finished))completion;
+
+/**
+ * 以指定时长关闭全屏模态浮层，适合关闭后需要立即呈现系统控制器的场景。
+ */
++ (void)animateModalOverlayViewOut:(UIView *)overlayView
+                       contentView:(UIView *)contentView
+                          duration:(NSTimeInterval)duration
+                        completion:(void (^_Nullable)(BOOL finished))completion;
+
 #pragma mark - Public File Management (公共文件管理)
 
 /**格式化大小
@@ -170,19 +197,19 @@ NS_ASSUME_NONNULL_BEGIN
 + (CGAffineTransform)transformForImage:(UIImage *)image targetSize:(CGSize)targetSize;
 
 /**
- * 判断图片是否为带 heif/heic URL 的 BDImage
+ * 获取抖音图片对象对应的原始网络资源
  */
-+ (BOOL)isBDImageWithHeifURL:(UIImage *)image;
++ (nullable NSURL *)sourceURLForAnimatedImage:(UIImage *)image;
 
 /**
- * 从 YYAnimatedImageView 提取帧数组
+ * 从动画图片对象提取帧数组
  */
-+ (NSArray *)getImagesFromYYAnimatedImageView:(YYAnimatedImageView *)imageView;
++ (NSArray *)getImagesFromAnimatedImage:(UIImage *)image;
 
 /**
- * 获取 YYAnimatedImageView 动图总时长
+ * 获取动画图片总时长
  */
-+ (CGFloat)getDurationFromYYAnimatedImageView:(YYAnimatedImageView *)imageView;
++ (CGFloat)getDurationFromAnimatedImage:(UIImage *)image;
 
 /**
  * 使用 YYImage 解码动图数据，返回帧图像和总时长

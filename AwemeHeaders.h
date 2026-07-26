@@ -104,7 +104,19 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(copy, nonatomic) NSString *nickname;
 @property(copy, nonatomic) NSString *shortID;
 @property(copy, nonatomic) NSString *signature;
+@property(retain, nonatomic) NSString *userID;
 @property(copy, nonatomic) AWEURLModel *avatarMedium;
+@end
+
+@interface AWEUserService : NSObject
++ (instancetype)sharedService;
+- (BOOL)isLogin;
+- (NSString *)userID;
+- (AWEUserModel *)currentLoginUser;
+@end
+
+@interface AWEUserServiceListener : NSObject
+- (void)didFinishLoginWithUid:(NSString *)userID;
 @end
 
 @interface AWEAnimatedImageVideoInfo : NSObject
@@ -140,6 +152,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign) BOOL isAds;
 @property(nonatomic, assign) BOOL isLive;
 @property(nonatomic, assign) BOOL isLivePhoto;
+@property(nonatomic, assign) BOOL isFamiliarItem;
 @property(nonatomic, assign) BOOL isNewTextMode;  // 文字图文专有属性
 @property(nonatomic, strong) NSString *shareURL;
 @property(nonatomic, strong) id hotSpotLynxCardModel;
@@ -366,9 +379,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)showSharePanel;
 - (void)showDislikeOnVideo;
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1;
-- (void)speedButtonTapped:(id)sender;
-- (void)buttonTouchDown:(id)sender;
-- (void)buttonTouchUp:(id)sender;
 @end
 
 @interface HTSLiveRoomStatsMessage : NSObject
@@ -449,6 +459,23 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @end
 
+// 39.3.0 文案下方的应用引流/下载组件。
+@interface AWEPlayInteractionDiversionBar : UIView
+@end
+
+@interface AWEPlayInteractionNewDiversionBarBottomElement : NSObject
+@property(nonatomic, strong) AWEPlayInteractionDiversionBar *diversionBarView;
+@end
+
+// “抖音精选”使用独立 Lynx 底栏，不经过上面的原生 diversion bar。
+@interface AWEDouYinSelectUGBottomBarController : NSObject
+- (BOOL)canShowBottomBarForAweme:(id)aweme;
+- (void)updateBottomBarWithAweme:(id)aweme updateTiming:(BOOL)updateTiming;
+- (void)bottomBarAddedToContainer:(id)container;
+@property(nonatomic, strong) UIView *appGuideView;
+@property(nonatomic, strong) UIView *appGuideContainer;
+@end
+
 @interface AWEFeedLiveMarkView : UIView
 
 @end
@@ -466,7 +493,27 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEAwemeDetailTableView : UITableView
 @end
 
+@interface _TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel : NSObject
+- (BOOL)isSkipCommentPanelLifecycle;
+- (BOOL)isCommentImageBrowsing;
+@end
+
 @interface AWECommentContainerViewController : UIViewController
+- (_TtC33AWECommentPanelContainerSwiftImpl31CommentViewControllerStateModel *)state;
+@end
+
+@interface _TtC33AWECommentPanelContainerSwiftImpl30CommentContainerInnerViewModel : NSObject
+- (instancetype)init;
+- (void)setTabManager:(id)tabManager;
+- (BOOL)isFeedVideoPlaying;
+- (id)feedVideoPlayerController;
+- (void)pauseVideoIfPlayingWithoutShowingPauseIcon;
+- (void)recoverPlayIfPauseByComment;
+@end
+
+@interface AWECommentMediaFeedParams : NSObject
+@property(nonatomic, copy) BOOL (^panelVideoHasPausedByComment)(void);
+@property(nonatomic, copy) BOOL (^fullPanelShouldPreventPlay)(void);
 @end
 
 @interface AWECommentInputViewController : UIViewController
@@ -746,7 +793,28 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEProfileMixItemCollectionViewCell : UICollectionViewCell
 @end
 
+@interface AWEProfilePublishGuideCollectionViewCell : UICollectionViewCell
+@end
+
 @interface AWEProfileTaskCardStyleListCollectionViewCell : UIView
+@end
+
+@interface AWEUserProfileUGCContributionGuideCollectionViewCell : UICollectionViewCell
+@end
+
+@interface AWEUserProfileUGCContributionGuideEmptyCollectionViewCell : UICollectionViewCell
+@end
+
+@interface AWEUserProfileUGCHeaderContributionGuideBannerSectionCell : UICollectionViewCell
+@end
+
+@interface AWEUserProfileUGCHeaderContributionGuideBannerSectionController : NSObject
+@end
+
+@interface AWEUserProfileUGCHeaderContributionGuideBannerSectionViewModel : NSObject
+@end
+
+@interface AWEUserProfileUGCTaskCardStyleListCollectionViewCell : UICollectionViewCell
 @end
 
 @interface AWEProfileUserDetailComponent : NSObject
@@ -1388,10 +1456,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, weak, readwrite) id currentContext;
 @end
 
+@interface AWEIMCustomMenuComponent : NSObject
+- (void)msg_dismissMenu;
+@end
+
 @interface AWEIMCustomMenuModel : NSObject
 @property(nonatomic, copy, readwrite) NSString *title;
 @property(nonatomic, copy, readwrite) NSString *imageName;
-@property(nonatomic, copy, readwrite) id willPerformMenuActionSelectorBlock;
+@property(nonatomic, copy, readwrite) void (^willPerformMenuActionSelectorBlock)(AWEIMCustomMenuModel *menuItem, NSUInteger actionIndex, BOOL *actionState);
 @property(nonatomic, copy, readwrite) NSString *trackerName;
 @property(nonatomic, assign, readwrite) NSUInteger type;
 @end
@@ -1401,14 +1473,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (id)playVideoViewController;
 - (CGFloat)longPressFastSpeedValue;
 - (void)changeSpeed:(double)speed;
-- (void)handleLongPressLockedDoubleSpeedChanged:(id)arg1 gesture:(UIGestureRecognizer *)gesture;
-- (void)handleLongPressLockedSpeedBegan;
-- (void)handleLongPressLockedDoubleSpeedEnded:(id)arg1 gesture:(UIGestureRecognizer *)gesture;
-- (void)longPressSpeedControlDidChangeSpeed:(double)speed;
-@end
-
-@interface AWEPlayInteractionDPlayerSpeedController : NSObject
-- (id)playVideoViewController;
+- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture;
 @end
 
 @interface AWEPlayInteractionUserAvatarView : UIView
@@ -1699,6 +1764,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface BDImage : UIImage
+@property(nonatomic, strong, readonly) NSURL *bd_webURL;
 - (BOOL)isHDR;
 - (void)setIsHDR:(BOOL)isHDR;
 @end

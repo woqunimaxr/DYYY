@@ -156,6 +156,5 @@
 
 // 动画贴纸和GIF相关方法
 + (void)saveAnimatedSticker:(YYAnimatedImageView *)targetStickerView;
-+ (void)saveHeifSticker:(YYAnimatedImageView *)stickerView;
 
 @end

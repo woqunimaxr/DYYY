@@ -24,8 +24,6 @@
         self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
         [self addSubview:self.contentView];
 
         // 主标题 - 根据模式设置颜色
@@ -103,6 +101,8 @@
         [self.confirmButton addTarget:self action:@selector(confirmTapped) forControlEvents:UIControlEventTouchUpInside];
         [buttonContainer addSubview:self.confirmButton];
 
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
+
         // 注册键盘通知
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
@@ -164,40 +164,46 @@
     }
     [window addSubview:self];
 
-    [UIView animateWithDuration:0.12
-        animations:^{
-          self.contentView.alpha = 1.0;
-          self.contentView.transform = CGAffineTransformIdentity;
-        }
-        completion:^(BOOL finished) {
-          [self.inputTextField becomeFirstResponder];
-        }];
+    [DYYYUtils animateModalOverlayViewIn:self
+                            contentView:self.contentView
+                             completion:^(__unused BOOL finished) {
+                               [self.inputTextField becomeFirstResponder];
+                             }];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-          self.blurView.alpha = 0;
-        }
-        completion:^(BOOL finished) {
-          [self removeFromSuperview];
-        }];
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
+    [self.inputTextField resignFirstResponder];
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                              completion:^(__unused BOOL finished) {
+                                [self removeFromSuperview];
+                                if (completion) {
+                                    completion();
+                                }
+                              }];
 }
 
 - (void)confirmTapped {
-    if (self.onConfirm) {
-        self.onConfirm(self.inputTextField.text);
-    }
-    [self dismiss];
+    NSString *text = [self.inputTextField.text copy] ?: @"";
+    void (^confirmAction)(NSString *) = [self.onConfirm copy];
+    [self dismissWithCompletion:^{
+      if (confirmAction) {
+          confirmAction(text);
+      }
+    }];
 }
 
 - (void)cancelTapped {
-    if (self.onCancel) {
-        self.onCancel();
-    }
-    [self dismiss];
+    void (^cancelAction)(void) = [self.onCancel copy];
+    [self dismissWithCompletion:^{
+      if (cancelAction) {
+          cancelAction();
+      }
+    }];
 }
 
 - (BOOL)textFieldShouldReturn:(UITextField *)textField {

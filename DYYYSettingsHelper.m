@@ -56,12 +56,17 @@
               // 普通依赖：当源设置开启时，目标设置项可用
               @"DYYYEnableDanmuColor" : @[ @"DYYYDanmuColor" ],
               @"DYYYEnableArea" : @[ @"DYYYGeonamesUsername", @"DYYYLabelColor", @"DYYYEnableRandomGradient" ],
-              @"DYYYShowScheduleDisplay" : @[ @"DYYYScheduleStyle", @"DYYYProgressLabelColor", @"DYYYTimelineVerticalPosition" ],
+	              @"DYYYShowScheduleDisplay" : @[ @"DYYYScheduleStyle", @"DYYYProgressLabelColor", @"DYYYTimelineVerticalPosition" ],
               @"DYYYEnableNotificationTransparency" : @[ @"DYYYNotificationCornerRadius" ],
-              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
+	              @"DYYYEnableSheetBlur" : @[ @"DYYYSheetBlurTransparent" ],
+	              @"DYYYMessageShowVideoDateLabel" :
+	                  @[ @"DYYYMessageVideoDateLabelColor", @"DYYYMessageVideoDateFontSize", @"DYYYMessageCustomVideoDateFormat", @"DYYYMessageVideoDateLabelPosition", @"DYYYMessageVideoDateLabelLineCount" ],
+	              @"DYYYMessageOneWayReadReceipt" : @[ @"DYYYMessageReadReceiptTargets" ],
+	              @"DYYYMessageEnableCustomAudioDuration" : @[ @"DYYYMessageCustomAudioSeconds" ],
+	              @"DYYYMessageShowTimeLabel" : @[ @"DYYYMessageTimeLabelColor" ],
               @"DYYYEnableFloatClearButton" : @[
                   @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYRemoveTimeProgress", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar",
-                  @"DYYYHideSpeed", @"DYYYHideClearButtonOnTap", @"DYYYHideChapter", @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"
+                  @"DYYYHideClearButtonOnTap", @"DYYYHideChapter", @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"
               ],
               @"DYYYEnableModernPanel" : @[ @"DYYYLongPressPanelBlur", @"DYYYLongPressPanelDark" ],
               @"DYYYEnableDoubleTapMenu" : @[ @"DYYYDoubleTapMenuSettings" ],
@@ -520,7 +525,73 @@ static NSArray *allSettingsViewControllers(void) {
 
 extern void *kViewModelKey;
 
-static void showIconOptionsDialog(NSString *title, UIImage *previewImage, NSString *saveFilename, void (^onClear)(void), void (^onSelect)(void)) {
+static char kDYYYIconPickerDelegateKey;
+
+static UIImagePickerController *DYYYCreateIconImagePicker(NSString *saveFilename, AWESettingItemModel *item) {
+    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    picker.allowsEditing = NO;
+    picker.mediaTypes = @[ @"public.image" ];
+
+    NSString *targetFilename = [saveFilename copy];
+    __weak AWESettingItemModel *weakItem = item;
+    DYYYImagePickerDelegate *pickerDelegate = [[DYYYImagePickerDelegate alloc] init];
+    pickerDelegate.completionBlock = ^(NSDictionary *info) {
+      NSURL *originalImageURL = info[UIImagePickerControllerImageURL];
+      if (!originalImageURL) {
+          originalImageURL = info[UIImagePickerControllerReferenceURL];
+      }
+      if (!originalImageURL) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [DYYYUtils showToast:@"无法获取选中的图片"];
+          });
+          return;
+      }
+
+      dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
+        NSString *imagePath = [dyyyFolderPath stringByAppendingPathComponent:targetFilename];
+        NSData *imageData = [NSData dataWithContentsOfURL:originalImageURL];
+
+        if (!imageData) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [DYYYUtils showToast:@"读取图片数据失败"];
+            });
+            return;
+        }
+
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        if (![fileManager fileExistsAtPath:dyyyFolderPath]) {
+            [fileManager createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
+        }
+
+        const char *bytes = (const char *)imageData.bytes;
+        BOOL isGIF = (imageData.length >= 6 && (memcmp(bytes, "GIF87a", 6) == 0 || memcmp(bytes, "GIF89a", 6) == 0));
+        if (!isGIF) {
+            UIImage *selectedImage = [UIImage imageWithData:imageData];
+            imageData = selectedImage ? UIImagePNGRepresentation(selectedImage) : nil;
+        }
+
+        BOOL writeSuccess = imageData && [imageData writeToFile:imagePath atomically:YES];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          AWESettingItemModel *strongItem = weakItem;
+          if (writeSuccess) {
+              strongItem.detail = @"已设置";
+              [strongItem refreshCell];
+          } else {
+              [DYYYUtils showToast:@"保存图标失败"];
+          }
+        });
+      });
+    };
+
+    picker.delegate = pickerDelegate;
+    objc_setAssociatedObject(picker, &kDYYYIconPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return picker;
+}
+
+static void showIconOptionsDialog(NSString *title, UIImage *previewImage, void (^onClear)(void), void (^onSelect)(void)) {
     DYYYIconOptionsDialogView *optionsDialog = [[DYYYIconOptionsDialogView alloc] initWithTitle:title previewImage:previewImage];
     optionsDialog.onClear = onClear;
     optionsDialog.onSelect = onSelect;
@@ -551,16 +622,17 @@ static void showIconOptionsDialog(NSString *title, UIImage *previewImage, NSStri
           [[NSFileManager defaultManager] createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
       }
 
-      UIViewController *topVC = topView();
-
       UIImage *previewImage = nil;
-      if (fileExists) {
+      BOOL currentFileExists = [[NSFileManager defaultManager] fileExistsAtPath:imagePath];
+      if (currentFileExists) {
           previewImage = [UIImage imageWithContentsOfFile:imagePath];
       }
 
+      __block UIImagePickerController *preparedPicker = DYYYCreateIconImagePicker(saveFilename, weakItem);
       showIconOptionsDialog(
-          title, previewImage, saveFilename,
+          title, previewImage,
           ^{
+            preparedPicker = nil;
             if ([[NSFileManager defaultManager] fileExistsAtPath:imagePath]) {
                 NSError *error = nil;
                 [[NSFileManager defaultManager] removeItemAtPath:imagePath error:&error];
@@ -571,66 +643,19 @@ static void showIconOptionsDialog(NSString *title, UIImage *previewImage, NSStri
             }
           },
           ^{
-            UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-            picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-            picker.allowsEditing = NO;
-            picker.mediaTypes = @[ @"public.image" ];
-
-            DYYYImagePickerDelegate *pickerDelegate = [[DYYYImagePickerDelegate alloc] init];
-            pickerDelegate.completionBlock = ^(NSDictionary *info) {
-              NSURL *originalImageURL = info[UIImagePickerControllerImageURL];
-              if (!originalImageURL) {
-                  originalImageURL = info[UIImagePickerControllerReferenceURL];
-              }
-              if (!originalImageURL) {
-                  dispatch_async(dispatch_get_main_queue(), ^{
-                    [DYYYUtils showToast:@"无法获取选中的图片"];
-                  });
-                  return;
-              }
-
-              dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
-                NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
-                NSString *imagePath = [dyyyFolderPath stringByAppendingPathComponent:saveFilename];
-                NSData *imageData = [NSData dataWithContentsOfURL:originalImageURL];
-
-                if (!imageData) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                      [DYYYUtils showToast:@"读取图片数据失败"];
-                    });
-                    return;
-                }
-
-                NSFileManager *fileManager = [NSFileManager defaultManager];
-                if (![fileManager fileExistsAtPath:dyyyFolderPath]) {
-                    [fileManager createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
-                }
-
-                const char *bytes = (const char *)imageData.bytes;
-                BOOL isGIF = (imageData.length >= 6 && (memcmp(bytes, "GIF87a", 6) == 0 || memcmp(bytes, "GIF89a", 6) == 0));
-                if (!isGIF) {
-                    UIImage *selectedImage = [UIImage imageWithData:imageData];
-                    imageData = UIImagePNGRepresentation(selectedImage);
-                }
-
-                BOOL writeSuccess = [imageData writeToFile:imagePath atomically:YES];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                  if (writeSuccess) {
-                      weakItem.detail = @"已设置";
-                      [weakItem refreshCell];
-                  } else {
-                      [DYYYUtils showToast:@"保存图标失败"];
-                  }
-                });
-              });
-            };
-
-            static char kDYYYPickerDelegateKey;
-            picker.delegate = pickerDelegate;
-            objc_setAssociatedObject(picker, &kDYYYPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            UIImagePickerController *picker = preparedPicker ?: DYYYCreateIconImagePicker(saveFilename, weakItem);
+            preparedPicker = nil;
+            UIViewController *topVC = topView();
+            if (!topVC) {
+                [DYYYUtils showToast:@"无法打开图片选择器"];
+                return;
+            }
             [topVC presentViewController:picker animated:YES completion:nil];
           });
+
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.28 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [preparedPicker loadViewIfNeeded];
+      });
     };
 
     return item;

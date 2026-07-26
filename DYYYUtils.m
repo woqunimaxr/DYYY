@@ -31,6 +31,7 @@
 
 static const void *kLabelColorStateKey = &kLabelColorStateKey;
 static const NSTimeInterval kDYYYUtilsDefaultFrameDelay = 0.1f;
+static const void *kDYYYModalOverlayDismissingKey = &kDYYYModalOverlayDismissingKey;
 
 static NSString *DYYYRuntimeLogFilePath(void) {
     static NSString *logPath = nil;
@@ -868,6 +869,94 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     return topViewController;
 }
 
++ (void)prepareModalOverlayView:(UIView *)overlayView contentView:(UIView *)contentView {
+    if (!overlayView || !contentView) {
+        return;
+    }
+
+    overlayView.alpha = 0.0;
+    contentView.alpha = 0.0;
+    contentView.transform = UIAccessibilityIsReduceMotionEnabled() ? CGAffineTransformIdentity : CGAffineTransformMake(0.94, 0.0, 0.0, 0.94, 0.0, 8.0);
+    objc_setAssociatedObject(overlayView, kDYYYModalOverlayDismissingKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
++ (void)animateModalOverlayViewIn:(UIView *)overlayView
+                      contentView:(UIView *)contentView
+                       completion:(void (^)(BOOL finished))completion {
+    if (!overlayView || !contentView) {
+        if (completion) {
+            completion(NO);
+        }
+        return;
+    }
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [self animateModalOverlayViewIn:overlayView contentView:contentView completion:completion];
+        });
+        return;
+    }
+
+    overlayView.userInteractionEnabled = YES;
+    objc_setAssociatedObject(overlayView, kDYYYModalOverlayDismissingKey, @NO, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [overlayView.superview layoutIfNeeded];
+
+    NSTimeInterval duration = UIAccessibilityIsReduceMotionEnabled() ? 0.16 : 0.28;
+    [UIView animateWithDuration:duration
+        delay:0.0
+        usingSpringWithDamping:0.88
+        initialSpringVelocity:0.18
+        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction | UIViewAnimationOptionCurveEaseOut
+        animations:^{
+          overlayView.alpha = 1.0;
+          contentView.alpha = 1.0;
+          contentView.transform = CGAffineTransformIdentity;
+        }
+        completion:completion];
+}
+
++ (void)animateModalOverlayViewOut:(UIView *)overlayView
+                       contentView:(UIView *)contentView
+                        completion:(void (^)(BOOL finished))completion {
+    NSTimeInterval duration = UIAccessibilityIsReduceMotionEnabled() ? 0.12 : 0.20;
+    [self animateModalOverlayViewOut:overlayView contentView:contentView duration:duration completion:completion];
+}
+
++ (void)animateModalOverlayViewOut:(UIView *)overlayView
+                       contentView:(UIView *)contentView
+                          duration:(NSTimeInterval)duration
+                        completion:(void (^)(BOOL finished))completion {
+    if (!overlayView || !contentView) {
+        if (completion) {
+            completion(NO);
+        }
+        return;
+    }
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [self animateModalOverlayViewOut:overlayView contentView:contentView duration:duration completion:completion];
+        });
+        return;
+    }
+    if ([objc_getAssociatedObject(overlayView, kDYYYModalOverlayDismissingKey) boolValue]) {
+        return;
+    }
+
+    objc_setAssociatedObject(overlayView, kDYYYModalOverlayDismissingKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    overlayView.userInteractionEnabled = NO;
+    CGAffineTransform exitTransform =
+        UIAccessibilityIsReduceMotionEnabled() ? CGAffineTransformIdentity : CGAffineTransformMake(0.97, 0.0, 0.0, 0.97, 0.0, 6.0);
+    NSTimeInterval effectiveDuration = UIAccessibilityIsReduceMotionEnabled() ? MIN(duration, 0.10) : MAX(duration, 0.0);
+    [UIView animateWithDuration:effectiveDuration
+        delay:0.0
+        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionCurveEaseIn
+        animations:^{
+          overlayView.alpha = 0.0;
+          contentView.alpha = 0.0;
+          contentView.transform = exitTransform;
+        }
+        completion:completion];
+}
+
 + (UIViewController *)firstAvailableViewControllerFromView:(UIView *)view {
     UIResponder *responder = view;
     while ((responder = [responder nextResponder])) {
@@ -1172,7 +1261,7 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
 
     NSDirectoryEnumerator *enumerator = [fileManager enumeratorAtURL:directoryURL
                                           includingPropertiesForKeys:@[ NSURLIsDirectoryKey, NSURLIsSymbolicLinkKey ]
-                                                             options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                             options:0
                                                         errorHandler:^BOOL(NSURL *url, NSError *enumError) {
                                                           NSLog(@"[CacheClean] Error enumerating directory %@: %@", url, enumError);
                                                           return YES;
@@ -1355,40 +1444,73 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     return transform;
 }
 
-+ (BOOL)isBDImageWithHeifURL:(UIImage *)image {
++ (NSURL *)sourceURLForAnimatedImage:(UIImage *)image {
     if (!image) {
-        return NO;
+        return nil;
     }
 
-    if ([NSStringFromClass([image class]) containsString:@"BDImage"]) {
-        if ([image respondsToSelector:@selector(bd_webURL)]) {
-            NSURL *webURL = [image performSelector:@selector(bd_webURL)];
-            if (webURL) {
-                NSString *urlString = webURL.absoluteString;
-                return [urlString containsString:@".heif"] || [urlString containsString:@".heic"];
+    SEL webURLSelector = @selector(bd_webURL);
+    if ([image respondsToSelector:webURLSelector]) {
+        id value = ((id(*)(id, SEL))objc_msgSend)(image, webURLSelector);
+        NSURL *sourceURL = nil;
+        if ([value isKindOfClass:NSURL.class]) {
+            sourceURL = (NSURL *)value;
+        }
+        if ([value isKindOfClass:NSString.class]) {
+            sourceURL = [NSURL URLWithString:(NSString *)value];
+        }
+        NSString *scheme = sourceURL.scheme.lowercaseString;
+        if ([scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"]) {
+            return sourceURL;
+        }
+    }
+
+    return nil;
+}
+
++ (NSArray *)getImagesFromAnimatedImage:(UIImage *)image {
+    if (!image) {
+        return nil;
+    }
+
+    SEL dataSEL = NSSelectorFromString(@"animatedImageData");
+    if ([image respondsToSelector:dataSEL]) {
+        NSData *animatedData = ((NSData *(*)(id, SEL))objc_msgSend)(image, dataSEL);
+        NSArray<UIImage *> *decodedFrames = nil;
+        if ([self framesFromAnimatedData:animatedData scale:image.scale images:&decodedFrames totalDuration:nil] && decodedFrames.count > 0) {
+            return decodedFrames;
+        }
+    }
+
+    SEL frameCountSEL = NSSelectorFromString(@"animatedImageFrameCount");
+    SEL frameAtIndexSEL = NSSelectorFromString(@"animatedImageFrameAtIndex:");
+    if ([image respondsToSelector:frameCountSEL] && [image respondsToSelector:frameAtIndexSEL]) {
+        NSUInteger frameCount = ((NSUInteger(*)(id, SEL))objc_msgSend)(image, frameCountSEL);
+        if (frameCount > 0) {
+            NSMutableArray<UIImage *> *frames = [NSMutableArray arrayWithCapacity:frameCount];
+            for (NSUInteger index = 0; index < frameCount; index++) {
+                UIImage *frame = ((UIImage *(*)(id, SEL, NSUInteger))objc_msgSend)(image, frameAtIndexSEL, index);
+                if (frame.CGImage) {
+                    [frames addObject:frame];
+                }
+            }
+            if (frames.count > 0) {
+                return [frames copy];
             }
         }
     }
 
-    return NO;
-}
+    if (image.images.count > 0) {
+        return image.images;
+    }
 
-+ (NSArray *)getImagesFromYYAnimatedImageView:(YYAnimatedImageView *)imageView {
-    if (!imageView || !imageView.image) {
-        return nil;
-    }
-    if ([imageView.image respondsToSelector:@selector(images)]) {
-        return [imageView.image performSelector:@selector(images)];
-    }
     return nil;
 }
 
-+ (CGFloat)getDurationFromYYAnimatedImageView:(YYAnimatedImageView *)imageView {
-    if (!imageView || !imageView.image) {
++ (CGFloat)getDurationFromAnimatedImage:(UIImage *)image {
+    if (!image) {
         return 0;
     }
-
-    UIImage *image = imageView.image;
 
     if (image.images.count > 0) {
         NSTimeInterval builtInDuration = image.duration;
@@ -1517,8 +1639,11 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     NSURL *fileURL = [NSURL fileURLWithPath:path];
     [[PHPhotoLibrary sharedPhotoLibrary]
         performChanges:^{
+          NSData *gifData = [NSData dataWithContentsOfURL:fileURL];
           PHAssetCreationRequest *request = [PHAssetCreationRequest creationRequestForAsset];
-          [request addResourceWithType:PHAssetResourceTypePhoto fileURL:fileURL options:nil];
+          PHAssetResourceCreationOptions *options = [[PHAssetResourceCreationOptions alloc] init];
+          options.uniformTypeIdentifier = @"com.compuserve.gif";
+          [request addResourceWithType:PHAssetResourceTypePhoto data:gifData options:options];
         }
         completionHandler:^(BOOL success, NSError *_Nullable error) {
           dispatch_async(dispatch_get_main_queue(), ^{

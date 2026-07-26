@@ -37,8 +37,6 @@
         self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
         [self addSubview:self.contentView];
 
         // 标题 - 根据模式调整文本颜色
@@ -119,6 +117,7 @@
         [self.confirmButton setTitleColor:confirmButtonColor forState:UIControlStateNormal];
         [self.confirmButton addTarget:self action:@selector(confirmTapped) forControlEvents:UIControlEventTouchUpInside];
         [self.contentView addSubview:self.confirmButton];
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
     }
     return self;
 }
@@ -133,30 +132,31 @@
     }
     [window addSubview:self];
 
-    [UIView animateWithDuration:0.12
-                     animations:^{
-                       self.contentView.alpha = 1.0;
-                       self.contentView.transform = CGAffineTransformIdentity;
-                     }];
+    [DYYYUtils animateModalOverlayViewIn:self contentView:self.contentView completion:nil];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-          self.blurView.alpha = 0;
-        }
-        completion:^(BOOL finished) {
-          [self removeFromSuperview];
-        }];
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                              completion:^(__unused BOOL finished) {
+                                [self removeFromSuperview];
+                                if (completion) {
+                                    completion();
+                                }
+                              }];
 }
 
 - (void)confirmTapped {
-    if (self.onConfirm) {
-        self.onConfirm();
-    }
-    [self dismiss];
+    void (^confirmAction)(void) = [self.onConfirm copy];
+    [self dismissWithCompletion:^{
+      if (confirmAction) {
+          confirmAction();
+      }
+    }];
 }
 
 @end

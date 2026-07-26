@@ -5,3 +5,14 @@ Aweme
 Makefile.local
 headers
 .vscode/
+build/
+output/
+LatestBuild
+DYYY.mm
+DYYYSettings.mm
+DYYYABTestHook.mm
+DYYYFloatClearButton.mm
+DYYYLongPressPanel.mm
+DYYY.xcodeproj/
+DYYY/
+DYYYDylib/

@@ -4,7 +4,6 @@
  * Dev: @c00kiec00k 曲奇的坏品味🍻
  * iOS Version: 16.5
  */
-#import "DYYYFloatSpeedButton.h"
 #import "DYYYFloatClearButton.h"
 #import "DYYYUtils.h"
 #import <Foundation/Foundation.h>
@@ -23,6 +22,8 @@ BOOL isPureViewVisible = NO;
 BOOL clearButtonForceHidden = NO;
 BOOL isAppActive = YES;
 BOOL dyyyIsPerformingFloatClearOperation = NO;
+BOOL dyyyInteractionViewVisible = NO;
+BOOL dyyyCommentViewVisible = NO;
 
 static NSInteger dyyyClearButtonMutationDepth = 0;
 
@@ -762,11 +763,6 @@ void reloadClearButtonConfiguration(void) {
         self.isElementsHidden = YES;
         self.selected = YES;
 
-        BOOL hideSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideSpeed"];
-        if (hideSpeed) {
-            hideSpeedButton();
-        }
-
         if (selfHide) {
             [self dyyy_applySelfHiddenAlpha];
         }
@@ -779,15 +775,6 @@ void reloadClearButtonConfiguration(void) {
         [self restoreAWEPlayInteractionProgressContainerView];
         [self.hiddenViewsList removeAllObjects];
         self.selected = NO;
-
-        BOOL hideSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideSpeed"];
-        if (hideSpeed) {
-            showSpeedButton();
-            // 退出清屏时主动刷新一次：清屏期间可能发生过 PlayInteractionVC 的 viewDidDisappear，
-            // 导致 dyyyInteractionViewVisible 被置 NO，此时仅靠 showSpeedButton() 无法让倍速按钮重新出现，
-            // 必须重新从当前可见 controller 备份状态。
-            DYYYRefreshFloatSpeedButton();
-        }
 
         // 退出清屏，恢复正常透明度并重启淡出
         self.alpha = self.originalAlpha;
@@ -898,11 +885,6 @@ void reloadClearButtonConfiguration(void) {
 
     if (self.superview) {
         [self.superview bringSubviewToFront:self];
-    }
-
-    BOOL hideSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideSpeed"];
-    if (hideSpeed) {
-        showSpeedButton();
     }
 
     // 切场景/重置状态时，确保按钮自隐藏 alpha 也被恢复，避免按钮一直处于近乎透明的状态

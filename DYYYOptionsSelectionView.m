@@ -181,12 +181,15 @@ static void DYYYApplySelectionSheetThemeToView(UIView *view, BOOL darkMode) {
           NSString *selectedValue = [currentModel title];
           [[NSUserDefaults standardUserDefaults] setObject:selectedValue forKey:preferenceKey];
 
-          if (callback) {
-              callback(selectedValue);
-          }
-
           if (contentSheet) {
-              [contentSheet dismissViewControllerAnimated:YES completion:nil];
+              [contentSheet dismissViewControllerAnimated:YES
+                                                completion:^{
+                                                  if (callback) {
+                                                      callback(selectedValue);
+                                                  }
+                                                }];
+          } else if (callback) {
+              callback(selectedValue);
           }
         }];
     }

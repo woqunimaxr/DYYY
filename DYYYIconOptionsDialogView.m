@@ -23,8 +23,6 @@
         self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
-        self.contentView.alpha = 0;
-        self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
         [self addSubview:self.contentView];
 
         // 标题 - 根据模式设置文本颜色
@@ -94,6 +92,7 @@
         // 添加点击空白处关闭的手势
         UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleBackgroundTap:)];
         [self addGestureRecognizer:tapGesture];
+        [DYYYUtils prepareModalOverlayView:self contentView:self.contentView];
     }
     return self;
 }
@@ -116,37 +115,46 @@
     }
     [window addSubview:self];
 
-    [UIView animateWithDuration:0.12
-                     animations:^{
-                       self.contentView.alpha = 1.0;
-                       self.contentView.transform = CGAffineTransformIdentity;
-                     }];
+    [DYYYUtils animateModalOverlayViewIn:self contentView:self.contentView completion:nil];
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.1
-        animations:^{
-          self.contentView.alpha = 0;
-          self.contentView.transform = CGAffineTransformMakeScale(0.8, 0.8);
-          self.blurView.alpha = 0;
-        }
-        completion:^(BOOL finished) {
-          [self removeFromSuperview];
-        }];
+    [self dismissWithCompletion:nil];
+}
+
+- (void)dismissWithCompletion:(void (^)(void))completion {
+    [self dismissWithDuration:0.20 completion:completion];
+}
+
+- (void)dismissWithDuration:(NSTimeInterval)duration completion:(void (^)(void))completion {
+    [DYYYUtils animateModalOverlayViewOut:self
+                             contentView:self.contentView
+                                duration:duration
+                              completion:^(__unused BOOL finished) {
+                                [self removeFromSuperview];
+                                if (completion) {
+                                    completion();
+                                }
+                              }];
 }
 
 - (void)clearButtonTapped {
-    if (self.onClear) {
-        self.onClear();
-    }
-    [self dismiss];
+    void (^clearAction)(void) = [self.onClear copy];
+    [self dismissWithCompletion:^{
+      if (clearAction) {
+          clearAction();
+      }
+    }];
 }
 
 - (void)selectButtonTapped {
-    if (self.onSelect) {
-        self.onSelect();
-    }
-    [self dismiss];
+    void (^selectAction)(void) = [self.onSelect copy];
+    [self dismissWithDuration:0.12
+                   completion:^{
+      if (selectAction) {
+          selectAction();
+      }
+    }];
 }
 
 @end

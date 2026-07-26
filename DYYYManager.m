@@ -2876,19 +2876,35 @@
         [DYYYUtils showToast:@"无法获取表情视图"];
         return;
     }
+    UIImage *stickerImage = targetStickerView.image;
+    if (!stickerImage) {
+        [DYYYUtils showToast:@"无法获取表情内容"];
+        return;
+    }
+
     [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
       dispatch_async(dispatch_get_main_queue(), ^{
         if (status != PHAuthorizationStatusAuthorized) {
             [DYYYUtils showToast:@"需要相册权限才能保存"];
             return;
         }
-        if ([DYYYUtils isBDImageWithHeifURL:targetStickerView.image]) {
-            [self saveHeifSticker:targetStickerView];
+
+        NSURL *sourceURL = [DYYYUtils sourceURLForAnimatedImage:stickerImage];
+        if (sourceURL) {
+            [self downloadMedia:sourceURL
+                     mediaType:MediaTypeHeic
+                         audio:nil
+                    completion:^(BOOL success) {
+                      if (!success) {
+                          [DYYYUtils showToast:@"表情保存失败"];
+                      }
+                    }];
             return;
         }
+
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-          NSArray *images = [DYYYUtils getImagesFromYYAnimatedImageView:targetStickerView];
-          CGFloat duration = [DYYYUtils getDurationFromYYAnimatedImageView:targetStickerView];
+          NSArray *images = [DYYYUtils getImagesFromAnimatedImage:stickerImage];
+          CGFloat duration = [DYYYUtils getDurationFromAnimatedImage:stickerImage];
           if (!images || images.count == 0) {
               dispatch_async(dispatch_get_main_queue(), ^{
                 [DYYYUtils showToast:@"无法获取表情帧"];
@@ -2918,41 +2934,6 @@
         });
       });
     }];
-}
-+ (void)saveHeifSticker:(YYAnimatedImageView *)stickerView {
-    UIImage *image = stickerView.image;
-    NSURL *heifURL = [image performSelector:@selector(bd_webURL)];
-    if (!heifURL) {
-        [DYYYUtils showToast:@"无法获取表情URL"];
-        return;
-    }
-    [DYYYUtils convertHeicToGif:heifURL
-                     completion:^(NSURL *gifURL, BOOL success) {
-                         if (!success || !gifURL) {
-                             [DYYYUtils showToast:@"表情转换失败"];
-                             return;
-                         }
-                         [[PHPhotoLibrary sharedPhotoLibrary]
-                             performChanges:^{
-                               PHAssetCreationRequest *request = [PHAssetCreationRequest creationRequestForAsset];
-                               [request addResourceWithType:PHAssetResourceTypePhoto fileURL:gifURL options:nil];
-                             }
-                             completionHandler:^(BOOL success, NSError *_Nullable error) {
-                               dispatch_async(dispatch_get_main_queue(), ^{
-                                 if (success) {
-                                     [DYYYToast showSuccessToastWithMessage:@"已保存到相册"];
-                                 } else {
-                                     NSString *errorMsg = error ? error.localizedDescription : @"未知错误";
-                                     [DYYYUtils showToast:[NSString stringWithFormat:@"保存失败: %@", errorMsg]];
-                                 }
-                                 NSError *removeError = nil;
-                                 [[NSFileManager defaultManager] removeItemAtURL:gifURL error:&removeError];
-                                 if (removeError) {
-                                     NSLog(@"删除临时转换文件失败: %@", removeError);
-                                 }
-                               });
-                             }];
-                       }];
 }
 + (void)downloadAndShareCommentAudio:(NSString *)audioContent
                             userName:(NSString *)userName
