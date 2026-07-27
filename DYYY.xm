@@ -634,7 +634,44 @@ static float DYYYConfiguredDefaultPlaybackSpeed(void) {
     return isfinite(speed) && speed > 0.0f ? speed : 1.0f;
 }
 
-static float DYYYNormalPlaybackSpeed(void) {
+static BOOL DYYYNativeLockedPlaybackSpeed(float *speedOut) {
+    Class managerClass = NSClassFromString(@"AFDSpeedManager");
+    if (!managerClass || ![managerClass respondsToSelector:@selector(sharedInstance)]) {
+        return NO;
+    }
+
+    @try {
+        AFDSpeedManager *speedManager = [(id)managerClass sharedInstance];
+        if (![speedManager respondsToSelector:@selector(isLockedSpeedAwemeID)] ||
+            ![speedManager respondsToSelector:@selector(currentSpeed)]) {
+            return NO;
+        }
+
+        NSString *lockedAwemeID = [speedManager isLockedSpeedAwemeID];
+        if (![lockedAwemeID isKindOfClass:[NSString class]] || lockedAwemeID.length == 0) {
+            return NO;
+        }
+
+        NSString *currentAwemeID = dyyyCurrentSpeedAweme.itemID;
+        if (currentAwemeID.length > 0 && ![currentAwemeID isEqualToString:lockedAwemeID]) {
+            return NO;
+        }
+
+        double speed = [speedManager currentSpeed];
+        if (!isfinite(speed) || speed <= 0.0) {
+            return NO;
+        }
+
+        if (speedOut) {
+            *speedOut = (float)speed;
+        }
+        return YES;
+    } @catch (__unused NSException *exception) {
+        return NO;
+    }
+}
+
+static float DYYYUnlockedNormalPlaybackSpeed(void) {
     if (isFloatSpeedButtonEnabled) {
         float speed = getCurrentSpeed();
         if (isfinite(speed) && speed > 0.0f && fabsf(speed - 1.0f) > FLT_EPSILON) {
@@ -642,6 +679,14 @@ static float DYYYNormalPlaybackSpeed(void) {
         }
     }
     return DYYYConfiguredDefaultPlaybackSpeed();
+}
+
+static float DYYYNormalPlaybackSpeed(void) {
+    float lockedSpeed = 0.0f;
+    if (DYYYNativeLockedPlaybackSpeed(&lockedSpeed)) {
+        return lockedSpeed;
+    }
+    return DYYYUnlockedNormalPlaybackSpeed();
 }
 
 static BOOL DYYYShouldHandleSpeedFeatures(void) {
@@ -5871,11 +5916,91 @@ static NSArray<NSString *> *dyyy_qualityRank = nil;
 static char kDYYYLongPressVerticalActiveKey;
 static char kDYYYLongPressVerticalInitialYKey;
 static char kDYYYLongPressVerticalCurrentSpeedKey;
+static __thread BOOL dyyyNativeLockCompletionActive = NO;
 
 static BOOL DYYYLongPressGestureIsEnding(UIGestureRecognizerState state) {
     return state == UIGestureRecognizerStateEnded ||
            state == UIGestureRecognizerStateCancelled ||
            state == UIGestureRecognizerStateFailed;
+}
+
+static double DYYYConfiguredLongPressPlaybackSpeed(void) {
+    id configuredValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYLongPressSpeed"];
+    double configuredSpeed = [configuredValue doubleValue];
+    return configuredValue && isfinite(configuredSpeed) && configuredSpeed > 0.0
+               ? configuredSpeed
+               : 0.0;
+}
+
+static NSString *DYYYFormattedPlaybackSpeed(double speed) {
+    if (fabs(speed - round(speed)) <= 0.0001) {
+        return [NSString stringWithFormat:@"%.0f", speed];
+    }
+    if (fabs(speed * 10.0 - round(speed * 10.0)) <= 0.0001) {
+        return [NSString stringWithFormat:@"%.1f", speed];
+    }
+    return [NSString stringWithFormat:@"%.2f", speed];
+}
+
+static NSString *DYYYAdjustedNativeLongPressSpeedHint(NSString *text) {
+    if (![text isKindOfClass:[NSString class]] || text.length == 0) {
+        return text;
+    }
+
+    double targetSpeed = 0.0;
+    if ([text containsString:@"锁定"]) {
+        targetSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+    } else if ([text containsString:@"取消"]) {
+        float lockedSpeed = 0.0f;
+        targetSpeed = DYYYNativeLockedPlaybackSpeed(&lockedSpeed)
+                          ? lockedSpeed
+                          : DYYYConfiguredLongPressPlaybackSpeed();
+    } else if ([text containsString:@"恢复"]) {
+        targetSpeed = DYYYUnlockedNormalPlaybackSpeed();
+    }
+    if (!isfinite(targetSpeed) || targetSpeed <= 0.0) {
+        return text;
+    }
+
+    NSRange speedUnitRange = [text rangeOfString:@"倍速" options:NSBackwardsSearch];
+    if (speedUnitRange.location == NSNotFound) {
+        return text;
+    }
+
+    NSUInteger numberEnd = speedUnitRange.location;
+    while (numberEnd > 0 &&
+           [[NSCharacterSet whitespaceCharacterSet] characterIsMember:[text characterAtIndex:numberEnd - 1]]) {
+        numberEnd--;
+    }
+
+    NSUInteger numberStart = numberEnd;
+    while (numberStart > 0) {
+        unichar character = [text characterAtIndex:numberStart - 1];
+        if ((character >= '0' && character <= '9') || character == '.') {
+            numberStart--;
+            continue;
+        }
+        break;
+    }
+    if (numberStart == numberEnd) {
+        return text;
+    }
+
+    NSRange numberRange = NSMakeRange(numberStart, numberEnd - numberStart);
+    return [text stringByReplacingCharactersInRange:numberRange
+                                         withString:DYYYFormattedPlaybackSpeed(targetSpeed)];
+}
+
+static void DYYYTriggerNativeLongPressSpeedHaptic(void) {
+    Class hapticClass = NSClassFromString(@"AFDHaptic");
+    if (!hapticClass || ![hapticClass respondsToSelector:@selector(triggerWithType:)]) {
+        return;
+    }
+
+    @try {
+        [(id)hapticClass triggerWithType:5];
+    } @catch (__unused NSException *exception) {
+    }
 }
 
 static void DYYYBeginLongPressVerticalAdjustment(id owner,
@@ -5907,7 +6032,7 @@ static BOOL DYYYUpdateLongPressVerticalAdjustment(id owner,
 
     CGPoint location = [gesture locationInView:gesture.view];
     CGFloat deltaY = location.y - initialYValue.doubleValue;
-    static const CGFloat threshold = 10.0;
+    static const CGFloat threshold = 30.0;
     NSInteger steps = (NSInteger)floor(fabs(deltaY) / threshold);
     if (steps <= 0) {
         return NO;
@@ -5917,11 +6042,13 @@ static BOOL DYYYUpdateLongPressVerticalAdjustment(id owner,
     double direction = deltaY > 0.0 ? 1.0 : -1.0;
     double newSpeed = currentSpeed + direction * 0.25 * steps;
     newSpeed = MAX(0.5, MIN(3.0, newSpeed));
-    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, @(location.y), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (fabs(newSpeed - currentSpeed) <= DBL_EPSILON) {
+        objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, @(location.y), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         return NO;
     }
 
+    CGFloat consumedY = initialYValue.doubleValue + direction * threshold * steps;
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, @(consumedY), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(owner, &kDYYYLongPressVerticalCurrentSpeedKey, @(newSpeed), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     if (updatedSpeed) {
         *updatedSpeed = newSpeed;
@@ -5941,9 +6068,54 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
 %hook AWEDSpeedBasicConfig
 
 - (double)longPressSpeed {
-    id configuredValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYLongPressSpeed"];
-    double configuredSpeed = [configuredValue doubleValue];
-    if (configuredValue && isfinite(configuredSpeed) && configuredSpeed > 0.0) {
+    double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+    if (configuredSpeed > 0.0) {
+        return configuredSpeed;
+    }
+    return %orig;
+}
+
+%end
+
+%hook AFDLongPressFastSpeedHelper
+
++ (double)longPressFastSpeedValue {
+    double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+    if (configuredSpeed > 0.0) {
+        return configuredSpeed;
+    }
+    return %orig;
+}
+
+%end
+
+%hook AWEDSpeedLockSpeedContainer
+
+- (BOOL)canShowLockSpeed {
+    if (DYYYGetBool(@"DYYYEnableLongPressSpeedGesture")) {
+        return NO;
+    }
+    return %orig;
+}
+
+- (void)handleLongPressLockedDoubleSpeedEnded:(CGPoint)point
+                                      gesture:(UILongPressGestureRecognizer *)gesture {
+    BOOL previousCompletionState = dyyyNativeLockCompletionActive;
+    dyyyNativeLockCompletionActive = YES;
+    @try {
+        %orig(point, gesture);
+    } @finally {
+        dyyyNativeLockCompletionActive = previousCompletionState;
+    }
+}
+
+%end
+
+%hook AWEDSpeedPortraitContainer
+
+- (double)longPressSpeedValue {
+    double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+    if (configuredSpeed > 0.0) {
         return configuredSpeed;
     }
     return %orig;
@@ -5952,6 +6124,31 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
 %end
 
 %hook AWEDSpeedCoreContainer
+
+- (void)changeSpeed:(double)speed {
+    BOOL shouldSynchronizeNativeSpeedManager = NO;
+    if (dyyyNativeLockCompletionActive) {
+        if (fabs(speed - 2.0) <= DBL_EPSILON) {
+            double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+            if (configuredSpeed > 0.0) {
+                speed = configuredSpeed;
+                shouldSynchronizeNativeSpeedManager = YES;
+            }
+        } else if (fabs(speed - 1.0) <= DBL_EPSILON) {
+            speed = DYYYUnlockedNormalPlaybackSpeed();
+            shouldSynchronizeNativeSpeedManager = YES;
+        }
+    }
+
+    if (shouldSynchronizeNativeSpeedManager &&
+        [self.speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
+        @try {
+            [self.speedManager setCurrentSpeed:speed];
+        } @catch (__unused NSException *exception) {
+        }
+    }
+    %orig(speed);
+}
 
 - (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture {
     id playerProvider = self.playerProvider;
@@ -5986,6 +6183,19 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
         double updatedSpeed = 0.0;
         if (DYYYUpdateLongPressVerticalAdjustment(self, gesture, &updatedSpeed)) {
             [self changeSpeed:updatedSpeed];
+            AWEDSpeedPortraitContainer *portraitContainer = self.portraitContainer;
+            BOOL nativeViewWillTriggerHaptic = NO;
+            if ([portraitContainer respondsToSelector:@selector(updateFastSpeedView:)]) {
+                @try {
+                    AFDFastSpeedView *speedView = portraitContainer.longPressFastSpeedView;
+                    nativeViewWillTriggerHaptic = speedView && !speedView.superview;
+                    [portraitContainer updateFastSpeedView:updatedSpeed];
+                } @catch (__unused NSException *exception) {
+                }
+            }
+            if (!nativeViewWillTriggerHaptic) {
+                DYYYTriggerNativeLongPressSpeedHaptic();
+            }
         }
     }
 
@@ -6032,9 +6242,8 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
 %hook AWEPlayInteractionSpeedController
 
 - (CGFloat)longPressFastSpeedValue {
-    id configuredValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYLongPressSpeed"];
-    double configuredSpeed = [configuredValue doubleValue];
-    if (configuredValue && isfinite(configuredSpeed) && configuredSpeed > 0.0) {
+    double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+    if (configuredSpeed > 0.0) {
         return (CGFloat)configuredSpeed;
     }
     return %orig;
@@ -15652,6 +15861,11 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
 %end
 
 %hook AFDFastSpeedView
+
+- (void)updateSpeedLockBottomWithText:(NSString *)text Type:(NSInteger)type {
+    %orig(DYYYAdjustedNativeLongPressSpeedHint(text), type);
+}
+
 - (void)layoutSubviews {
     %orig;
 

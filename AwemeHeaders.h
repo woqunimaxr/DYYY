@@ -536,6 +536,12 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AFDFastSpeedView : UIView
+- (void)updateSpeedLockBottomWithText:(NSString *)text Type:(NSInteger)type;
+- (void)updateSpeedImageViewWithSpeed:(double)speed;
+@end
+
+@interface AFDHaptic : NSObject
++ (void)triggerWithType:(NSInteger)type;
 @end
 
 @interface AWEAwemeOfflineBottomView : UIView
@@ -1492,10 +1498,35 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign) double lockDistanceThreshold;
 @end
 
+@interface AFDLongPressFastSpeedHelper : NSObject
++ (double)longPressFastSpeedValue;
+@end
+
+@interface AFDSpeedManager : NSObject
++ (instancetype)sharedInstance;
+- (double)currentSpeed;
+- (void)setCurrentSpeed:(double)speed;
+- (NSString *)isLockedSpeedAwemeID;
+@end
+
+@interface AWEDSpeedLockSpeedContainer : NSObject
+- (BOOL)canShowLockSpeed;
+- (void)handleLongPressLockedDoubleSpeedEnded:(CGPoint)point
+                                      gesture:(UILongPressGestureRecognizer *)gesture;
+@end
+
+@interface AWEDSpeedPortraitContainer : NSObject
+@property(nonatomic, strong) AFDFastSpeedView *longPressFastSpeedView;
+- (double)longPressSpeedValue;
+- (void)updateFastSpeedView:(double)speed;
+@end
+
 @interface AWEDSpeedCoreContainer : NSObject
 @property(nonatomic, assign) BOOL isInLongPressFastSpeed;
 @property(nonatomic, assign) double speedBeforeLongPress;
 @property(nonatomic, strong) id playerProvider;
+@property(nonatomic, strong) AFDSpeedManager *speedManager;
+@property(nonatomic, strong) AWEDSpeedPortraitContainer *portraitContainer;
 - (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture;
 - (void)changeSpeed:(double)speed;
 - (double)longPressFastSpeedValue;
