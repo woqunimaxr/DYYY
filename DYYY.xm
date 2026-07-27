@@ -622,22 +622,88 @@ static UIImage *DYYYLoadCustomImage(NSString *fileName, CGSize targetSize) {
 
 static __weak AWEPlayInteractionViewController *dyyyActivePlaybackInteractionController = nil;
 static __weak UIViewController *dyyyActiveSpeedPlayerViewController = nil;
+static __weak AWEDPlayerSpeedController *dyyyActiveDPlayerSpeedController = nil;
+static __weak AWEDPlayerSpeedController *dyyyLongPressDPlayerSpeedController = nil;
 static __weak AWEAwemeModel *dyyyCurrentSpeedAweme = nil;
-static NSUInteger dyyyDefaultPlaybackSpeedGeneration = 0;
-static BOOL dyyyNativeLongPressActive = NO;
 static NSString *dyyyCommittedSpeedAwemeIdentifier = nil;
 static NSHashTable<_TtC33AWECommentPanelContainerSwiftImpl30CommentContainerInnerViewModel *> *dyyyCommentPauseViewModels = nil;
 static __weak _TtC33AWECommentPanelContainerSwiftImpl30CommentContainerInnerViewModel *dyyyLastCommentPauseViewModel = nil;
 
-static BOOL DYYYShouldApplyDefaultPlaybackSpeed(void) {
-    if (!DYYYGetBool(@"DYYYUserAgreementAccepted")) {
-        return NO;
+static float DYYYConfiguredDefaultPlaybackSpeed(void) {
+    float speed = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYDefaultSpeed"];
+    return isfinite(speed) && speed > 0.0f ? speed : 1.0f;
+}
+
+static float DYYYNormalPlaybackSpeed(void) {
+    if (isFloatSpeedButtonEnabled) {
+        float speed = getCurrentSpeed();
+        if (isfinite(speed) && speed > 0.0f && fabsf(speed - 1.0f) > FLT_EPSILON) {
+            return speed;
+        }
     }
+    return DYYYConfiguredDefaultPlaybackSpeed();
+}
+
+static BOOL DYYYShouldHandleSpeedFeatures(void) {
     if (isFloatSpeedButtonEnabled) {
         return YES;
     }
-    double defaultSpeed = [[NSUserDefaults standardUserDefaults] doubleForKey:@"DYYYDefaultSpeed"];
-    return isfinite(defaultSpeed) && defaultSpeed > 0.0 && fabs(defaultSpeed - 1.0) > DBL_EPSILON;
+
+    float defaultSpeed = DYYYConfiguredDefaultPlaybackSpeed();
+    return fabsf(defaultSpeed - 1.0f) > FLT_EPSILON;
+}
+
+static BOOL DYYYSpeedMethodMatchesEncoding(id object, SEL selector, const char *expectedEncoding) {
+    if (!object || !selector || !expectedEncoding) {
+        return NO;
+    }
+    Method method = class_getInstanceMethod(object_getClass(object), selector);
+    const char *actualEncoding = method ? method_getTypeEncoding(method) : NULL;
+    return actualEncoding && strcmp(actualEncoding, expectedEncoding) == 0;
+}
+
+static BOOL DYYYIsVerifiedNativeDPlayerSpeedController(id object) {
+    return object &&
+           DYYYSpeedMethodMatchesEncoding(object, @selector(playbackRate), "f16@0:8") &&
+           DYYYSpeedMethodMatchesEncoding(object, @selector(setPlaybackRate:), "v20@0:8f16") &&
+           DYYYSpeedMethodMatchesEncoding(object, @selector(isInLongPressSpeed), "B16@0:8");
+}
+
+static BOOL DYYYNativeDPlayerLongPressIsActive(AWEDPlayerSpeedController *speedController) {
+    if (!DYYYIsVerifiedNativeDPlayerSpeedController(speedController)) {
+        return NO;
+    }
+    @try {
+        return [speedController isInLongPressSpeed];
+    } @catch (__unused NSException *exception) {
+        return NO;
+    }
+}
+
+static BOOL DYYYAnyNativeDPlayerLongPressIsActive(void) {
+    return DYYYNativeDPlayerLongPressIsActive(dyyyLongPressDPlayerSpeedController) ||
+           DYYYNativeDPlayerLongPressIsActive(dyyyActiveDPlayerSpeedController);
+}
+
+static BOOL DYYYApplyPlaybackRateToNativeDPlayer(AWEDPlayerSpeedController *speedController, double speed) {
+    if (!DYYYIsVerifiedNativeDPlayerSpeedController(speedController) ||
+        !isfinite(speed) ||
+        speed <= 0.0 ||
+        DYYYAnyNativeDPlayerLongPressIsActive() ||
+        DYYYNativeDPlayerLongPressIsActive(speedController)) {
+        return NO;
+    }
+
+    @try {
+        dyyyActiveDPlayerSpeedController = speedController;
+        [speedController setPlaybackRate:(float)speed];
+        return YES;
+    } @catch (NSException *exception) {
+        NSLog(@"[DYYY][Speed397] native setPlaybackRate failed on %@: %@",
+              NSStringFromClass([speedController class]),
+              exception.reason);
+        return NO;
+    }
 }
 
 static CGFloat DYYYViewControllerVisibilityScore(UIViewController *viewController) {
@@ -697,20 +763,6 @@ static AWEAwemeModel *DYYYSpeedAwemeFromObject(id object) {
         }
     }
     return nil;
-}
-
-static double DYYYDefaultPlaybackSpeed(void) {
-    if (isFloatSpeedButtonEnabled) {
-        double quickSpeed = getCurrentSpeed();
-        if (isfinite(quickSpeed) && quickSpeed > 0.0) {
-            return quickSpeed;
-        }
-    }
-    double defaultSpeed = [[NSUserDefaults standardUserDefaults] doubleForKey:@"DYYYDefaultSpeed"];
-    if (isfinite(defaultSpeed) && defaultSpeed > 0.0) {
-        return defaultSpeed;
-    }
-    return 1.0;
 }
 
 static NSArray<UIViewController *> *DYYYViewControllersInHierarchy(UIViewController *rootViewController) {
@@ -883,8 +935,43 @@ static id DYYYBestVisiblePlaybackRateTarget(id preferredTarget) {
     return bestPlayerViewController;
 }
 
+static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromFastSpeedController(id fastSpeedController) {
+    if (DYYYIsVerifiedNativeDPlayerSpeedController(fastSpeedController)) {
+        return (AWEDPlayerSpeedController *)fastSpeedController;
+    }
+    if (!fastSpeedController ||
+        !DYYYSpeedMethodMatchesEncoding(fastSpeedController, @selector(dPlayerSpeed), "@16@0:8")) {
+        return nil;
+    }
+
+    @try {
+        id candidate = [(AWEPlayInteractionDPlayerSpeedController *)fastSpeedController dPlayerSpeed];
+        return DYYYIsVerifiedNativeDPlayerSpeedController(candidate) ? (AWEDPlayerSpeedController *)candidate : nil;
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
+static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractionController(AWEPlayInteractionViewController *interactionController) {
+    if (!interactionController || ![interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
+        return nil;
+    }
+
+    Protocol *speedControllerProtocol = NSProtocolFromString(@"AWEFastSpeedControllerProtocol");
+    if (!speedControllerProtocol) {
+        return nil;
+    }
+
+    @try {
+        id fastSpeedController = [interactionController controllerByProtocol:speedControllerProtocol];
+        return DYYYNativeDPlayerSpeedControllerFromFastSpeedController(fastSpeedController);
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
+}
+
 static BOOL DYYYSetPlaybackRateOnTarget(id target, double speed) {
-    if (dyyyNativeLongPressActive ||
+    if (DYYYAnyNativeDPlayerLongPressIsActive() ||
         !target ||
         ![target respondsToSelector:@selector(setVideoControllerPlaybackRate:)]) {
         return NO;
@@ -903,7 +990,7 @@ static BOOL DYYYSetPlaybackRateOnTarget(id target, double speed) {
 }
 
 static BOOL DYYYApplyPlaybackSpeedThroughInteractionController(AWEPlayInteractionViewController *interactionController, double speed) {
-    if (!isfinite(speed) || speed <= 0.0 || dyyyNativeLongPressActive) {
+    if (!isfinite(speed) || speed <= 0.0) {
         return NO;
     }
 
@@ -913,6 +1000,14 @@ static BOOL DYYYApplyPlaybackSpeedThroughInteractionController(AWEPlayInteractio
         if (speedControllerProtocol && [interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
             @try {
                 id speedController = [interactionController controllerByProtocol:speedControllerProtocol];
+                AWEDPlayerSpeedController *nativeDPlayerSpeedController =
+                    DYYYNativeDPlayerSpeedControllerFromFastSpeedController(speedController);
+                if (nativeDPlayerSpeedController) {
+                    if (DYYYNativeDPlayerLongPressIsActive(nativeDPlayerSpeedController)) {
+                        return NO;
+                    }
+                    return DYYYApplyPlaybackRateToNativeDPlayer(nativeDPlayerSpeedController, speed);
+                }
                 if ([speedController respondsToSelector:@selector(playVideoViewController)] &&
                     DYYYSetPlaybackRateOnTarget([(AWEPlayInteractionSpeedController *)speedController playVideoViewController], speed)) {
                     return YES;
@@ -928,37 +1023,78 @@ static BOOL DYYYApplyPlaybackSpeedThroughInteractionController(AWEPlayInteractio
     return DYYYSetPlaybackRateOnTarget(DYYYBestVisiblePlaybackRateTarget(nil), speed);
 }
 
-static BOOL DYYYApplyDefaultPlaybackSpeedThroughInteractionController(AWEPlayInteractionViewController *interactionController) {
-    if (!DYYYShouldApplyDefaultPlaybackSpeed() || dyyyNativeLongPressActive) {
-        return NO;
-    }
-    return DYYYApplyPlaybackSpeedThroughInteractionController(interactionController, DYYYDefaultPlaybackSpeed());
-}
-
-static void DYYYBindAndApplyDefaultPlaybackSpeed(void) {
-    if (!DYYYShouldApplyDefaultPlaybackSpeed() || dyyyNativeLongPressActive) {
+static void DYYYApplyNormalPlaybackSpeedToNativeDPlayer(AWEDPlayerSpeedController *speedController) {
+    if (!DYYYShouldHandleSpeedFeatures() || !speedController) {
         return;
     }
-    AWEPlayInteractionViewController *currentController =
-        DYYYResolvePlaybackInteractionController(dyyyActivePlaybackInteractionController, dyyyCurrentSpeedAweme, YES);
-    if (currentController) {
-        dyyyActivePlaybackInteractionController = currentController;
+
+    void (^applyBlock)(void) = ^{
+      DYYYApplyPlaybackRateToNativeDPlayer(speedController, DYYYNormalPlaybackSpeed());
+    };
+    if ([NSThread isMainThread]) {
+        applyBlock();
+    } else {
+        __weak AWEDPlayerSpeedController *weakSpeedController = speedController;
+        dispatch_async(dispatch_get_main_queue(), ^{
+          DYYYApplyPlaybackRateToNativeDPlayer(weakSpeedController, DYYYNormalPlaybackSpeed());
+        });
     }
-    DYYYApplyDefaultPlaybackSpeedThroughInteractionController(currentController);
 }
 
-static void DYYYScheduleDefaultPlaybackSpeedRestore(void) {
-    NSUInteger generation = dyyyDefaultPlaybackSpeedGeneration;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if (generation == dyyyDefaultPlaybackSpeedGeneration && !dyyyNativeLongPressActive) {
-          DYYYBindAndApplyDefaultPlaybackSpeed();
+static BOOL DYYYHandleNormalPlaybackSpeedWithMatchingNativeController(AWEDPlayerSpeedController *speedController,
+                                                                      id playerViewController) {
+    if (!DYYYIsVerifiedNativeDPlayerSpeedController(speedController) || !playerViewController) {
+        return NO;
+    }
+
+    id nativePlayerViewController = nil;
+    @try {
+        nativePlayerViewController = [speedController playerViewController];
+    } @catch (__unused NSException *exception) {
+    }
+    if (nativePlayerViewController != playerViewController) {
+        return NO;
+    }
+
+    DYYYApplyPlaybackRateToNativeDPlayer(speedController, DYYYNormalPlaybackSpeed());
+    return YES;
+}
+
+static void DYYYApplyNormalPlaybackSpeedToPlayerFallback(id playerViewController) {
+    if (!DYYYShouldHandleSpeedFeatures() || !playerViewController) {
+        return;
+    }
+
+    void (^applyBlock)(void) = ^{
+      AWEPlayInteractionViewController *visibleInteractionController =
+          DYYYResolvePlaybackInteractionController(dyyyActivePlaybackInteractionController,
+                                                   dyyyCurrentSpeedAweme,
+                                                   YES);
+      AWEDPlayerSpeedController *visibleNativeSpeedController =
+          DYYYNativeDPlayerSpeedControllerFromInteractionController(visibleInteractionController);
+      if (DYYYHandleNormalPlaybackSpeedWithMatchingNativeController(visibleNativeSpeedController,
+                                                                    playerViewController) ||
+          DYYYHandleNormalPlaybackSpeedWithMatchingNativeController(dyyyActiveDPlayerSpeedController,
+                                                                    playerViewController)) {
+          return;
       }
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      if (generation == dyyyDefaultPlaybackSpeedGeneration && !dyyyNativeLongPressActive) {
-          DYYYBindAndApplyDefaultPlaybackSpeed();
+      if (DYYYAnyNativeDPlayerLongPressIsActive()) {
+          return;
       }
-    });
+      DYYYSetPlaybackRateOnTarget(playerViewController, DYYYNormalPlaybackSpeed());
+    };
+
+    if ([NSThread isMainThread]) {
+        applyBlock();
+    } else {
+        __weak id weakPlayerViewController = playerViewController;
+        dispatch_async(dispatch_get_main_queue(), ^{
+          id strongPlayerViewController = weakPlayerViewController;
+          if (strongPlayerViewController) {
+              DYYYApplyNormalPlaybackSpeedToPlayerFallback(strongPlayerViewController);
+          }
+        });
+    }
 }
 
 static NSObject *DYYYCommentPauseViewModelRegistryLock(void) {
@@ -1101,42 +1237,6 @@ static BOOL DYYYCommentPauseOwnsPlayback(void) {
     return DYYYGetBool(@"DYYYCommentPausePlayback") && dyyyLastCommentPauseViewModel != nil;
 }
 
-static void DYYYApplyDefaultPlaybackSpeedToPlayer(id playerViewController) {
-    if (!DYYYShouldApplyDefaultPlaybackSpeed() ||
-        dyyyNativeLongPressActive ||
-        !playerViewController ||
-        ![playerViewController respondsToSelector:@selector(setVideoControllerPlaybackRate:)]) {
-        return;
-    }
-
-    __weak id weakPlayerViewController = playerViewController;
-    void (^applyBlock)(void) = ^{
-      id strongPlayerViewController = weakPlayerViewController;
-      if (!strongPlayerViewController ||
-          !DYYYShouldApplyDefaultPlaybackSpeed() ||
-          dyyyNativeLongPressActive) {
-          return;
-      }
-      DYYYSetPlaybackRateOnTarget(strongPlayerViewController, DYYYDefaultPlaybackSpeed());
-    };
-    if ([NSThread isMainThread]) {
-        applyBlock();
-    } else {
-        dispatch_async(dispatch_get_main_queue(), applyBlock);
-    }
-}
-
-static void DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(id playerViewController) {
-    DYYYApplyDefaultPlaybackSpeedToPlayer(playerViewController);
-    NSUInteger generation = dyyyDefaultPlaybackSpeedGeneration;
-    __weak id weakPlayerViewController = playerViewController;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      if (generation == dyyyDefaultPlaybackSpeedGeneration && !dyyyNativeLongPressActive) {
-          DYYYApplyDefaultPlaybackSpeedToPlayer(weakPlayerViewController);
-      }
-    });
-}
-
 static void DYYYHandleCurrentAwemeChanged(id aweme) {
     if (![NSThread isMainThread]) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -1148,8 +1248,6 @@ static void DYYYHandleCurrentAwemeChanged(id aweme) {
     AWEAwemeModel *currentAweme = DYYYSpeedAwemeFromObject(aweme);
     if (currentAweme) {
         dyyyCurrentSpeedAweme = currentAweme;
-        DYYYBindAndApplyDefaultPlaybackSpeed();
-        DYYYScheduleDefaultPlaybackSpeedRestore();
     }
 }
 
@@ -1178,16 +1276,12 @@ static void DYYYHandleCommittedSpeedAwemeChanged(id aweme) {
     }
 
     if (isNewCommittedAweme) {
-        dyyyDefaultPlaybackSpeedGeneration++;
         if (isFloatSpeedButtonEnabled &&
             [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"]) {
             setCurrentSpeedIndex(0);
             updateSpeedButtonUI();
         }
     }
-
-    DYYYBindAndApplyDefaultPlaybackSpeed();
-    DYYYScheduleDefaultPlaybackSpeedRestore();
 }
 
 static void DYYYScheduleCurrentAwemeTracking(id source, id fallbackAweme) {
@@ -5774,121 +5868,199 @@ static NSArray<NSString *> *dyyy_qualityRank = nil;
 
 %end
 
-%hook AWEPlayInteractionSpeedController
+static char kDYYYLongPressVerticalActiveKey;
+static char kDYYYLongPressVerticalInitialYKey;
+static char kDYYYLongPressVerticalCurrentSpeedKey;
 
-static CGFloat currentLongPressSpeed = 0;
-static CGFloat initialTouchX = 0;
-static BOOL isGestureActive = NO;
-
-- (CGFloat)longPressFastSpeedValue {
-    float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
-    if (longPressSpeed == 0) {
-        longPressSpeed = 2.0;
-    }
-    return longPressSpeed;
+static BOOL DYYYLongPressGestureIsEnding(UIGestureRecognizerState state) {
+    return state == UIGestureRecognizerStateEnded ||
+           state == UIGestureRecognizerStateCancelled ||
+           state == UIGestureRecognizerStateFailed;
 }
 
-- (void)changeSpeed:(double)speed {
-    float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
-
-    if (isGestureActive && currentLongPressSpeed > 0) {
-        %orig(currentLongPressSpeed);
+static void DYYYBeginLongPressVerticalAdjustment(id owner,
+                                                 UILongPressGestureRecognizer *gesture,
+                                                 double initialSpeed) {
+    if (!owner || !gesture || !isfinite(initialSpeed) || initialSpeed <= 0.0) {
         return;
     }
-
-    if (speed == 2.0 && longPressSpeed != 0 && longPressSpeed != 2.0) {
-        %orig(longPressSpeed);
-        return;
-    }
-
-    %orig(speed);
-}
-
-- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture {
-    BOOL enableSpeedGesture = DYYYGetBool(@"DYYYEnableLongPressSpeedGesture");
     CGPoint location = [gesture locationInView:gesture.view];
-    static CGFloat initialTouchY = 0;
-    BOOL isBeginning = gesture.state == UIGestureRecognizerStateBegan;
-    BOOL isEnding = gesture.state == UIGestureRecognizerStateEnded ||
-                    gesture.state == UIGestureRecognizerStateCancelled ||
-                    gesture.state == UIGestureRecognizerStateFailed;
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalActiveKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, @(location.y), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalCurrentSpeedKey, @(initialSpeed), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
 
-    if (isBeginning) {
-        dyyyNativeLongPressActive = YES;
-        dyyyDefaultPlaybackSpeedGeneration++;
+static BOOL DYYYUpdateLongPressVerticalAdjustment(id owner,
+                                                  UILongPressGestureRecognizer *gesture,
+                                                  double *updatedSpeed) {
+    if (!owner ||
+        !gesture ||
+        ![objc_getAssociatedObject(owner, &kDYYYLongPressVerticalActiveKey) boolValue]) {
+        return NO;
     }
-    if (isEnding) {
-        isGestureActive = NO;
-        currentLongPressSpeed = 0;
-        initialTouchY = 0;
+
+    NSNumber *initialYValue = objc_getAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey);
+    NSNumber *currentSpeedValue = objc_getAssociatedObject(owner, &kDYYYLongPressVerticalCurrentSpeedKey);
+    if (!initialYValue || !currentSpeedValue) {
+        return NO;
+    }
+
+    CGPoint location = [gesture locationInView:gesture.view];
+    CGFloat deltaY = location.y - initialYValue.doubleValue;
+    static const CGFloat threshold = 10.0;
+    NSInteger steps = (NSInteger)floor(fabs(deltaY) / threshold);
+    if (steps <= 0) {
+        return NO;
+    }
+
+    double currentSpeed = currentSpeedValue.doubleValue;
+    double direction = deltaY > 0.0 ? 1.0 : -1.0;
+    double newSpeed = currentSpeed + direction * 0.25 * steps;
+    newSpeed = MAX(0.5, MIN(3.0, newSpeed));
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, @(location.y), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (fabs(newSpeed - currentSpeed) <= DBL_EPSILON) {
+        return NO;
+    }
+
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalCurrentSpeedKey, @(newSpeed), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if (updatedSpeed) {
+        *updatedSpeed = newSpeed;
+    }
+    return YES;
+}
+
+static void DYYYEndLongPressVerticalAdjustment(id owner) {
+    if (!owner) {
+        return;
+    }
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalActiveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalInitialYKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(owner, &kDYYYLongPressVerticalCurrentSpeedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+%hook AWEDSpeedBasicConfig
+
+- (double)longPressSpeed {
+    id configuredValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYLongPressSpeed"];
+    double configuredSpeed = [configuredValue doubleValue];
+    if (configuredValue && isfinite(configuredSpeed) && configuredSpeed > 0.0) {
+        return configuredSpeed;
+    }
+    return %orig;
+}
+
+%end
+
+%hook AWEDSpeedCoreContainer
+
+- (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture {
+    id playerProvider = self.playerProvider;
+    if (DYYYIsVerifiedNativeDPlayerSpeedController(playerProvider)) {
+        dyyyActiveDPlayerSpeedController = (AWEDPlayerSpeedController *)playerProvider;
+    }
+
+    UIGestureRecognizerState state = gesture.state;
+    BOOL verticalAdjustmentEnabled = DYYYGetBool(@"DYYYEnableLongPressSpeedGesture");
+    if (verticalAdjustmentEnabled && state == UIGestureRecognizerStateBegan) {
+        DYYYBeginLongPressVerticalAdjustment(self, gesture, [self longPressFastSpeedValue]);
     }
 
     %orig(gesture);
-    if (isEnding) {
-        dyyyNativeLongPressActive = NO;
-        dyyyDefaultPlaybackSpeedGeneration++;
+
+    if ((state == UIGestureRecognizerStateBegan || state == UIGestureRecognizerStateChanged) &&
+        self.isInLongPressFastSpeed &&
+        DYYYIsVerifiedNativeDPlayerSpeedController(playerProvider)) {
+        dyyyLongPressDPlayerSpeedController = (AWEDPlayerSpeedController *)playerProvider;
     }
 
-    if (!enableSpeedGesture) {
+    if (verticalAdjustmentEnabled &&
+        state == UIGestureRecognizerStateBegan &&
+        !self.isInLongPressFastSpeed) {
+        DYYYEndLongPressVerticalAdjustment(self);
         return;
     }
 
-    if (isBeginning) {
-        initialTouchY = location.y;
-        isGestureActive = YES;
-
-        float longPressSpeed = DYYYGetFloat(@"DYYYLongPressSpeed");
-        if (longPressSpeed == 0) {
-            longPressSpeed = 2.0;
+    if (verticalAdjustmentEnabled &&
+        state == UIGestureRecognizerStateChanged &&
+        self.isInLongPressFastSpeed) {
+        double updatedSpeed = 0.0;
+        if (DYYYUpdateLongPressVerticalAdjustment(self, gesture, &updatedSpeed)) {
+            [self changeSpeed:updatedSpeed];
         }
-        currentLongPressSpeed = longPressSpeed;
     }
-    else if (gesture.state == UIGestureRecognizerStateChanged && isGestureActive) {
-        CGFloat deltaY = location.y - initialTouchY;
-        CGFloat threshold = 10.0;
 
-        if (fabs(deltaY) > threshold) {
-            CGFloat speedChange;
-            speedChange = (deltaY > 0) ? 0.25 : -0.25;
-
-            CGFloat newSpeed = currentLongPressSpeed + speedChange;
-            newSpeed = MAX(0.5, MIN(3.0, newSpeed));
-
-            if (newSpeed != currentLongPressSpeed) {
-                currentLongPressSpeed = newSpeed;
-                initialTouchY = location.y;
-                [self changeSpeed:currentLongPressSpeed];
-            }
+    if (DYYYLongPressGestureIsEnding(state)) {
+        DYYYEndLongPressVerticalAdjustment(self);
+        if (dyyyLongPressDPlayerSpeedController == playerProvider) {
+            dyyyLongPressDPlayerSpeedController = nil;
         }
     }
 }
+
 %end
 
-%hook UILabel
+%hook AWEDPlayerSpeedController
 
-- (void)setText:(NSString *)text {
-    UIView *superview = self.superview;
+- (void)viewDidLoad {
+    %orig;
+    dyyyActiveDPlayerSpeedController = self;
+    DYYYApplyNormalPlaybackSpeedToNativeDPlayer(self);
+}
 
-    if ([superview isKindOfClass:%c(AFDFastSpeedView)] && text) {
-        CGFloat displaySpeed = isGestureActive && currentLongPressSpeed > 0 ? currentLongPressSpeed : DYYYGetFloat(@"DYYYLongPressSpeed");
-        if (displaySpeed == 0) {
-            displaySpeed = 2.0;
-        }
+- (void)setData:(id)data {
+    %orig(data);
+    dyyyActiveDPlayerSpeedController = self;
+    DYYYApplyNormalPlaybackSpeedToNativeDPlayer(self);
+}
 
-        NSString *speedString = [NSString stringWithFormat:@"%.2f", displaySpeed];
-        if ([speedString hasSuffix:@".00"]) {
-            speedString = [speedString substringToIndex:speedString.length - 3];
-        } else if ([speedString hasSuffix:@"0"] && [speedString containsString:@"."]) {
-            speedString = [speedString substringToIndex:speedString.length - 1];
-        }
+- (void)viewWillAppear {
+    %orig;
+    dyyyActiveDPlayerSpeedController = self;
+    DYYYApplyNormalPlaybackSpeedToNativeDPlayer(self);
+}
 
-        if ([text containsString:@"2"]) {
-            text = [text stringByReplacingOccurrencesOfString:@"2" withString:speedString];
+- (void)onPlayerPlay:(id)player ifPlay:(BOOL)isPlaying {
+    %orig(player, isPlaying);
+    if (isPlaying) {
+        dyyyActiveDPlayerSpeedController = self;
+        DYYYApplyNormalPlaybackSpeedToNativeDPlayer(self);
+    }
+}
+
+%end
+
+%hook AWEPlayInteractionSpeedController
+
+- (CGFloat)longPressFastSpeedValue {
+    id configuredValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYLongPressSpeed"];
+    double configuredSpeed = [configuredValue doubleValue];
+    if (configuredValue && isfinite(configuredSpeed) && configuredSpeed > 0.0) {
+        return (CGFloat)configuredSpeed;
+    }
+    return %orig;
+}
+
+- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture {
+    UIGestureRecognizerState state = gesture.state;
+    BOOL verticalAdjustmentEnabled = DYYYGetBool(@"DYYYEnableLongPressSpeedGesture");
+    if (verticalAdjustmentEnabled && state == UIGestureRecognizerStateBegan) {
+        DYYYBeginLongPressVerticalAdjustment(self, gesture, [self longPressFastSpeedValue]);
+    }
+
+    %orig(gesture);
+
+    if (verticalAdjustmentEnabled && state == UIGestureRecognizerStateChanged) {
+        double updatedSpeed = 0.0;
+        if (DYYYUpdateLongPressVerticalAdjustment(self, gesture, &updatedSpeed)) {
+            [self changeSpeed:updatedSpeed];
         }
     }
 
-    %orig(text);
+    if (DYYYLongPressGestureIsEnding(state)) {
+        DYYYEndLongPressVerticalAdjustment(self);
+    }
 }
+
 %end
 
 // 强制启用保存他人头像
@@ -14558,12 +14730,21 @@ static Class tabBarButtonClass = nil;
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
 }
 
 - (void)prepareForDisplay {
     %orig;
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    if (!DYYYShouldHandleSpeedFeatures()) {
+        return;
+    }
+
+    BOOL autoRestoreSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
+    if (isFloatSpeedButtonEnabled && autoRestoreSpeed) {
+        setCurrentSpeedIndex(0);
+    }
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
+    updateSpeedButtonUI();
 }
 
 %end
@@ -14598,12 +14779,20 @@ static Class tabBarButtonClass = nil;
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
 }
 
 - (void)prepareForDisplay {
     %orig;
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    if (!DYYYShouldHandleSpeedFeatures()) {
+        return;
+    }
+    BOOL autoRestoreSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
+    if (isFloatSpeedButtonEnabled && autoRestoreSpeed) {
+        setCurrentSpeedIndex(0);
+    }
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
+    updateSpeedButtonUI();
 }
 
 %end
@@ -14638,12 +14827,20 @@ static Class tabBarButtonClass = nil;
 
 - (void)setIsAutoPlay:(BOOL)arg0 {
     %orig(arg0);
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
 }
 
 - (void)prepareForDisplay {
     %orig;
-    DYYYApplyDefaultPlaybackSpeedToPlayerWithRetry(self);
+    if (!DYYYShouldHandleSpeedFeatures()) {
+        return;
+    }
+    BOOL autoRestoreSpeed = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
+    if (isFloatSpeedButtonEnabled && autoRestoreSpeed) {
+        setCurrentSpeedIndex(0);
+    }
+    DYYYApplyNormalPlaybackSpeedToPlayerFallback(self);
+    updateSpeedButtonUI();
 }
 
 %end

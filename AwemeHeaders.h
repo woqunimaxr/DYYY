@@ -1483,6 +1483,46 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture;
 @end
 
+@protocol AWEDSpeedPlayerProviderProtocol;
+
+@interface AWEDSpeedBasicConfig : NSObject
+@property(nonatomic, assign) double longPressSpeedArea;
+@property(nonatomic, assign) double longPressSpeed;
+@property(nonatomic, assign) BOOL enableLockSpeed;
+@property(nonatomic, assign) double lockDistanceThreshold;
+@end
+
+@interface AWEDSpeedCoreContainer : NSObject
+@property(nonatomic, assign) BOOL isInLongPressFastSpeed;
+@property(nonatomic, assign) double speedBeforeLongPress;
+@property(nonatomic, strong) id playerProvider;
+- (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture;
+- (void)changeSpeed:(double)speed;
+- (double)longPressFastSpeedValue;
+@end
+
+@interface AWEDPlayerSpeedController : NSObject
+- (void)viewDidLoad;
+- (void)setData:(id)data;
+- (void)viewWillAppear;
+- (void)onPlayerPlay:(id)player ifPlay:(BOOL)isPlaying;
+- (float)playbackRate;
+- (void)setPlaybackRate:(float)playbackRate;
+- (BOOL)isInLongPressSpeed;
+- (void)handleGestureBegin:(UIGestureRecognizer *)gesture;
+- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture;
+- (AWEDSpeedCoreContainer *)speedContainer;
+- (id)playerViewController;
+@end
+
+@interface AWEPlayInteractionDPlayerSpeedController : NSObject
+- (BOOL)enableToSpeedControl;
+- (void)handleGestureBegin:(UIGestureRecognizer *)gesture;
+- (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture;
+- (AWEDPlayerSpeedController *)dPlayerSpeed;
+- (id)playVideoViewController;
+@end
+
 @interface AWEPlayInteractionUserAvatarView : UIView
 @property(retain, nonatomic) UIView *followPromptView;
 @property(retain, nonatomic) UIView *followAnimationView;
@@ -1936,18 +1976,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface HTSEventForwardingView : UIView
 @property(copy, nonatomic) NSString *levelName;
-@end
-
-@interface AWEAwemePlayVideoViewController (SpeedControl)
-- (void)adjustPlaybackSpeed:(float)speed;
-@end
-
-@interface AWEDPlayerFeedPlayerViewController (SpeedControl)
-- (void)adjustPlaybackSpeed:(float)speed;
-@end
-
-@interface AWEDPlayerViewController_Merge (SpeedControl)
-- (void)adjustPlaybackSpeed:(float)speed;
 @end
 
 @interface AWELeftSideBarModel : NSObject
