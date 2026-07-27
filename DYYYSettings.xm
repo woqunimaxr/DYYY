@@ -23,6 +23,7 @@
 
 #import "DYYYConstants.h"
 #import "DYYYFloatClearButton.h"
+#import "DYYYFloatSpeedButton.h"
 #import "DYYYSettingsHelper.h"
 #import "DYYYUtils.h"
 
@@ -4671,6 +4672,148 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     floatButtonSettingItem.cellTappedBlock = ^{
       // 创建悬浮按钮设置二级界面的设置项
 
+      // 快捷倍速section
+      NSMutableArray<AWESettingItemModel *> *speedButtonItems = [NSMutableArray array];
+
+      AWESettingItemModel *enableSpeedButton = [DYYYSettingsHelper
+          createSettingItem:
+              @{@"identifier" : @"DYYYEnableFloatSpeedButton",
+                @"title" : @"启用快捷倍速按钮",
+                @"detail" : @"",
+                @"cellType" : @6,
+                @"imageName" : @"ic_xspeed_outlined"}];
+      [speedButtonItems addObject:enableSpeedButton];
+
+      AWESettingItemModel *speedSettingsItem = [[%c(AWESettingItemModel) alloc] init];
+      speedSettingsItem.identifier = @"DYYYSpeedSettings";
+      speedSettingsItem.title = @"快捷倍速数值设置";
+      speedSettingsItem.type = 0;
+      speedSettingsItem.svgIconImageName = @"ic_speed_outlined_20";
+      speedSettingsItem.cellType = 26;
+      speedSettingsItem.colorStyle = 0;
+      speedSettingsItem.isEnable = YES;
+
+      NSString *savedSpeedSettings = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYSpeedSettings"];
+      if (!savedSpeedSettings || savedSpeedSettings.length == 0) {
+          savedSpeedSettings = @"1.0,1.25,1.5,2.0";
+      }
+      speedSettingsItem.detail = savedSpeedSettings;
+      speedSettingsItem.cellTappedBlock = ^{
+        [DYYYSettingsHelper showTextInputAlert:@"设置快捷倍速数值"
+                                   defaultText:speedSettingsItem.detail
+                                   placeholder:@"使用半角逗号(,)分隔倍速值"
+                                     onConfirm:^(NSString *text) {
+                                       NSString *trimmedText = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+                                       [[NSUserDefaults standardUserDefaults] setObject:trimmedText forKey:@"DYYYSpeedSettings"];
+                                       speedSettingsItem.detail = trimmedText;
+                                       [speedSettingsItem refreshCell];
+                                       updateSpeedButtonUI();
+                                     }
+                                      onCancel:nil];
+      };
+
+      AWESettingItemModel *autoRestoreSpeedItem = [[%c(AWESettingItemModel) alloc] init];
+      autoRestoreSpeedItem.identifier = @"DYYYAutoRestoreSpeed";
+      autoRestoreSpeedItem.title = @"自动恢复默认倍速";
+      autoRestoreSpeedItem.detail = @"";
+      autoRestoreSpeedItem.type = 1000;
+      autoRestoreSpeedItem.svgIconImageName = @"ic_switch_outlined";
+      autoRestoreSpeedItem.cellType = 6;
+      autoRestoreSpeedItem.colorStyle = 0;
+      autoRestoreSpeedItem.isEnable = YES;
+      autoRestoreSpeedItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
+      autoRestoreSpeedItem.switchChangedBlock = ^{
+        BOOL newValue = !autoRestoreSpeedItem.isSwitchOn;
+        autoRestoreSpeedItem.isSwitchOn = newValue;
+        [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYAutoRestoreSpeed"];
+      };
+      [speedButtonItems addObject:autoRestoreSpeedItem];
+
+      AWESettingItemModel *showXItem = [[%c(AWESettingItemModel) alloc] init];
+      showXItem.identifier = @"DYYYSpeedButtonShowX";
+      showXItem.title = @"倍速按钮显示后缀";
+      showXItem.detail = @"";
+      showXItem.type = 1000;
+      showXItem.svgIconImageName = @"ic_pensketch_outlined_20";
+      showXItem.cellType = 6;
+      showXItem.colorStyle = 0;
+      showXItem.isEnable = YES;
+      showXItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYSpeedButtonShowX"];
+      showXItem.switchChangedBlock = ^{
+        BOOL newValue = !showXItem.isSwitchOn;
+        showXItem.isSwitchOn = newValue;
+        [[NSUserDefaults standardUserDefaults] setBool:newValue forKey:@"DYYYSpeedButtonShowX"];
+        showSpeedX = newValue;
+        updateSpeedButtonUI();
+      };
+      [speedButtonItems addObject:showXItem];
+
+      AWESettingItemModel *buttonSizeItem = [[%c(AWESettingItemModel) alloc] init];
+      buttonSizeItem.identifier = @"DYYYSpeedButtonSize";
+      buttonSizeItem.title = @"快捷倍速按钮大小";
+      CGFloat currentButtonSize = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYSpeedButtonSize"] ?: 32;
+      buttonSizeItem.detail = [NSString stringWithFormat:@"%.0f", currentButtonSize];
+      buttonSizeItem.type = 0;
+      buttonSizeItem.svgIconImageName = @"ic_zoomin_outlined_20";
+      buttonSizeItem.cellType = 26;
+      buttonSizeItem.colorStyle = 0;
+      buttonSizeItem.isEnable = YES;
+      buttonSizeItem.cellTappedBlock = ^{
+        [DYYYSettingsHelper showTextInputAlert:@"设置按钮大小"
+                                   defaultText:buttonSizeItem.detail
+                                   placeholder:@"请输入20-60之间的数值"
+                                     onConfirm:^(NSString *text) {
+                                       NSInteger size = text.integerValue;
+                                       if (size < 20 || size > 60) {
+                                           [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
+                                           return;
+                                       }
+                                       [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYSpeedButtonSize"];
+                                       speedButtonSize = size;
+                                       buttonSizeItem.detail = [NSString stringWithFormat:@"%ld", (long)size];
+                                       [buttonSizeItem refreshCell];
+                                     }
+                                      onCancel:nil];
+      };
+      [speedButtonItems addObject:buttonSizeItem];
+      [speedButtonItems addObject:speedSettingsItem];
+
+      NSMutableArray<AWESettingItemModel *> *speedDependentItems = [NSMutableArray array];
+      for (AWESettingItemModel *item in speedButtonItems) {
+          if (item != enableSpeedButton) {
+              [speedDependentItems addObject:item];
+          }
+      }
+      void (^refreshSpeedDependentItems)(void) = ^{
+        for (AWESettingItemModel *item in speedDependentItems) {
+            [DYYYSettingsHelper applyDependencyRulesForItem:item];
+            [item refreshCell];
+        }
+      };
+      refreshSpeedDependentItems();
+
+      void (^originalSpeedSwitchChangedBlock)(void) = enableSpeedButton.switchChangedBlock;
+      enableSpeedButton.switchChangedBlock = ^{
+        if (originalSpeedSwitchChangedBlock) {
+            originalSpeedSwitchChangedBlock();
+        }
+        BOOL newEnabled = [NSUserDefaults.standardUserDefaults boolForKey:@"DYYYEnableFloatSpeedButton"];
+        if (!newEnabled) {
+            hideSpeedButton();
+        }
+        isFloatSpeedButtonEnabled = newEnabled;
+        if (newEnabled) {
+            showSpeedButton();
+            DYYYRefreshFloatSpeedButton();
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+              DYYYRefreshFloatSpeedButton();
+            });
+        } else if (speedButton) {
+            speedButton.hidden = YES;
+        }
+        refreshSpeedDependentItems();
+      };
+
       // 一键清屏section
       NSMutableArray<AWESettingItemModel *> *clearButtonItems = [NSMutableArray array];
 
@@ -4761,6 +4904,15 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 @"cellType" : @6,
                 @"imageName" : @"ic_eyeslash_outlined_16"}];
       [clearButtonItems addObject:hideTabButton];
+      AWESettingItemModel *hideSpeedButtonItem = [DYYYSettingsHelper createSettingItem:@{
+          @"identifier" : @"DYYYHideSpeed",
+          @"title" : @"清屏隐藏倍速",
+          @"subTitle" : @"清屏状态下隐藏DYYY的倍速按钮",
+          @"detail" : @"",
+          @"cellType" : @37,
+          @"imageName" : @"ic_eyeslash_outlined_16"
+      }];
+      [clearButtonItems addObject:hideSpeedButtonItem];
       // 清屏后隐藏清屏按钮自身（仍可点击恢复）
       AWESettingItemModel *hideClearButtonOnTap = [DYYYSettingsHelper createSettingItem:@{
           @"identifier" : @"DYYYHideClearButtonOnTap",
@@ -4820,6 +4972,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并组织所有section
       NSMutableArray *sections = [NSMutableArray array];
+      [sections addObject:[DYYYSettingsHelper createSectionWithTitle:@"快捷倍速" items:speedButtonItems]];
       [sections addObject:[DYYYSettingsHelper createSectionWithTitle:@"一键清屏" items:clearButtonItems]];
 
       DYYYRegisterSearchSections(@"悬浮按钮", sections);

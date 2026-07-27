@@ -379,6 +379,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)showSharePanel;
 - (void)showDislikeOnVideo;
 - (void)onVideoPlayerViewDoubleClicked:(id)arg1;
+- (void)speedButtonTapped:(id)sender;
+- (void)buttonTouchDown:(id)sender;
+- (void)buttonTouchUp:(id)sender;
 @end
 
 @interface HTSLiveRoomStatsMessage : NSObject
@@ -485,6 +488,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFeedTableViewController : UIViewController
+- (id)currentAweme;
+- (void)setCurrentPlayIndex:(NSInteger)index;
+- (void)playVideo:(id)video;
+- (void)playVideoOnScrollDidEnd;
 @end
 
 @interface AWEFeedTableView : UIView

@@ -5,6 +5,7 @@
  * iOS Version: 16.5
  */
 #import "DYYYFloatClearButton.h"
+#import "DYYYFloatSpeedButton.h"
 #import "DYYYUtils.h"
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -22,8 +23,6 @@ BOOL isPureViewVisible = NO;
 BOOL clearButtonForceHidden = NO;
 BOOL isAppActive = YES;
 BOOL dyyyIsPerformingFloatClearOperation = NO;
-BOOL dyyyInteractionViewVisible = NO;
-BOOL dyyyCommentViewVisible = NO;
 
 static NSInteger dyyyClearButtonMutationDepth = 0;
 
@@ -762,6 +761,7 @@ void reloadClearButtonConfiguration(void) {
         [self hideUIElements];
         self.isElementsHidden = YES;
         self.selected = YES;
+        updateSpeedButtonVisibility();
 
         if (selfHide) {
             [self dyyy_applySelfHiddenAlpha];
@@ -775,6 +775,7 @@ void reloadClearButtonConfiguration(void) {
         [self restoreAWEPlayInteractionProgressContainerView];
         [self.hiddenViewsList removeAllObjects];
         self.selected = NO;
+        updateSpeedButtonVisibility();
 
         // 退出清屏，恢复正常透明度并重启淡出
         self.alpha = self.originalAlpha;
@@ -882,6 +883,7 @@ void reloadClearButtonConfiguration(void) {
     [self restoreAWEPlayInteractionProgressContainerView];
     [self.hiddenViewsList removeAllObjects];
     self.selected = NO;
+    updateSpeedButtonVisibility();
 
     if (self.superview) {
         [self.superview bringSubviewToFront:self];
