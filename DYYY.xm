@@ -10391,6 +10391,8 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 }
 %end
 
+// 数据源 getter 会在详情/合集滚动枚举期间被频繁读取；过滤只能发生在写入边界，
+// 不能在 getter 内原地修改宿主持有的 NSMutableArray，否则会触发快速枚举突变异常。
 %hook AWEListDataController
 
 - (void)setDataSource:(NSMutableArray *)dataSource {
@@ -10398,31 +10400,9 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
     %orig(filtered);
 }
 
-- (NSMutableArray *)dataSource {
-    NSMutableArray *dataSource = %orig;
-    NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
-    if (filtered != dataSource && [dataSource isKindOfClass:[NSMutableArray class]]) {
-        [dataSource setArray:filtered];
-    } else if (filtered != dataSource) {
-        return [filtered mutableCopy];
-    }
-    return dataSource;
-}
-
 - (void)setFilteredDataSource:(NSMutableArray *)filteredDataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:filteredDataSource];
     %orig(filtered);
-}
-
-- (NSMutableArray *)filteredDataSource {
-    NSMutableArray *filteredDataSource = %orig;
-    NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:filteredDataSource];
-    if (filtered != filteredDataSource && [filteredDataSource isKindOfClass:[NSMutableArray class]]) {
-        [filteredDataSource setArray:filtered];
-    } else if (filtered != filteredDataSource) {
-        return [filtered mutableCopy];
-    }
-    return filteredDataSource;
 }
 
 %end
@@ -10432,17 +10412,6 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 - (void)setDataSource:(id)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
     %orig(filtered);
-}
-
-- (id)dataSource {
-    id dataSource = %orig;
-    NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
-    if (filtered != dataSource && [dataSource isKindOfClass:[NSMutableArray class]]) {
-        [dataSource setArray:filtered];
-    } else if (filtered != dataSource) {
-        return filtered;
-    }
-    return dataSource;
 }
 
 %end
@@ -10461,17 +10430,6 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 - (void)setDataSource:(id)dataSource {
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
     %orig(filtered);
-}
-
-- (id)dataSource {
-    id dataSource = %orig;
-    NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
-    if (filtered != dataSource && [dataSource isKindOfClass:[NSMutableArray class]]) {
-        [dataSource setArray:filtered];
-    } else if (filtered != dataSource) {
-        return filtered;
-    }
-    return dataSource;
 }
 
 %end
