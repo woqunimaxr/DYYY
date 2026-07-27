@@ -13,6 +13,7 @@
 #import <math.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <os/lock.h>
 #import <substrate.h>
 #import <stdlib.h>
 #import <string.h>
@@ -10499,6 +10500,158 @@ static BOOL DYYYAwemeModelIsFamiliarItem(AWEAwemeModel *aweme) {
     return [aweme respondsToSelector:@selector(isFamiliarItem)] && aweme.isFamiliarItem;
 }
 
+static BOOL DYYYAwemeModelIsAIInteraction(AWEAwemeModel *aweme) {
+    return [aweme respondsToSelector:@selector(awemeType)] && aweme.awemeType == 162;
+}
+
+@interface DYYYRecommendationFilterConfig : NSObject
+@property(nonatomic) NSUInteger generation;
+@property(nonatomic) BOOL noAds;
+@property(nonatomic) BOOL skipLive;
+@property(nonatomic) BOOL skipAllLive;
+@property(nonatomic) BOOL skipHotSpot;
+@property(nonatomic) BOOL skipPhoto;
+@property(nonatomic) BOOL skipPhotoText;
+@property(nonatomic) BOOL skipFriendsVideo;
+@property(nonatomic) BOOL skipMusic;
+@property(nonatomic) BOOL skipAIInteraction;
+@property(nonatomic) BOOL shouldDisableHDR;
+@property(nonatomic) BOOL filterHDR;
+@property(nonatomic) NSInteger minLikesThreshold;
+@property(nonatomic) NSInteger daysThreshold;
+@property(nonatomic, copy) NSArray<NSString *> *keywords;
+@property(nonatomic, copy) NSArray<NSString *> *propKeywords;
+@property(nonatomic, copy) NSSet<NSString *> *userIDs;
+@property(nonatomic) BOOL hasBatchWork;
+@property(nonatomic) BOOL hasModelFilterWork;
+@end
+
+@implementation DYYYRecommendationFilterConfig
+@end
+
+static os_unfair_lock gDYYYRecommendationFilterConfigLock = OS_UNFAIR_LOCK_INIT;
+static DYYYRecommendationFilterConfig *gDYYYRecommendationFilterConfig = nil;
+static BOOL gDYYYRecommendationFilterConfigDirty = YES;
+static NSUInteger gDYYYRecommendationFilterConfigGeneration = 1;
+static id gDYYYRecommendationFilterDefaultsObserver = nil;
+
+static NSArray<NSString *> *DYYYNormalizedFilterTokens(id rawValue) {
+    if (![rawValue isKindOfClass:[NSString class]] || [(NSString *)rawValue length] == 0) {
+        return @[];
+    }
+
+    NSMutableArray<NSString *> *tokens = [NSMutableArray array];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    for (NSString *rawToken in [(NSString *)rawValue componentsSeparatedByString:@","]) {
+        NSString *token = [rawToken stringByTrimmingCharactersInSet:whitespace];
+        if (token.length > 0) {
+            [tokens addObject:token];
+        }
+    }
+    return [tokens copy];
+}
+
+static NSSet<NSString *> *DYYYNormalizedFilterUserIDs(id rawValue) {
+    NSMutableSet<NSString *> *userIDs = [NSMutableSet set];
+    for (NSString *userInfo in DYYYNormalizedFilterTokens(rawValue)) {
+        NSArray<NSString *> *components = [userInfo componentsSeparatedByString:@"-"];
+        if (components.count < 2) {
+            continue;
+        }
+
+        NSString *userID = [[components lastObject] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (userID.length > 0) {
+            [userIDs addObject:userID];
+        }
+    }
+    return [userIDs copy];
+}
+
+static DYYYRecommendationFilterConfig *DYYYBuildRecommendationFilterConfig(NSUInteger generation) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    DYYYRecommendationFilterConfig *config = [DYYYRecommendationFilterConfig new];
+    config.generation = generation;
+    config.noAds = [defaults boolForKey:@"DYYYNoAds"];
+    config.skipLive = [defaults boolForKey:@"DYYYSkipLive"];
+    config.skipAllLive = [defaults boolForKey:@"DYYYSkipAllLive"];
+    config.skipHotSpot = [defaults boolForKey:@"DYYYSkipHotSpot"];
+    config.skipPhoto = [defaults boolForKey:@"DYYYSkipPhoto"];
+    config.skipPhotoText = [defaults boolForKey:@"DYYYSkipPhotoText"];
+    config.skipFriendsVideo = [defaults boolForKey:@"DYYYSkipFriendsVideo"];
+    config.skipMusic = [defaults boolForKey:@"DYYYSkipMusic"];
+    config.skipAIInteraction = [defaults boolForKey:@"DYYYSkipAIInteraction"];
+    config.shouldDisableHDR = DYYYShouldDisableAllHDR();
+    config.filterHDR = DYYYShouldFilterGlobalHDR();
+    config.minLikesThreshold = MAX([defaults integerForKey:@"DYYYFilterLowLikes"], 0);
+    config.daysThreshold = MAX([defaults integerForKey:@"DYYYFilterTimeLimit"], 0);
+    config.keywords = DYYYNormalizedFilterTokens([defaults objectForKey:@"DYYYFilterKeywords"]);
+    config.propKeywords = DYYYNormalizedFilterTokens([defaults objectForKey:@"DYYYFilterProp"]);
+    config.userIDs = DYYYNormalizedFilterUserIDs([defaults objectForKey:@"DYYYFilterUsers"]);
+
+    config.hasBatchWork = config.noAds ||
+                          config.skipLive ||
+                          config.skipAllLive ||
+                          config.skipPhoto ||
+                          config.skipPhotoText ||
+                          config.skipFriendsVideo ||
+                          config.skipMusic ||
+                          config.skipAIInteraction ||
+                          config.shouldDisableHDR ||
+                          config.minLikesThreshold > 0 ||
+                          config.daysThreshold > 0;
+    config.hasModelFilterWork = config.noAds ||
+                                config.skipAllLive ||
+                                config.skipHotSpot ||
+                                config.skipFriendsVideo ||
+                                config.skipMusic ||
+                                config.skipAIInteraction ||
+                                config.shouldDisableHDR ||
+                                config.filterHDR ||
+                                config.keywords.count > 0 ||
+                                config.propKeywords.count > 0 ||
+                                config.userIDs.count > 0;
+    return config;
+}
+
+static DYYYRecommendationFilterConfig *DYYYCurrentRecommendationFilterConfig(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        gDYYYRecommendationFilterDefaultsObserver =
+            [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
+                                                              object:nil
+                                                               queue:nil
+                                                          usingBlock:^(__unused NSNotification *notification) {
+            os_unfair_lock_lock(&gDYYYRecommendationFilterConfigLock);
+            gDYYYRecommendationFilterConfigDirty = YES;
+            gDYYYRecommendationFilterConfigGeneration += 1;
+            os_unfair_lock_unlock(&gDYYYRecommendationFilterConfigLock);
+        }];
+    });
+
+    os_unfair_lock_lock(&gDYYYRecommendationFilterConfigLock);
+    if (gDYYYRecommendationFilterConfigDirty || !gDYYYRecommendationFilterConfig) {
+        gDYYYRecommendationFilterConfig =
+            DYYYBuildRecommendationFilterConfig(gDYYYRecommendationFilterConfigGeneration);
+        gDYYYRecommendationFilterConfigDirty = NO;
+    }
+    DYYYRecommendationFilterConfig *config = gDYYYRecommendationFilterConfig;
+    os_unfair_lock_unlock(&gDYYYRecommendationFilterConfigLock);
+    return config;
+}
+
+static BOOL DYYYStringContainsAnyFilterToken(NSString *value, NSArray<NSString *> *tokens) {
+    if (value.length == 0 || tokens.count == 0) {
+        return NO;
+    }
+
+    for (NSString *token in tokens) {
+        if ([value containsString:token]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 %hook AWEHotListDataController
 
 %new
@@ -10553,11 +10706,16 @@ static BOOL DYYYAwemeModelIsFamiliarItem(AWEAwemeModel *aweme) {
         return nil;
     }
 
+    // 39.7.0 的稳定原生路径，绝大多数推荐模型可在这里直接命中，避免进入 KVC 兼容探测。
+    NSNumber *directDiggCount = [self dyyy_numberValueForLowLikesFilter:aweme.statistics.diggCount];
+    if (directDiggCount) {
+        return directDiggCount;
+    }
+
     static NSArray<NSString *> *diggKeyPaths = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         diggKeyPaths = @[
-            @"statistics.diggCount",
             @"statistics.digg_count",
             @"diggCount",
             @"digg_count",
@@ -10591,27 +10749,18 @@ static BOOL DYYYAwemeModelIsFamiliarItem(AWEAwemeModel *aweme) {
         return orig;
     }
 
-    // --- 配置读取 ---
-    NSInteger daysThreshold = DYYYGetInteger(@"DYYYFilterTimeLimit");
-    BOOL skipLive = DYYYGetBool(@"DYYYSkipLive"); // 读取直播过滤开关
-    BOOL skipAllLive = DYYYGetBool(@"DYYYSkipAllLive");
-    NSInteger minLikesThreshold = DYYYGetInteger(@"DYYYFilterLowLikes"); // 读取低赞过滤阈值 (例如: 1000)
-    BOOL skipPhotoText = DYYYGetBool(@"DYYYSkipPhotoText"); // 图文过滤
-    BOOL skipPhoto = DYYYGetBool(@"DYYYSkipPhoto"); // 图集过滤
-    BOOL skipFriendsVideo = DYYYGetBool(@"DYYYSkipFriendsVideo"); // 朋友作品过滤
-    BOOL skipMusic = DYYYGetBool(@"DYYYSkipMusic"); // 音乐过滤
-    BOOL shouldDisableHDR = DYYYShouldDisableAllHDR();
-    BOOL noAds = DYYYGetBool(@"DYYYNoAds");
+    DYYYRecommendationFilterConfig *config = DYYYCurrentRecommendationFilterConfig();
+    if (!config.hasBatchWork) {
+        return orig;
+    }
 
     NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-    NSTimeInterval thresholdInSeconds = MAX(daysThreshold, 0) * 86400.0;
-
-    // 第一阶段：先做稳定字段过滤（直播/时间/类型）
-    NSMutableArray *baseFiltered = [NSMutableArray arrayWithCapacity:orig.count];
+    NSTimeInterval thresholdInSeconds = config.daysThreshold * 86400.0;
+    NSMutableArray *filtered = [NSMutableArray arrayWithCapacity:orig.count];
 
     for (id obj in orig) {
         if (![obj isKindOfClass:%c(AWEAwemeModel)]) {
-            [baseFiltered addObject:obj];
+            [filtered addObject:obj];
             continue;
         }
 
@@ -10620,111 +10769,93 @@ static BOOL DYYYAwemeModelIsFamiliarItem(AWEAwemeModel *aweme) {
         BOOL isLiveAweme = DYYYAwemeModelHasLiveSignal(m);
 
         // 1. 广告过滤：合集、搜索内流、分页追加等旁路也会进入此共享转换。
-        if (noAds && [DYYYUtils isAdvertisementAwemeModel:m]) {
+        if (config.noAds && [DYYYUtils isAdvertisementAwemeModel:m]) {
             continue;
         }
 
         // 2. 直播过滤：当前路径是推荐流转换，全部过滤同样覆盖这里。
-        if ((skipAllLive || skipLive) && isLiveAweme) {
-            continue; // 命中直播过滤，跳过
+        if ((config.skipAllLive || config.skipLive) && isLiveAweme) {
+            continue;
         }
 
         if (isLiveAweme) {
-            [baseFiltered addObject:obj];
+            [filtered addObject:obj];
             continue;
         }
 
         // 2.1 图文模式过滤逻辑（推荐页）
-        if (skipPhotoText &&
+        if (config.skipPhotoText &&
             [m respondsToSelector:@selector(isNewTextMode)] &&
             m.isNewTextMode &&
             isRecommendFeed) {
-            continue; // 图文模式且来自推荐页，跳过
+            continue;
         }
 
         // 2.2 图集过滤逻辑（推荐页）
-        if (skipPhoto &&
+        if (config.skipPhoto &&
             [m respondsToSelector:@selector(awemeType)] &&
             m.awemeType == 68 &&
             isRecommendFeed) {
-            continue; // 图集且来自推荐页，跳过
+            continue;
         }
 
         // 2.3 朋友作品过滤逻辑（推荐页）：仅使用宿主原生 isFamiliarItem 标记。
-        if (skipFriendsVideo &&
+        if (config.skipFriendsVideo &&
             isRecommendFeed &&
             DYYYAwemeModelIsFamiliarItem(m)) {
             continue;
         }
 
         // 2.4 音乐过滤逻辑（推荐页）
-        if (skipMusic &&
+        if (config.skipMusic &&
             isRecommendFeed &&
             [m respondsToSelector:@selector(musicCard)] &&
             m.musicCard) {
-            continue; // 音乐卡片且来自推荐页，跳过
+            continue;
+        }
+
+        // 2.5 AI 互动过滤逻辑（推荐页）：仅接受宿主 awemeType == 162 的明确类型。
+        if (config.skipAIInteraction &&
+            isRecommendFeed &&
+            DYYYAwemeModelIsAIInteraction(m)) {
+            continue;
         }
 
         // 3. 时间限制过滤
-        if (daysThreshold > 0 && [m respondsToSelector:@selector(createTime)]) {
+        if (config.daysThreshold > 0 && [m respondsToSelector:@selector(createTime)]) {
             NSTimeInterval vTs = [m.createTime doubleValue];
             if (vTs > 1e12) {
-                vTs /= 1000.0; // 毫秒转秒
+                vTs /= 1000.0;
             }
 
             if (vTs > 0 && (now - vTs) > thresholdInSeconds) {
-                continue; // 超过设定时限，跳过
+                continue;
             }
         }
 
         // 4. 全局屏蔽 HDR 时，若作品没有 SDR 码率档，直接过滤，避免强播纯 HDR 源导致黑屏或 HDR 漏出。
-        if (shouldDisableHDR &&
+        if (config.shouldDisableHDR &&
             ![m dyyy_shouldExcludeFromGlobalHDRFilter] &&
             DYYYAwemeModelHasOnlyHDRBitrateModels(m)) {
             continue;
         }
 
-        if (shouldDisableHDR) {
+        if (config.shouldDisableHDR) {
             DYYYStripHDRHintsFromAwemeModel(m);
         }
 
-        [baseFiltered addObject:obj];
+        // 5. 低赞过滤：字段缺失时放行；可解析到数值时严格按阈值过滤。
+        if (config.minLikesThreshold > 0) {
+            NSNumber *diggCountValue = [self dyyy_resolvedDiggCountForAweme:m];
+            if (diggCountValue && diggCountValue.integerValue < config.minLikesThreshold) {
+                continue;
+            }
+        }
+
+        [filtered addObject:obj];
     }
 
-    if (minLikesThreshold <= 0 || baseFiltered.count == 0) {
-        return [baseFiltered copy];
-    }
-
-    // 第二阶段：低赞过滤。字段缺失时放行；只要能解析到数值，就严格按阈值过滤。
-    NSMutableArray *lowLikesFiltered = [NSMutableArray arrayWithCapacity:baseFiltered.count];
-
-    for (id obj in baseFiltered) {
-        if (![obj isKindOfClass:%c(AWEAwemeModel)]) {
-            [lowLikesFiltered addObject:obj];
-            continue;
-        }
-
-        AWEAwemeModel *m = (AWEAwemeModel *)obj;
-        if (DYYYAwemeModelHasLiveSignal(m)) {
-            [lowLikesFiltered addObject:obj];
-            continue;
-        }
-
-        NSNumber *diggCountValue = [self dyyy_resolvedDiggCountForAweme:m];
-
-        if (!diggCountValue) {
-            [lowLikesFiltered addObject:obj];
-            continue;
-        }
-
-        if (diggCountValue.integerValue < minLikesThreshold) {
-            continue;
-        }
-
-        [lowLikesFiltered addObject:obj];
-    }
-
-    return [lowLikesFiltered copy];
+    return [filtered copy];
 }
 
 %end
@@ -10742,12 +10873,86 @@ static BOOL DYYYShouldHideTemplateVideoForAweme(AWEAwemeModel *aweme) {
     return referString.length == 0 || [referString isEqualToString:@"homepage_hot"];
 }
 
+static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
+                                                           DYYYRecommendationFilterConfig *config) {
+    if (!aweme || !config.hasModelFilterWork) {
+        return NO;
+    }
+
+    BOOL shouldFilterAds = config.noAds && [DYYYUtils isAdvertisementAwemeModel:aweme];
+    BOOL shouldFilterHotSpot = config.skipHotSpot && aweme.hotSpotLynxCardModel;
+    BOOL isRecommendFeed = DYYYAwemeModelIsRecommendFeed(aweme);
+    BOOL shouldFilterAllLive = config.skipAllLive && DYYYAwemeModelHasLiveSignal(aweme);
+    BOOL shouldFilterFriendsVideo = config.skipFriendsVideo && isRecommendFeed && DYYYAwemeModelIsFamiliarItem(aweme);
+    BOOL shouldFilterMusic = config.skipMusic && isRecommendFeed && aweme.musicCard;
+    BOOL shouldFilterAIInteraction = config.skipAIInteraction && isRecommendFeed && DYYYAwemeModelIsAIInteraction(aweme);
+    BOOL shouldFilterKeywords = NO;
+    BOOL shouldFilterProp = NO;
+    BOOL shouldFilterUser = NO;
+    BOOL shouldFilterHDR = NO;
+
+    if (isRecommendFeed && config.userIDs.count > 0 && aweme.author) {
+        NSString *currentShortID = aweme.author.shortID;
+        shouldFilterUser = currentShortID.length > 0 && [config.userIDs containsObject:currentShortID];
+    }
+
+    if (isRecommendFeed && config.keywords.count > 0) {
+        shouldFilterKeywords = DYYYStringContainsAnyFilterToken(aweme.descriptionString, config.keywords);
+    }
+
+    if (isRecommendFeed && config.propKeywords.count > 0) {
+        shouldFilterProp = DYYYStringContainsAnyFilterToken(aweme.propGuideV2.propName, config.propKeywords);
+    }
+
+    if (config.shouldDisableHDR &&
+        ![aweme dyyy_shouldExcludeFromGlobalHDRFilter] &&
+        DYYYAwemeModelHasOnlyHDRBitrateModels(aweme)) {
+        shouldFilterHDR = YES;
+    }
+
+    if (config.filterHDR && ![aweme dyyy_shouldExcludeFromGlobalHDRFilter] && aweme.video) {
+        AWEVideoModel *video = aweme.video;
+        if ([video respondsToSelector:@selector(isSourceHDR)] && video.isSourceHDR > 0) {
+            shouldFilterHDR = YES;
+        } else if ([video respondsToSelector:@selector(hasFilterHDR)] && video.hasFilterHDR) {
+            shouldFilterHDR = YES;
+        }
+
+        if (!shouldFilterHDR) {
+            for (id bitrateModel in video.bitrateModels) {
+                @try {
+                    NSNumber *hdrType = [bitrateModel valueForKey:@"hdrType"];
+                    NSNumber *hdrBit = [bitrateModel valueForKey:@"hdrBit"];
+                    if ((hdrType && [hdrType integerValue] > 0) ||
+                        (!hdrType && hdrBit && [hdrBit integerValue] >= 10)) {
+                        shouldFilterHDR = YES;
+                        break;
+                    }
+                } @catch (__unused NSException *exception) {
+                }
+            }
+        }
+    }
+
+    return shouldFilterAds ||
+           shouldFilterAllLive ||
+           shouldFilterHotSpot ||
+           shouldFilterFriendsVideo ||
+           shouldFilterMusic ||
+           shouldFilterAIInteraction ||
+           shouldFilterHDR ||
+           shouldFilterKeywords ||
+           shouldFilterProp ||
+           shouldFilterUser;
+}
+
 %hook AWEAwemeModel
 
 - (id)initWithDictionary:(id)arg1 error:(id *)arg2 {
     id orig = %orig;
     if (orig) {
-        BOOL shouldDisableHDR = DYYYShouldDisableAllHDR();
+        DYYYRecommendationFilterConfig *filterConfig = DYYYCurrentRecommendationFilterConfig();
+        BOOL shouldDisableHDR = filterConfig.shouldDisableHDR;
         BOOL shouldFilterOnlyHDRSource = NO;
         if (shouldDisableHDR && ![self dyyy_shouldExcludeFromGlobalHDRFilter]) {
             shouldFilterOnlyHDRSource = DYYYAwemeModelHasOnlyHDRBitrateModels(self);
@@ -10758,15 +10963,14 @@ static BOOL DYYYShouldHideTemplateVideoForAweme(AWEAwemeModel *aweme) {
                 }
             }
         }
-        BOOL shouldFilter = DYYYGetBool(@"DYYYNoAds") &&
-                            ([DYYYUtils isAdvertisementAwemeModel:self] || [DYYYUtils isAdvertisementRawData:arg1]);
+        BOOL shouldFilter = filterConfig.noAds && [DYYYUtils isAdvertisementRawData:arg1];
         if (!shouldFilter) {
-            shouldFilter = [self contentFilter];
+            shouldFilter = DYYYAwemeModelMatchesConfiguredContentFilters(self, filterConfig);
         }
         if (!shouldFilter && shouldFilterOnlyHDRSource) {
             shouldFilter = YES;
         }
-        if (!shouldFilter && DYYYShouldFilterGlobalHDR() &&
+        if (!shouldFilter && filterConfig.filterHDR &&
             ![self dyyy_shouldExcludeFromGlobalHDRFilter] &&
             [self dyyy_containsHDRMetadataInObject:arg1 depth:0]) {
             shouldFilter = YES;
@@ -10871,142 +11075,7 @@ static BOOL DYYYShouldHideTemplateVideoForAweme(AWEAwemeModel *aweme) {
 
 %new
 - (BOOL)contentFilter {
-    BOOL noAds = DYYYGetBool(@"DYYYNoAds");
-    BOOL skipAllLive = DYYYGetBool(@"DYYYSkipAllLive");
-    BOOL skipHotSpot = DYYYGetBool(@"DYYYSkipHotSpot");
-    BOOL skipPhoto = DYYYGetBool(@"DYYYSkipPhoto");
-    BOOL skipPhotoText = DYYYGetBool(@"DYYYSkipPhotoText");
-    BOOL skipFriendsVideo = DYYYGetBool(@"DYYYSkipFriendsVideo");
-    BOOL skipMusic = DYYYGetBool(@"DYYYSkipMusic");
-    BOOL skipAIInteraction = DYYYGetBool(@"DYYYSkipAIInteraction");
-    BOOL filterHDR = DYYYShouldFilterGlobalHDR();
-
-    BOOL shouldFilterAds = noAds && [DYYYUtils isAdvertisementAwemeModel:self];
-    BOOL shouldFilterHotSpot = skipHotSpot && self.hotSpotLynxCardModel;
-    BOOL isRecommendFeed = DYYYAwemeModelIsRecommendFeed(self);
-    BOOL shouldFilterAllLive = skipAllLive && DYYYAwemeModelHasLiveSignal(self);
-    BOOL shouldskipPhoto = skipPhoto && (self.awemeType == 68) && isRecommendFeed;
-    BOOL shouldskipPhotoText = skipPhotoText && self.isNewTextMode && isRecommendFeed;
-    BOOL shouldFilterFriendsVideo = skipFriendsVideo && isRecommendFeed && DYYYAwemeModelIsFamiliarItem(self);
-    BOOL shouldFilterMusic = skipMusic && self.musicCard && isRecommendFeed;
-    BOOL shouldFilterAIInteraction = skipAIInteraction && (self.awemeType == 162) && isRecommendFeed;
-    BOOL shouldFilterHDR = NO;
-    BOOL shouldFilterLowLikes = NO;
-    BOOL shouldFilterKeywords = NO;
-    BOOL shouldFilterProp = NO;
-    BOOL shouldFilterTime = NO;
-    BOOL shouldFilterUser = NO;
-
-    // 获取用户设置的需要过滤的关键词
-    NSString *filterKeywords = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterKeywords"];
-    NSArray *keywordsList = nil;
-
-    if (filterKeywords.length > 0) {
-        keywordsList = [filterKeywords componentsSeparatedByString:@","];
-    }
-
-    // 过滤包含指定拍同款的视频
-    NSString *filterProp = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterProp"];
-    NSArray *propKeywordsList = nil;
-
-    if (filterProp.length > 0) {
-        propKeywordsList = [filterProp componentsSeparatedByString:@","];
-    }
-
-    // 获取需要过滤的用户列表
-    NSString *filterUsers = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterUsers"];
-    BOOL disableHDR = DYYYShouldDisableAllHDR();
-
-    // 检查是否需要过滤特定用户
-    if (isRecommendFeed && filterUsers.length > 0 && self.author) {
-        NSArray *usersList = [filterUsers componentsSeparatedByString:@","];
-        NSString *currentShortID = self.author.shortID;
-        NSString *currentNickname = self.author.nickname;
-
-        if (currentShortID.length > 0) {
-            for (NSString *userInfo in usersList) {
-                // 解析"昵称-id"格式
-                NSArray *components = [userInfo componentsSeparatedByString:@"-"];
-                if (components.count >= 2) {
-                    NSString *userId = [components lastObject];
-                    NSString *userNickname = [[components subarrayWithRange:NSMakeRange(0, components.count - 1)] componentsJoinedByString:@"-"];
-
-                    if ([userId isEqualToString:currentShortID]) {
-                        shouldFilterUser = YES;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // 仅在推荐页过滤关键词和道具
-    if (isRecommendFeed) {
-        // 过滤包含特定关键词的视频
-        if (keywordsList.count > 0) {
-            // 检查视频标题
-            if (self.descriptionString.length > 0) {
-                for (NSString *keyword in keywordsList) {
-                    NSString *trimmedKeyword = [keyword stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                    if (trimmedKeyword.length > 0 && [self.descriptionString containsString:trimmedKeyword]) {
-                        shouldFilterKeywords = YES;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 过滤包含特定道具的视频
-        if (propKeywordsList.count > 0 && self.propGuideV2) {
-            NSString *propName = self.propGuideV2.propName;
-            if (propName.length > 0) {
-                for (NSString *propKeyword in propKeywordsList) {
-                    NSString *trimmedKeyword = [propKeyword stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                    if (trimmedKeyword.length > 0 && [propName containsString:trimmedKeyword]) {
-                        shouldFilterProp = YES;
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    // 全局屏蔽 HDR 时，仍允许有 SDR 档的作品降档播放；纯 HDR 档作品直接过滤，避免黑屏或 HDR 漏出。
-    if (disableHDR &&
-        ![self dyyy_shouldExcludeFromGlobalHDRFilter] &&
-        DYYYAwemeModelHasOnlyHDRBitrateModels(self)) {
-        shouldFilterHDR = YES;
-    }
-
-    // 全场景过滤 HDR 作品，但保留私信、消息详情和转发链路。
-    if (filterHDR && ![self dyyy_shouldExcludeFromGlobalHDRFilter] && self.video) {
-        AWEVideoModel *video = self.video;
-        if ([video respondsToSelector:@selector(isSourceHDR)] && video.isSourceHDR > 0) {
-            shouldFilterHDR = YES;
-        } else if ([video respondsToSelector:@selector(hasFilterHDR)] && video.hasFilterHDR) {
-            shouldFilterHDR = YES;
-        }
-
-        if (!shouldFilterHDR) {
-            for (id bitrateModel in video.bitrateModels) {
-                @try {
-                    NSNumber *hdrType = [bitrateModel valueForKey:@"hdrType"];
-                    NSNumber *hdrBit = [bitrateModel valueForKey:@"hdrBit"];
-
-                    // hdrType 覆盖 HDR10、HLG、HDR Vivid 等类型；无类型字段时保留 10bit 兜底。
-                    if ((hdrType && [hdrType integerValue] > 0) ||
-                        (!hdrType && hdrBit && [hdrBit integerValue] >= 10)) {
-                        shouldFilterHDR = YES;
-                        break;
-                    }
-                } @catch (__unused NSException *exception) {
-                }
-            }
-        }
-    }
-
-    return shouldFilterAds || shouldFilterAllLive || shouldFilterHotSpot || shouldFilterFriendsVideo || shouldFilterMusic || shouldFilterHDR || shouldFilterKeywords || shouldFilterProp ||
-           shouldFilterTime || shouldFilterUser;
+    return DYYYAwemeModelMatchesConfiguredContentFilters(self, DYYYCurrentRecommendationFilterConfig());
 }
 
 - (AWEECommerceLabel *)ecommerceBelowLabel {
