@@ -1510,6 +1510,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEDSpeedLockSpeedContainer : NSObject
+@property(nonatomic, strong) AFDSpeedManager *speedManager;
 - (BOOL)canShowLockSpeed;
 - (void)handleLongPressLockedDoubleSpeedEnded:(CGPoint)point
                                       gesture:(UILongPressGestureRecognizer *)gesture;

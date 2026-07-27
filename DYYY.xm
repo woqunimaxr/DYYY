@@ -624,6 +624,7 @@ static __weak AWEPlayInteractionViewController *dyyyActivePlaybackInteractionCon
 static __weak UIViewController *dyyyActiveSpeedPlayerViewController = nil;
 static __weak AWEDPlayerSpeedController *dyyyActiveDPlayerSpeedController = nil;
 static __weak AWEDPlayerSpeedController *dyyyLongPressDPlayerSpeedController = nil;
+static __weak AFDSpeedManager *dyyyActiveNativeSpeedManager = nil;
 static __weak AWEAwemeModel *dyyyCurrentSpeedAweme = nil;
 static NSString *dyyyCommittedSpeedAwemeIdentifier = nil;
 static NSHashTable<_TtC33AWECommentPanelContainerSwiftImpl30CommentContainerInnerViewModel *> *dyyyCommentPauseViewModels = nil;
@@ -635,13 +636,14 @@ static float DYYYConfiguredDefaultPlaybackSpeed(void) {
 }
 
 static BOOL DYYYNativeLockedPlaybackSpeed(float *speedOut) {
-    Class managerClass = NSClassFromString(@"AFDSpeedManager");
-    if (!managerClass || ![managerClass respondsToSelector:@selector(sharedInstance)]) {
-        return NO;
-    }
-
     @try {
-        AFDSpeedManager *speedManager = [(id)managerClass sharedInstance];
+        AFDSpeedManager *speedManager = dyyyActiveNativeSpeedManager;
+        if (!speedManager) {
+            Class managerClass = NSClassFromString(@"AFDSpeedManager");
+            if ([managerClass respondsToSelector:@selector(sharedInstance)]) {
+                speedManager = [(id)managerClass sharedInstance];
+            }
+        }
         if (![speedManager respondsToSelector:@selector(isLockedSpeedAwemeID)] ||
             ![speedManager respondsToSelector:@selector(currentSpeed)]) {
             return NO;
@@ -6100,10 +6102,25 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
 
 - (void)handleLongPressLockedDoubleSpeedEnded:(CGPoint)point
                                       gesture:(UILongPressGestureRecognizer *)gesture {
+    AFDSpeedManager *speedManager = self.speedManager;
+    if (speedManager) {
+        dyyyActiveNativeSpeedManager = speedManager;
+    }
+
     BOOL previousCompletionState = dyyyNativeLockCompletionActive;
     dyyyNativeLockCompletionActive = YES;
     @try {
         %orig(point, gesture);
+
+        NSString *lockedAwemeID = speedManager.isLockedSpeedAwemeID;
+        double synchronizedSpeed = lockedAwemeID.length > 0
+                                       ? DYYYConfiguredLongPressPlaybackSpeed()
+                                       : DYYYUnlockedNormalPlaybackSpeed();
+        if (isfinite(synchronizedSpeed) &&
+            synchronizedSpeed > 0.0 &&
+            [speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
+            [speedManager setCurrentSpeed:synchronizedSpeed];
+        }
     } @finally {
         dyyyNativeLockCompletionActive = previousCompletionState;
     }
@@ -6126,31 +6143,29 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
 %hook AWEDSpeedCoreContainer
 
 - (void)changeSpeed:(double)speed {
-    BOOL shouldSynchronizeNativeSpeedManager = NO;
+    if (self.speedManager) {
+        dyyyActiveNativeSpeedManager = self.speedManager;
+    }
+
     if (dyyyNativeLockCompletionActive) {
         if (fabs(speed - 2.0) <= DBL_EPSILON) {
             double configuredSpeed = DYYYConfiguredLongPressPlaybackSpeed();
             if (configuredSpeed > 0.0) {
                 speed = configuredSpeed;
-                shouldSynchronizeNativeSpeedManager = YES;
             }
         } else if (fabs(speed - 1.0) <= DBL_EPSILON) {
             speed = DYYYUnlockedNormalPlaybackSpeed();
-            shouldSynchronizeNativeSpeedManager = YES;
         }
     }
 
-    if (shouldSynchronizeNativeSpeedManager &&
-        [self.speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
-        @try {
-            [self.speedManager setCurrentSpeed:speed];
-        } @catch (__unused NSException *exception) {
-        }
-    }
     %orig(speed);
 }
 
 - (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture {
+    if (self.speedManager) {
+        dyyyActiveNativeSpeedManager = self.speedManager;
+    }
+
     id playerProvider = self.playerProvider;
     if (DYYYIsVerifiedNativeDPlayerSpeedController(playerProvider)) {
         dyyyActiveDPlayerSpeedController = (AWEDPlayerSpeedController *)playerProvider;
