@@ -1206,6 +1206,8 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 @property(nonatomic, strong) UIImageView *leftIconView;
 @property(nonatomic, strong) UIImageView *centerIconView;
 @property(nonatomic, strong) UILabel *centerPlaceholderLabel;
+@property(nonatomic, strong) NSLayoutConstraint *placeholderCenterXConstraint;
+@property(nonatomic, strong) NSLayoutConstraint *placeholderLeadingConstraint;
 @property(nonatomic, assign) UIEdgeInsets tableContentInsetBeforeSearchHeader;
 @property(nonatomic, assign) UIEdgeInsets tableScrollIndicatorInsetsBeforeSearchHeader;
 @property(nonatomic, assign) BOOL hasInstalledPinnedHeaderInsets;
@@ -1275,16 +1277,34 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
     self.centerPlaceholderView = [[UIView alloc] initWithFrame:CGRectZero];
     self.centerPlaceholderView.userInteractionEnabled = NO;
+    self.centerPlaceholderView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.containerView addSubview:self.centerPlaceholderView];
 
     self.centerIconView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"magnifyingglass"]];
     self.centerIconView.contentMode = UIViewContentModeScaleAspectFit;
+    self.centerIconView.translatesAutoresizingMaskIntoConstraints = NO;
     [self.centerPlaceholderView addSubview:self.centerIconView];
 
     self.centerPlaceholderLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     self.centerPlaceholderLabel.text = @"搜索设置项";
     self.centerPlaceholderLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightRegular];
+    self.centerPlaceholderLabel.translatesAutoresizingMaskIntoConstraints = NO;
     [self.centerPlaceholderView addSubview:self.centerPlaceholderLabel];
+
+    self.placeholderCenterXConstraint = [self.centerPlaceholderView.centerXAnchor constraintEqualToAnchor:self.containerView.centerXAnchor];
+    self.placeholderLeadingConstraint = [self.centerPlaceholderView.leadingAnchor constraintEqualToAnchor:self.containerView.leadingAnchor constant:14.0];
+    [NSLayoutConstraint activateConstraints:@[
+        self.placeholderCenterXConstraint,
+        [self.centerPlaceholderView.centerYAnchor constraintEqualToAnchor:self.containerView.centerYAnchor],
+        [self.centerIconView.leadingAnchor constraintEqualToAnchor:self.centerPlaceholderView.leadingAnchor],
+        [self.centerIconView.centerYAnchor constraintEqualToAnchor:self.centerPlaceholderView.centerYAnchor],
+        [self.centerIconView.widthAnchor constraintEqualToConstant:18.0],
+        [self.centerIconView.heightAnchor constraintEqualToConstant:18.0],
+        [self.centerPlaceholderLabel.leadingAnchor constraintEqualToAnchor:self.centerIconView.trailingAnchor constant:8.0],
+        [self.centerPlaceholderLabel.topAnchor constraintEqualToAnchor:self.centerPlaceholderView.topAnchor],
+        [self.centerPlaceholderLabel.trailingAnchor constraintEqualToAnchor:self.centerPlaceholderView.trailingAnchor],
+        [self.centerPlaceholderLabel.bottomAnchor constraintEqualToAnchor:self.centerPlaceholderView.bottomAnchor]
+    ]];
 
     [self.settingsVC.view addSubview:self.headerView];
     [self installPinnedHeaderInsetsForTableView:tableView];
@@ -1367,22 +1387,6 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     [self updateNavigationGestureState];
 }
 
-- (CGRect)placeholderFrameForLeftAlignment:(BOOL)leftAligned {
-    CGFloat iconSize = 18.0;
-    CGFloat spacing = 8.0;
-    CGSize labelSize = [self.centerPlaceholderLabel.text sizeWithAttributes:@{NSFontAttributeName : self.centerPlaceholderLabel.font}];
-    CGFloat placeholderWidth = iconSize + spacing + ceil(labelSize.width);
-    CGFloat placeholderHeight = MAX(iconSize, ceil(labelSize.height));
-    self.centerIconView.frame = CGRectMake(0, (placeholderHeight - iconSize) / 2.0, iconSize, iconSize);
-    self.centerPlaceholderLabel.frame = CGRectMake(iconSize + spacing, 0, ceil(labelSize.width), placeholderHeight);
-
-    CGFloat containerWidth = CGRectGetWidth(self.containerView.bounds);
-    CGFloat containerHeight = CGRectGetHeight(self.containerView.bounds);
-    CGFloat targetX = leftAligned ? 14.0 : (containerWidth - placeholderWidth) / 2.0;
-    targetX = MAX(0.0, MIN(targetX, containerWidth - placeholderWidth));
-    return CGRectMake(targetX, (containerHeight - placeholderHeight) / 2.0, placeholderWidth, placeholderHeight);
-}
-
 - (void)updateSearchPlaceholderVisibility {
     [self updateSearchPlaceholderVisibilityAnimated:NO];
 }
@@ -1395,8 +1399,16 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     BOOL hasSearchText = self.searchTextField.text.length > 0;
     BOOL showPlaceholderView = !hasSearchText;
     BOOL leftAligned = self.searchTextField.isEditing;
-    CGRect targetFrame = [self placeholderFrameForLeftAlignment:leftAligned];
     CGFloat targetPlaceholderAlpha = showPlaceholderView ? 1.0 : 0.0;
+
+    [self.containerView layoutIfNeeded];
+    if (leftAligned) {
+        self.placeholderCenterXConstraint.active = NO;
+        self.placeholderLeadingConstraint.active = YES;
+    } else {
+        self.placeholderLeadingConstraint.active = NO;
+        self.placeholderCenterXConstraint.active = YES;
+    }
 
     self.searchTextField.placeholder = nil;
     self.searchTextField.attributedPlaceholder = nil;
@@ -1407,8 +1419,8 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     }
 
     void (^animations)(void) = ^{
-      self.centerPlaceholderView.frame = targetFrame;
       self.centerPlaceholderView.alpha = targetPlaceholderAlpha;
+      [self.containerView layoutIfNeeded];
       if (!showPlaceholderView) {
           self.leftIconView.alpha = 1.0;
       }
