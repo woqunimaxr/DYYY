@@ -56,14 +56,6 @@ static NSString *const kDYYYCommentPausePlaybackSVGIconName = @"ic_commentpause_
 static NSString *const kDYYYLoginBypassSVGIconName = @"ic_unlocknew_outlined_20";
 static NSString *const kDYYYHideRecommendAppDownloadSettingIdentifier = @"DYYYHideRecommendAppDownload";
 static NSString *const kDYYYMiniProgramJumpingAdsSettingIdentifier = @"DYYYEnableMiniProgramJumpingAds";
-static void DYYYNormalizeMiniProgramJumpingAdsSwitchValue(void) {
-    id savedValue = [[NSUserDefaults standardUserDefaults] objectForKey:kDYYYMiniProgramJumpingAdsSettingIdentifier];
-    if ([savedValue isKindOfClass:[NSString class]]) {
-        NSString *savedString = (NSString *)savedValue;
-        BOOL enabled = [savedString isEqualToString:@"正常跳广告"] || [savedString boolValue];
-        [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kDYYYMiniProgramJumpingAdsSettingIdentifier];
-    }
-}
 
 static char kDYYYGeneratedSettingIconIdentifierKey;
 static char kDYYYGeneratedSettingIconRetryScheduledKey;
@@ -2382,7 +2374,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       }
       // 【过滤与屏蔽】分类
       NSMutableArray<AWESettingItemModel *> *filterItems = [NSMutableArray array];
-      DYYYNormalizeMiniProgramJumpingAdsSwitchValue();
       NSArray *filterSettings = @[
           @{@"identifier" : @"DYYYSkipLive",
             @"title" : @"推荐过滤直播",
