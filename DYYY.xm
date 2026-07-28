@@ -5961,8 +5961,6 @@ static NSString *DYYYAdjustedNativeLongPressSpeedHint(NSString *text) {
                           : DYYYConfiguredLongPressPlaybackSpeed();
     } else if ([text containsString:@"恢复"]) {
         targetSpeed = DYYYUnlockedNormalPlaybackSpeed();
-    } else {
-        targetSpeed = DYYYConfiguredLongPressPlaybackSpeed();
     }
     if (!isfinite(targetSpeed) || targetSpeed <= 0.0) {
         return text;
