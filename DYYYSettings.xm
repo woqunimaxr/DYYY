@@ -2440,6 +2440,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"imageName" : @"ic_thumbsdown_outlined_20"},
           @{@"identifier" : @"DYYYFilterUsers",
             @"title" : @"推荐过滤用户",
+            @"subTitle" : @"支持直接填写用户UID；建议通过长按面板添加",
             @"detail" : @"",
             @"cellType" : @26,
             @"imageName" : @"ic_userban_outlined_20"},
@@ -2509,6 +2510,9 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 NSString *savedKeywords = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterUsers"] ?: @"";
                 NSArray *keywordArray = savedKeywords.length > 0 ? [savedKeywords componentsSeparatedByString:@","] : @[];
                 DYYYKeywordListView *keywordListView = [[DYYYKeywordListView alloc] initWithTitle:@"过滤用户列表" keywords:keywordArray];
+                keywordListView.addItemTitle = @"添加用户UID";
+                keywordListView.editItemTitle = @"编辑用户";
+                keywordListView.inputPlaceholder = @"请输入用户UID";
                 keywordListView.onConfirm = ^(NSArray *keywords) {
                   NSString *keywordString = [keywords componentsJoinedByString:@","];
                   [DYYYSettingsHelper setUserDefaults:keywordString forKey:@"DYYYFilterUsers"];

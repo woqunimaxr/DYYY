@@ -8,6 +8,71 @@
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
 
+static NSString *DYYYLongPressFilterUserTokenFromStoredEntry(NSString *entry) {
+    NSString *token = [entry stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    NSRange canonicalSeparatorRange = [token rangeOfString:@"|" options:NSBackwardsSearch];
+    if (canonicalSeparatorRange.location != NSNotFound) {
+        token = NSMaxRange(canonicalSeparatorRange) < token.length
+                    ? [[token substringFromIndex:NSMaxRange(canonicalSeparatorRange)]
+                          stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                    : @"";
+    } else {
+        NSRange legacySeparatorRange = [token rangeOfString:@"-" options:NSBackwardsSearch];
+        if (legacySeparatorRange.location != NSNotFound) {
+            token = NSMaxRange(legacySeparatorRange) < token.length
+                        ? [[token substringFromIndex:NSMaxRange(legacySeparatorRange)]
+                              stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                        : @"";
+        }
+    }
+    return token;
+}
+
+static BOOL DYYYLongPressFilterUserEntryMatchesAuthor(NSString *entry, AWEUserModel *author) {
+    NSString *storedToken = DYYYLongPressFilterUserTokenFromStoredEntry(entry);
+    if (storedToken.length == 0 || !author) {
+        return NO;
+    }
+
+    NSString *userID = [author.userID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (userID.length > 0 &&
+        ([storedToken isEqualToString:userID] ||
+         [storedToken isEqualToString:[@"uid:" stringByAppendingString:userID]])) {
+        return YES;
+    }
+
+    NSString *shortID = [author.shortID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return shortID.length > 0 &&
+           ([storedToken isEqualToString:shortID] ||
+            [storedToken isEqualToString:[@"short:" stringByAppendingString:shortID]]);
+}
+
+static NSString *DYYYLongPressFilterUserStoredEntry(AWEUserModel *author) {
+    if (!author) {
+        return nil;
+    }
+
+    NSString *nickname = author.nickname.length > 0 ? author.nickname : @"未知用户";
+    NSString *userID = [author.userID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (userID.length > 0) {
+        return [NSString stringWithFormat:@"%@|uid:%@", nickname, userID];
+    }
+
+    NSString *shortID = [author.shortID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (shortID.length > 0) {
+        return [NSString stringWithFormat:@"%@|short:%@", nickname, shortID];
+    }
+
+    return nil;
+}
+
+static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
+    if (author.userID.length > 0) {
+        return author.userID;
+    }
+    return author.shortID ?: @"";
+}
+
 %hook AWELongPressPanelViewGroupModel
 %property(nonatomic, assign) BOOL isDYYYCustomGroup;
 %end
@@ -522,26 +587,25 @@
         filterKeywords.action = ^{
           AWEUserModel *author = self.awemeModel.author;
           NSString *nickname = author.nickname ?: @"未知用户";
-          NSString *shortId = author.shortID ?: @"";
-          // 创建当前用户的过滤格式 "nickname-shortid"
-          NSString *currentUserFilter = [NSString stringWithFormat:@"%@-%@", nickname, shortId];
+          NSString *displayID = DYYYLongPressFilterUserDisplayID(author);
+          NSString *currentUserFilter = DYYYLongPressFilterUserStoredEntry(author);
+          if (currentUserFilter.length == 0) {
+              [DYYYUtils showToast:@"无法获取该用户的有效ID"];
+              return;
+          }
           // 获取保存的过滤用户列表
           NSString *savedUsers = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterUsers"] ?: @"";
           NSArray *userArray = [savedUsers length] > 0 ? [savedUsers componentsSeparatedByString:@","] : @[];
           BOOL userExists = NO;
           for (NSString *userInfo in userArray) {
-              NSArray *components = [userInfo componentsSeparatedByString:@"-"];
-              if (components.count >= 2) {
-                  NSString *userId = [components lastObject];
-                  if ([userId isEqualToString:shortId] && shortId.length > 0) {
-                      userExists = YES;
-                      break;
-                  }
+              if (DYYYLongPressFilterUserEntryMatchesAuthor(userInfo, author)) {
+                  userExists = YES;
+                  break;
               }
           }
           NSString *actionButtonText = userExists ? @"取消过滤" : @"添加过滤";
           [DYYYBottomAlertView showAlertWithTitle:@"过滤用户视频"
-              message:[NSString stringWithFormat:@"用户: %@ (ID: %@)", nickname, shortId]
+              message:[NSString stringWithFormat:@"用户: %@ (ID: %@)", nickname, displayID]
               avatarURL:nil
               cancelButtonText:@"管理过滤列表"
               confirmButtonText:actionButtonText
@@ -562,12 +626,8 @@
                     // 移除用户
                     NSMutableArray *toRemove = [NSMutableArray array];
                     for (NSString *userInfo in updatedUsers) {
-                        NSArray *components = [userInfo componentsSeparatedByString:@"-"];
-                        if (components.count >= 2) {
-                            NSString *userId = [components lastObject];
-                            if ([userId isEqualToString:shortId]) {
-                                [toRemove addObject:userInfo];
-                            }
+                        if (DYYYLongPressFilterUserEntryMatchesAuthor(userInfo, author)) {
+                            [toRemove addObject:userInfo];
                         }
                     }
                     [updatedUsers removeObjectsInArray:toRemove];
@@ -1292,26 +1352,25 @@
         filterKeywords.action = ^{
           AWEUserModel *author = self.awemeModel.author;
           NSString *nickname = author.nickname ?: @"未知用户";
-          NSString *shortId = author.shortID ?: @"";
-          // 创建当前用户的过滤格式 "nickname-shortid"
-          NSString *currentUserFilter = [NSString stringWithFormat:@"%@-%@", nickname, shortId];
+          NSString *displayID = DYYYLongPressFilterUserDisplayID(author);
+          NSString *currentUserFilter = DYYYLongPressFilterUserStoredEntry(author);
+          if (currentUserFilter.length == 0) {
+              [DYYYUtils showToast:@"无法获取该用户的有效ID"];
+              return;
+          }
           // 获取保存的过滤用户列表
           NSString *savedUsers = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYFilterUsers"] ?: @"";
           NSArray *userArray = [savedUsers length] > 0 ? [savedUsers componentsSeparatedByString:@","] : @[];
           BOOL userExists = NO;
           for (NSString *userInfo in userArray) {
-              NSArray *components = [userInfo componentsSeparatedByString:@"-"];
-              if (components.count >= 2) {
-                  NSString *userId = [components lastObject];
-                  if ([userId isEqualToString:shortId] && shortId.length > 0) {
-                      userExists = YES;
-                      break;
-                  }
+              if (DYYYLongPressFilterUserEntryMatchesAuthor(userInfo, author)) {
+                  userExists = YES;
+                  break;
               }
           }
           NSString *actionButtonText = userExists ? @"取消过滤" : @"添加过滤";
           [DYYYBottomAlertView showAlertWithTitle:@"过滤用户视频"
-              message:[NSString stringWithFormat:@"用户: %@ (ID: %@)", nickname, shortId]
+              message:[NSString stringWithFormat:@"用户: %@ (ID: %@)", nickname, displayID]
               avatarURL:nil
               cancelButtonText:@"管理过滤列表"
               confirmButtonText:actionButtonText
@@ -1332,12 +1391,8 @@
                     // 移除用户
                     NSMutableArray *toRemove = [NSMutableArray array];
                     for (NSString *userInfo in updatedUsers) {
-                        NSArray *components = [userInfo componentsSeparatedByString:@"-"];
-                        if (components.count >= 2) {
-                            NSString *userId = [components lastObject];
-                            if ([userId isEqualToString:shortId]) {
-                                [toRemove addObject:userInfo];
-                            }
+                        if (DYYYLongPressFilterUserEntryMatchesAuthor(userInfo, author)) {
+                            [toRemove addObject:userInfo];
                         }
                     }
                     [updatedUsers removeObjectsInArray:toRemove];

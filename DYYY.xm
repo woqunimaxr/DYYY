@@ -10596,18 +10596,46 @@ static NSArray<NSString *> *DYYYNormalizedFilterTokens(id rawValue) {
 
 static NSSet<NSString *> *DYYYNormalizedFilterUserIDs(id rawValue) {
     NSMutableSet<NSString *> *userIDs = [NSMutableSet set];
+    NSCharacterSet *whitespace = [NSCharacterSet whitespaceAndNewlineCharacterSet];
     for (NSString *userInfo in DYYYNormalizedFilterTokens(rawValue)) {
-        NSArray<NSString *> *components = [userInfo componentsSeparatedByString:@"-"];
-        if (components.count < 2) {
-            continue;
+        NSString *userID = [userInfo stringByTrimmingCharactersInSet:whitespace];
+        NSRange canonicalSeparatorRange = [userID rangeOfString:@"|" options:NSBackwardsSearch];
+        if (canonicalSeparatorRange.location != NSNotFound) {
+            userID = NSMaxRange(canonicalSeparatorRange) < userID.length
+                         ? [[userID substringFromIndex:NSMaxRange(canonicalSeparatorRange)] stringByTrimmingCharactersInSet:whitespace]
+                         : @"";
+        } else {
+            NSRange legacySeparatorRange = [userID rangeOfString:@"-" options:NSBackwardsSearch];
+            if (legacySeparatorRange.location != NSNotFound) {
+                userID = NSMaxRange(legacySeparatorRange) < userID.length
+                             ? [[userID substringFromIndex:NSMaxRange(legacySeparatorRange)] stringByTrimmingCharactersInSet:whitespace]
+                             : @"";
+            }
         }
 
-        NSString *userID = [[components lastObject] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         if (userID.length > 0) {
             [userIDs addObject:userID];
         }
     }
     return [userIDs copy];
+}
+
+static BOOL DYYYRecommendationFilterMatchesAuthor(DYYYRecommendationFilterConfig *config, AWEUserModel *author) {
+    if (config.userIDs.count == 0 || !author) {
+        return NO;
+    }
+
+    NSString *userID = [author.userID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (userID.length > 0 &&
+        ([config.userIDs containsObject:userID] ||
+         [config.userIDs containsObject:[@"uid:" stringByAppendingString:userID]])) {
+        return YES;
+    }
+
+    NSString *shortID = [author.shortID stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    return shortID.length > 0 &&
+           ([config.userIDs containsObject:shortID] ||
+            [config.userIDs containsObject:[@"short:" stringByAppendingString:shortID]]);
 }
 
 static DYYYRecommendationFilterConfig *DYYYBuildRecommendationFilterConfig(NSUInteger generation) {
@@ -10641,7 +10669,8 @@ static DYYYRecommendationFilterConfig *DYYYBuildRecommendationFilterConfig(NSUIn
                           config.skipAIInteraction ||
                           config.shouldDisableHDR ||
                           config.minLikesThreshold > 0 ||
-                          config.daysThreshold > 0;
+                          config.daysThreshold > 0 ||
+                          config.userIDs.count > 0;
     config.hasModelFilterWork = config.noAds ||
                                 config.skipAllLive ||
                                 config.skipHotSpot ||
@@ -10864,6 +10893,12 @@ static BOOL DYYYStringContainsAnyFilterToken(NSString *value, NSArray<NSString *
             continue;
         }
 
+        // 2.6 用户过滤：当前控制器只处理推荐流，模型字段也已在数组转换阶段完整初始化。
+        // 优先匹配稳定 userID，并保留旧版 shortID 配置兼容。
+        if (DYYYRecommendationFilterMatchesAuthor(config, m.author)) {
+            continue;
+        }
+
         // 3. 时间限制过滤
         if (config.daysThreshold > 0 && [m respondsToSelector:@selector(createTime)]) {
             NSTimeInterval vTs = [m.createTime doubleValue];
@@ -10934,9 +10969,8 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     BOOL shouldFilterUser = NO;
     BOOL shouldFilterHDR = NO;
 
-    if (isRecommendFeed && config.userIDs.count > 0 && aweme.author) {
-        NSString *currentShortID = aweme.author.shortID;
-        shouldFilterUser = currentShortID.length > 0 && [config.userIDs containsObject:currentShortID];
+    if (isRecommendFeed) {
+        shouldFilterUser = DYYYRecommendationFilterMatchesAuthor(config, aweme.author);
     }
 
     if (isRecommendFeed && config.keywords.count > 0) {
