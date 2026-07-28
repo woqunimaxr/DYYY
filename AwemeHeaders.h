@@ -1767,6 +1767,21 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(retain, nonatomic) AWECodeGenCommonAnchorBasicInfoModel *templateAnchorInfo;
 @end
 
+@interface AWEFeedTemplateAnchorViewV2 : UIView
+@property(retain, nonatomic, readonly) AWECodeGenCommonAnchorBasicInfoModel *templateAnchorInfo;
+@end
+
+@interface AWEFeedAnchorPOIConfig : NSObject
++ (BOOL)hasAnchorViewDataWithAwemeModelForFeed:(id)awemeModel extraInfo:(id)extraInfo;
+@end
+
+@interface AWEFeedAnchorPOITradeConfig : NSObject
++ (BOOL)hasAnchorViewDataWithAwemeModelForFeed:(id)awemeModel extraInfo:(id)extraInfo;
+@end
+
+@interface AWEPOITradeEntryAnchorView : UIView
+@end
+
 @interface AWEKnowledgeABTestSettings : NSObject
 + (BOOL)enableHDRAutomaticIdentification;
 @end

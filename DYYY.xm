@@ -4327,12 +4327,88 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
+%hook AWEFeedAnchorPOIConfig
+
++ (BOOL)hasAnchorViewDataWithAwemeModelForFeed:(id)awemeModel extraInfo:(id)extraInfo {
+    if (DYYYGetBool(@"DYYYHideLocation")) {
+        return NO;
+    }
+    return %orig(awemeModel, extraInfo);
+}
+
+%end
+
+%hook AWEFeedAnchorPOITradeConfig
+
++ (BOOL)hasAnchorViewDataWithAwemeModelForFeed:(id)awemeModel extraInfo:(id)extraInfo {
+    if (DYYYGetBool(@"DYYYHideLocation")) {
+        return NO;
+    }
+    return %orig(awemeModel, extraInfo);
+}
+
+%end
+
+static char kDYYYFeedLocationContainerManagedHiddenKey;
+static char kDYYYFeedLocationContainerOriginalHiddenKey;
+
+%hook AWEFeedAnchorContainerView
+
+- (void)layoutSubviews {
+    %orig;
+
+    BOOL containsLocationAnchor = NO;
+    Class poiEntryClass = NSClassFromString(@"AWEPOIEntryAnchorView");
+    Class poiTradeEntryClass = NSClassFromString(@"AWEPOITradeEntryAnchorView");
+    if ((poiEntryClass && [DYYYUtils containsSubviewOfClass:poiEntryClass inContainer:self]) ||
+        (poiTradeEntryClass && [DYYYUtils containsSubviewOfClass:poiTradeEntryClass inContainer:self])) {
+        containsLocationAnchor = YES;
+    }
+
+    if (!containsLocationAnchor) {
+        Class templateAnchorV2Class = NSClassFromString(@"AWEFeedTemplateAnchorViewV2");
+        NSArray<UIView *> *templateAnchorViews = [DYYYUtils findAllSubviewsOfClass:templateAnchorV2Class inContainer:self];
+        for (AWEFeedTemplateAnchorViewV2 *templateAnchorView in templateAnchorViews) {
+            AWECodeGenCommonAnchorBasicInfoModel *anchorInfo = templateAnchorView.templateAnchorInfo;
+            if ([anchorInfo.name isEqualToString:@"poi_poi"]) {
+                containsLocationAnchor = YES;
+                break;
+            }
+        }
+    }
+
+    NSNumber *managedHidden = objc_getAssociatedObject(self, &kDYYYFeedLocationContainerManagedHiddenKey);
+    if (DYYYGetBool(@"DYYYHideLocation") && containsLocationAnchor) {
+        if (![managedHidden boolValue]) {
+            objc_setAssociatedObject(self, &kDYYYFeedLocationContainerOriginalHiddenKey, @(self.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(self, &kDYYYFeedLocationContainerManagedHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        self.hidden = YES;
+        return;
+    }
+
+    if ([managedHidden boolValue]) {
+        NSNumber *originalHidden = objc_getAssociatedObject(self, &kDYYYFeedLocationContainerOriginalHiddenKey);
+        objc_setAssociatedObject(self, &kDYYYFeedLocationContainerManagedHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(self, &kDYYYFeedLocationContainerOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        self.hidden = originalHidden ? originalHidden.boolValue : NO;
+    }
+}
+
+%end
+
 %hook AWEMarkView
 
 - (void)layoutSubviews {
     %orig;
 
-    if (DYYYGetBool(@"DYYYHideLocation")) {
+    Class poiConfigClass = NSClassFromString(@"AWEFeedAnchorPOIConfig");
+    Class poiTradeConfigClass = NSClassFromString(@"AWEFeedAnchorPOITradeConfig");
+    SEL feedVisibilitySelector = @selector(hasAnchorViewDataWithAwemeModelForFeed:extraInfo:);
+    BOOL supportsPOIConfigVisibility =
+        (poiConfigClass && class_getClassMethod(poiConfigClass, feedVisibilitySelector)) ||
+        (poiTradeConfigClass && class_getClassMethod(poiTradeConfigClass, feedVisibilitySelector));
+    if (DYYYGetBool(@"DYYYHideLocation") && !supportsPOIConfigVisibility) {
         self.hidden = YES;
         return;
     }
