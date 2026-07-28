@@ -1767,9 +1767,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(retain, nonatomic) AWECodeGenCommonAnchorBasicInfoModel *templateAnchorInfo;
 @end
 
-@interface AWEPOITradeEntryAnchorView : UIView
-@end
-
 @interface AWEKnowledgeABTestSettings : NSObject
 + (BOOL)enableHDRAutomaticIdentification;
 @end

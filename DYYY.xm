@@ -4327,101 +4327,15 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
-static char kDYYYMarkViewOriginalHiddenKey;
-static char kDYYYTemplateLocationOriginalHiddenKey;
-static char kDYYYTradeLocationOriginalHiddenKey;
-
 %hook AWEMarkView
 
-- (void)setHidden:(BOOL)hidden {
-    NSNumber *originalHidden = objc_getAssociatedObject(self, &kDYYYMarkViewOriginalHiddenKey);
+- (void)layoutSubviews {
+    %orig;
+
     if (DYYYGetBool(@"DYYYHideLocation")) {
-        if (!originalHidden) {
-            objc_setAssociatedObject(self, &kDYYYMarkViewOriginalHiddenKey, @(hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        %orig(YES);
+        self.hidden = YES;
         return;
     }
-
-    if (originalHidden) {
-        objc_setAssociatedObject(self, &kDYYYMarkViewOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        %orig(originalHidden.boolValue);
-        return;
-    }
-
-    %orig(hidden);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    self.hidden = self.hidden;
-}
-
-%end
-
-%hook AWEFeedTemplateAnchorView
-
-- (void)setHidden:(BOOL)hidden {
-    NSString *anchorName = nil;
-    id anchorInfo = self.templateAnchorInfo;
-    if ([anchorInfo respondsToSelector:@selector(name)]) {
-        anchorName = [(AWECodeGenCommonAnchorBasicInfoModel *)anchorInfo name];
-    }
-
-    NSNumber *originalHidden = objc_getAssociatedObject(self, &kDYYYTemplateLocationOriginalHiddenKey);
-    if (DYYYGetBool(@"DYYYHideLocation") && [anchorName isEqualToString:@"poi_poi"]) {
-        if (!originalHidden) {
-            objc_setAssociatedObject(self, &kDYYYTemplateLocationOriginalHiddenKey, @(hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        %orig(YES);
-        return;
-    }
-
-    if (originalHidden) {
-        objc_setAssociatedObject(self, &kDYYYTemplateLocationOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        %orig(originalHidden.boolValue);
-        return;
-    }
-
-    %orig(hidden);
-}
-
-- (void)setTemplateAnchorInfo:(AWECodeGenCommonAnchorBasicInfoModel *)anchorInfo {
-    %orig(anchorInfo);
-    self.hidden = self.hidden;
-}
-
-- (void)layoutSubviews {
-    %orig;
-    self.hidden = self.hidden;
-}
-
-%end
-
-%hook AWEPOITradeEntryAnchorView
-
-- (void)setHidden:(BOOL)hidden {
-    NSNumber *originalHidden = objc_getAssociatedObject(self, &kDYYYTradeLocationOriginalHiddenKey);
-    if (DYYYGetBool(@"DYYYHideLocation")) {
-        if (!originalHidden) {
-            objc_setAssociatedObject(self, &kDYYYTradeLocationOriginalHiddenKey, @(hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
-        %orig(YES);
-        return;
-    }
-
-    if (originalHidden) {
-        objc_setAssociatedObject(self, &kDYYYTradeLocationOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        %orig(originalHidden.boolValue);
-        return;
-    }
-
-    %orig(hidden);
-}
-
-- (void)layoutSubviews {
-    %orig;
-    self.hidden = self.hidden;
 }
 
 %end
