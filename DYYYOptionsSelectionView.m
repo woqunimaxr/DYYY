@@ -10,8 +10,9 @@ static UIColor *DYYYThemeColor(UIColor *darkColor, UIColor *lightColor, BOOL dar
 }
 
 static UIColor *DYYYSelectionSheetBackgroundColor(BOOL darkMode) {
-    (void)darkMode;
-    return [DYYYUtils douyinPanelBackgroundColor];
+    // AWEUIColor BGPanelTint: d=FF262626, dl=FFFFFFFF。
+    // 选项页可能在“经典背景 + 系统浅色外观”下创建，不能依赖全局 trait 再解析一次颜色。
+    return darkMode ? [UIColor colorWithWhite:38.0 / 255.0 alpha:1.0] : [UIColor whiteColor];
 }
 
 static UIColor *DYYYSelectionSheetTextColor(BOOL darkMode) {
@@ -19,8 +20,9 @@ static UIColor *DYYYSelectionSheetTextColor(BOOL darkMode) {
 }
 
 static UIColor *DYYYSelectionSheetSeparatorColor(BOOL darkMode) {
-    (void)darkMode;
-    return [DYYYUtils douyinSeparatorColor];
+    // 使用 LineSecondary 的可见前景方向，避免经典与浅色模式的分割线反色。
+    return darkMode ? [UIColor colorWithWhite:1.0 alpha:20.0 / 255.0]
+                    : [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:20.0 / 255.0];
 }
 
 static BOOL DYYYColorGetRGBA(UIColor *color, CGFloat *red, CGFloat *green, CGFloat *blue, CGFloat *alpha) {
