@@ -55,6 +55,15 @@ static NSString *const kDYYYCommentPausePlaybackSettingIdentifier = @"DYYYCommen
 static NSString *const kDYYYCommentPausePlaybackSVGIconName = @"ic_commentpause_dyyy_outlined_20";
 static NSString *const kDYYYLoginBypassSVGIconName = @"ic_unlocknew_outlined_20";
 static NSString *const kDYYYHideRecommendAppDownloadSettingIdentifier = @"DYYYHideRecommendAppDownload";
+static NSString *const kDYYYMiniProgramJumpingAdsSettingIdentifier = @"DYYYEnableMiniProgramJumpingAds";
+static void DYYYNormalizeMiniProgramJumpingAdsSwitchValue(void) {
+    id savedValue = [[NSUserDefaults standardUserDefaults] objectForKey:kDYYYMiniProgramJumpingAdsSettingIdentifier];
+    if ([savedValue isKindOfClass:[NSString class]]) {
+        NSString *savedString = (NSString *)savedValue;
+        BOOL enabled = [savedString isEqualToString:@"正常跳广告"] || [savedString boolValue];
+        [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kDYYYMiniProgramJumpingAdsSettingIdentifier];
+    }
+}
 
 static char kDYYYGeneratedSettingIconIdentifierKey;
 static char kDYYYGeneratedSettingIconRetryScheduledKey;
@@ -218,6 +227,37 @@ static UIImage *DYYYCommentPausePlaybackIcon(CGSize requestedSize) {
     });
 }
 
+static UIImage *DYYYMiniProgramJumpingAdsIcon(CGSize requestedSize) {
+    return DYYYRenderGeneratedSettingTemplateIcon(@"mini-program-jumping-ads-v2", requestedSize, ^(CGContextRef context, CGSize targetSize) {
+      CGContextScaleCTM(context, targetSize.width / 20.0, targetSize.height / 20.0);
+      UIColor *iconColor = [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:1.0];
+      [iconColor setStroke];
+      CGContextSetLineWidth(context, 1.55);
+      CGContextSetLineCap(context, kCGLineCapRound);
+      CGContextSetLineJoin(context, kCGLineJoinRound);
+
+      UIBezierPath *tiles = [UIBezierPath bezierPath];
+      [tiles appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(3.0, 3.0, 5.2, 5.2) cornerRadius:1.15]];
+      [tiles appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(11.3, 3.3, 3.9, 3.9) cornerRadius:0.9]];
+      [tiles appendPath:[UIBezierPath bezierPathWithRoundedRect:CGRectMake(3.3, 11.3, 3.9, 3.9) cornerRadius:0.9]];
+      tiles.lineWidth = 1.55;
+      tiles.lineCapStyle = kCGLineCapRound;
+      tiles.lineJoinStyle = kCGLineJoinRound;
+      [tiles stroke];
+
+      UIBezierPath *arrow = [UIBezierPath bezierPath];
+      [arrow moveToPoint:CGPointMake(10.0, 14.3)];
+      [arrow addLineToPoint:CGPointMake(16.7, 14.3)];
+      [arrow moveToPoint:CGPointMake(14.1, 11.7)];
+      [arrow addLineToPoint:CGPointMake(16.8, 14.3)];
+      [arrow addLineToPoint:CGPointMake(14.1, 16.9)];
+      arrow.lineWidth = 1.65;
+      arrow.lineCapStyle = kCGLineCapRound;
+      arrow.lineJoinStyle = kCGLineJoinRound;
+      [arrow stroke];
+    });
+}
+
 @interface AWESettingsTableViewCell : UITableViewCell
 @property(nonatomic, strong) AWESettingItemModel *itemModel;
 @property(nonatomic, strong) UILabel *titleLabel;
@@ -236,7 +276,8 @@ static UIImage *DYYYCommentPausePlaybackIcon(CGSize requestedSize) {
 
 static BOOL DYYYIsGeneratedSettingIconIdentifier(NSString *identifier) {
     return [identifier isEqualToString:kDYYYFeedNowPlayingSettingIdentifier] ||
-           [identifier isEqualToString:kDYYYCommentPausePlaybackSettingIdentifier];
+           [identifier isEqualToString:kDYYYCommentPausePlaybackSettingIdentifier] ||
+           [identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier];
 }
 
 static UIImage *DYYYGeneratedSettingIconForIdentifier(NSString *identifier, CGSize targetSize) {
@@ -245,6 +286,9 @@ static UIImage *DYYYGeneratedSettingIconForIdentifier(NSString *identifier, CGSi
     }
     if ([identifier isEqualToString:kDYYYCommentPausePlaybackSettingIdentifier]) {
         return DYYYCommentPausePlaybackIcon(targetSize);
+    }
+    if ([identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier]) {
+        return DYYYMiniProgramJumpingAdsIcon(targetSize);
     }
     return nil;
 }
@@ -2327,6 +2371,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       }
       // 【过滤与屏蔽】分类
       NSMutableArray<AWESettingItemModel *> *filterItems = [NSMutableArray array];
+      DYYYNormalizeMiniProgramJumpingAdsSwitchValue();
       NSArray *filterSettings = @[
           @{@"identifier" : @"DYYYSkipLive",
             @"title" : @"推荐过滤直播",
@@ -2413,6 +2458,11 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"imageName" : @"ic_sun_outlined"},
           @{@"identifier" : @"DYYYNoAds",
             @"title" : @"启用屏蔽广告",
+            @"detail" : @"",
+            @"cellType" : @6,
+            @"imageName" : @"ic_ad_outlined_20"},
+          @{@"identifier" : kDYYYMiniProgramJumpingAdsSettingIdentifier,
+            @"title" : @"小程序跳广告",
             @"detail" : @"",
             @"cellType" : @6,
             @"imageName" : @"ic_ad_outlined_20"},
