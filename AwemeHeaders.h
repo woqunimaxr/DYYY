@@ -1353,6 +1353,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEAwemeDetailTableViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 @end
+@interface AWEMixVideoPanelDetailTableViewController : AWEAwemeDetailTableViewController
+@property(nonatomic, assign) BOOL isShowingRelatedMixViewController;
+@end
 @interface AWEAwemeHotSpotTableViewController : UIViewController
 - (BOOL)prefersStatusBarHidden;
 @end

@@ -14940,6 +14940,19 @@ static Class tabBarButtonClass = nil;
         count++;
     }
 
+    BOOL isShowingRelatedMixViewController = NO;
+    UIViewController *sceneParentVC = directParentVC;
+    int sceneDepth = 0;
+    while (sceneParentVC && sceneDepth < 8) {
+        if ([sceneParentVC isKindOfClass:%c(AWEMixVideoPanelDetailTableViewController)]) {
+            AWEMixVideoPanelDetailTableViewController *mixDetailVC = (AWEMixVideoPanelDetailTableViewController *)sceneParentVC;
+            isShowingRelatedMixViewController = mixDetailVC.isShowingRelatedMixViewController;
+            break;
+        }
+        sceneParentVC = sceneParentVC.parentViewController;
+        sceneDepth++;
+    }
+
     if (!self.view.superview) {
         return;
     }
@@ -14956,7 +14969,7 @@ static Class tabBarButtonClass = nil;
 
     BOOL useFullHeight = [currentReferString isEqualToString:@"general_search"] || [currentReferString isEqualToString:@"search_result"] || [currentReferString isEqualToString:@"search_ecommerce"] ||
                          [currentReferString isEqualToString:@"close_friends_moment"] || [currentReferString isEqualToString:@"offline_mode"] || [currentReferString isEqualToString:@"challenge"] ||
-                         [currentReferString isEqualToString:@"general_search_scan"] || currentReferString == nil;
+                         [currentReferString isEqualToString:@"general_search_scan"] || currentReferString == nil || isShowingRelatedMixViewController;
 
     if (!useFullHeight && [currentReferString isEqualToString:@"co_play_watch"]) {
         Class richContentVCClass = NSClassFromString(@"AWEFriendsImpl.RichContentNewListViewController");
