@@ -15986,8 +15986,13 @@ static void DYYYRemoveKeyboardObserver(void) {
 %hook AWEStoryProgressContainerView
 - (void)setCenter:(CGPoint)center {
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([vc isKindOfClass:NSClassFromString(@"AWEFeedPlayControlImpl.PureModePageCellViewController")] && DYYYGetBool(@"DYYYEnableFullScreen")) {
-        center.y -= gCurrentTabBarHeight;
+    BOOL isPureModeImageBrowser = [vc isKindOfClass:NSClassFromString(@"AWEFeedPlayControlImpl.PureModePageCellViewController")];
+    if (isPureModeImageBrowser && DYYYGetBool(@"DYYYEnableFullScreen")) {
+        NSString *appVersion = [NSBundle mainBundle].infoDictionary[@"CFBundleShortVersionString"];
+        BOOL needsLegacyOffset = appVersion.length == 0 || [DYYYUtils compareVersion:appVersion toVersion:@"37.2.0"] == NSOrderedAscending;
+        if (needsLegacyOffset && gCurrentTabBarHeight > 0) {
+            center.y -= gCurrentTabBarHeight;
+        }
     }
     %orig(center);
 }
