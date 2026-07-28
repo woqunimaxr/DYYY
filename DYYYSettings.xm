@@ -1075,13 +1075,12 @@ static NSMutableArray<NSString *> *DYYYSettingsSearchIndexKeys(void) {
     return keys;
 }
 
-static void DYYYRegisterSearchSections(NSString *categoryTitle, NSArray *sections) {
+static NSArray<NSDictionary *> *DYYYSettingsSearchEntriesForSections(NSString *categoryTitle, NSArray *sections) {
     if (categoryTitle.length == 0 || sections.count == 0) {
-        return;
+        return @[];
     }
 
-    NSMutableDictionary *indexMap = DYYYSettingsSearchIndexMap();
-    NSMutableArray *orderedKeys = DYYYSettingsSearchIndexKeys();
+    NSMutableArray<NSDictionary *> *entries = [NSMutableArray array];
 
     for (AWESettingSectionModel *section in sections) {
         if (![section respondsToSelector:@selector(itemArray)]) {
@@ -1104,12 +1103,25 @@ static void DYYYRegisterSearchSections(NSString *categoryTitle, NSArray *section
             NSString *identifier = item.identifier.length > 0 ? item.identifier : item.title;
             NSString *entryKey = [NSString stringWithFormat:@"%@|%@|%@", path, identifier, item.title];
             NSString *searchableText = [NSString stringWithFormat:@"%@ %@", item.title ?: @"", item.subTitle ?: @""];
-
-            if (!indexMap[entryKey]) {
-                [orderedKeys addObject:entryKey];
-            }
-            indexMap[entryKey] = [@{@"path" : path, @"item" : item, @"searchableText" : searchableText} mutableCopy];
+            [entries addObject:@{@"entryKey" : entryKey, @"path" : path, @"item" : item, @"searchableText" : searchableText}];
         }
+    }
+
+    return entries;
+}
+
+static void DYYYRegisterSearchSections(NSString *categoryTitle, NSArray *sections) {
+    NSMutableDictionary *indexMap = DYYYSettingsSearchIndexMap();
+    NSMutableArray *orderedKeys = DYYYSettingsSearchIndexKeys();
+
+    for (NSDictionary *entry in DYYYSettingsSearchEntriesForSections(categoryTitle, sections)) {
+        NSString *entryKey = entry[@"entryKey"];
+        if (!indexMap[entryKey]) {
+            [orderedKeys addObject:entryKey];
+        }
+        NSMutableDictionary *storedEntry = [entry mutableCopy];
+        [storedEntry removeObjectForKey:@"entryKey"];
+        indexMap[entryKey] = storedEntry;
     }
 }
 
@@ -1576,17 +1588,24 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
 @end
 
-static void DYYYAttachSettingsSearchHeader(AWESettingBaseViewController *settingsVC, AWESettingsViewModel *viewModel, NSArray *sections) {
+static void DYYYAttachSettingsSearchHeader(AWESettingBaseViewController *settingsVC, AWESettingsViewModel *viewModel, NSArray *sections, NSArray<NSDictionary *> *searchEntries) {
     if (!settingsVC || !viewModel || sections.count == 0) {
         return;
     }
 
-    DYYYSettingsSearchCoordinator *coordinator = [[DYYYSettingsSearchCoordinator alloc] initWithSettingsVC:settingsVC viewModel:viewModel originalSections:sections searchEntries:DYYYSettingsSearchEntries()];
+    DYYYSettingsSearchCoordinator *coordinator =
+        [[DYYYSettingsSearchCoordinator alloc] initWithSettingsVC:settingsVC viewModel:viewModel originalSections:sections searchEntries:searchEntries ?: @[]];
     objc_setAssociatedObject(settingsVC, &kDYYYSettingsSearchCoordinatorKey, coordinator, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
     dispatch_async(dispatch_get_main_queue(), ^{
       [coordinator installSearchHeader];
     });
+}
+
+static void DYYYAttachSubSettingsSearchHeader(AWESettingBaseViewController *settingsVC, NSString *title, NSArray *sections) {
+    AWESettingsViewModel *viewModel = objc_getAssociatedObject(settingsVC, &kViewModelKey);
+    NSArray<NSDictionary *> *searchEntries = DYYYSettingsSearchEntriesForSections(title, sections);
+    DYYYAttachSettingsSearchHeader(settingsVC, viewModel, sections, searchEntries);
 }
 
 static void DYYYBuildSettingsSearchIndexIfNeeded(NSArray<AWESettingItemModel *> *categoryItems) {
@@ -2520,6 +2539,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并推入二级设置页面
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"基本设置" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"基本设置", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
     [mainItems addObject:basicSettingItem];
@@ -2705,6 +2725,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并推入二级设置页面
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"界面设置" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"界面设置", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
 
@@ -3526,6 +3547,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并推入二级设置页面
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"隐藏设置" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"隐藏设置", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
     [mainItems addObject:hideSettingItem];
@@ -3653,6 +3675,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       }
 
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"顶栏移除" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"顶栏移除", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
     [mainItems addObject:removeSettingItem];
@@ -4650,6 +4673,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并推入二级设置页面
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"增强设置" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"增强设置", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
 
@@ -4977,6 +5001,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 创建并推入二级设置页面
       AWESettingBaseViewController *subVC = [DYYYSettingsHelper createSubSettingsViewController:@"悬浮按钮" sections:sections];
+      DYYYAttachSubSettingsSearchHeader(subVC, @"悬浮按钮", sections);
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
     [mainItems addObject:floatButtonSettingItem];
@@ -5389,7 +5414,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     NSArray *rootSections = @[ mainSection, cleanupSection, backupSection, aboutSection ];
     viewModel.sectionDataArray = rootSections;
     objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    DYYYAttachSettingsSearchHeader(settingsVC, viewModel, rootSections);
+    DYYYAttachSettingsSearchHeader(settingsVC, viewModel, rootSections, DYYYSettingsSearchEntries());
     [rootVC.navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
 }
 
