@@ -1242,11 +1242,17 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
         return;
     }
 
-    self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 44)];
+    // 直接进入子页时 tableView 可能尚未完成首次布局，宽度仍为 0。
+    // 禁止用 width - 32 创建负宽度视图，否则 UIKit 会留下非零 bounds.origin。
+    CGFloat initialWidth = MAX(CGRectGetWidth(tableView.bounds), CGRectGetWidth(self.settingsVC.view.bounds));
+    initialWidth = MAX(0.0, initialWidth);
+    CGFloat initialContainerWidth = MAX(0.0, initialWidth - 32.0);
+
+    self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, initialWidth, 44)];
     self.headerView.backgroundColor = [UIColor clearColor];
     self.headerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
-    self.containerView = [[UIView alloc] initWithFrame:CGRectMake(16, 0, self.headerView.bounds.size.width - 32, 44)];
+    self.containerView = [[UIView alloc] initWithFrame:CGRectMake(16, 0, initialContainerWidth, 44)];
     self.containerView.layer.cornerRadius = 12;
     self.containerView.layer.masksToBounds = NO;
     self.containerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
@@ -1354,8 +1360,11 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
     CGRect tableFrame = [tableSuperview convertRect:tableView.frame toView:settingsView];
     CGFloat automaticTopInset = MAX(0.0, tableView.adjustedContentInset.top - tableView.contentInset.top);
+    CGFloat containerWidth = MAX(0.0, width - 32.0);
     self.headerView.frame = CGRectMake(CGRectGetMinX(tableFrame), CGRectGetMinY(tableFrame) + automaticTopInset, width, 44);
-    self.containerView.frame = CGRectMake(16, 0, width - 32, 44);
+    self.containerView.frame = CGRectMake(16, 0, containerWidth, 44);
+    // containerView 是非滚动的自有承载视图，bounds 原点必须始终为零。
+    self.containerView.bounds = CGRectMake(0, 0, containerWidth, 44);
     self.containerView.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.containerView.bounds cornerRadius:self.containerView.layer.cornerRadius].CGPath;
     self.searchTextField.frame = self.containerView.bounds;
     self.headerView.backgroundColor = UIColor.clearColor;
