@@ -1443,15 +1443,10 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 }
 
 - (void)searchTextDidChange:(UITextField *)textField {
-    [self updateSearchPlaceholderVisibilityAnimated:YES];
+    // 输入过程中不要反复叠加占位视图和列表的过渡动画，避免阻塞文字即时显示。
+    [self updateSearchPlaceholderVisibilityAnimated:NO];
     self.viewModel.sectionDataArray = [self sectionsForSearchText:[self trimmedSearchText]];
-    [UIView transitionWithView:self.settingsVC.tableView
-                      duration:0.14
-                       options:UIViewAnimationOptionTransitionCrossDissolve | UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-                    animations:^{
-                      [self.settingsVC.tableView reloadData];
-                    }
-                    completion:nil];
+    [self.settingsVC.tableView reloadData];
     [self updateNavigationGestureState];
 }
 
