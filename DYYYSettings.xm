@@ -1206,8 +1206,13 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 @property(nonatomic, strong) UIImageView *leftIconView;
 @property(nonatomic, strong) UIImageView *centerIconView;
 @property(nonatomic, strong) UILabel *centerPlaceholderLabel;
+@property(nonatomic, assign) UIEdgeInsets tableContentInsetBeforeSearchHeader;
+@property(nonatomic, assign) UIEdgeInsets tableScrollIndicatorInsetsBeforeSearchHeader;
+@property(nonatomic, assign) BOOL hasInstalledPinnedHeaderInsets;
 - (instancetype)initWithSettingsVC:(AWESettingBaseViewController *)settingsVC viewModel:(AWESettingsViewModel *)viewModel originalSections:(NSArray *)sections searchEntries:(NSArray<NSDictionary *> *)entries;
 - (void)installSearchHeader;
+- (void)installPinnedHeaderInsetsForTableView:(UITableView *)tableView;
+- (void)restorePinnedHeaderInsets;
 - (void)installNavigationInterceptors;
 - (void)applyThemeColors;
 - (void)updateLayout;
@@ -1281,11 +1286,51 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     self.centerPlaceholderLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightRegular];
     [self.centerPlaceholderView addSubview:self.centerPlaceholderLabel];
 
+    [self.settingsVC.view addSubview:self.headerView];
+    [self installPinnedHeaderInsetsForTableView:tableView];
     [self applyThemeColors];
     [self updateLayout];
-    tableView.tableHeaderView = self.headerView;
     [self installNavigationInterceptors];
     [self updateNavigationGestureState];
+}
+
+- (void)installPinnedHeaderInsetsForTableView:(UITableView *)tableView {
+    if (!tableView || self.hasInstalledPinnedHeaderInsets) {
+        return;
+    }
+
+    self.tableContentInsetBeforeSearchHeader = tableView.contentInset;
+    self.tableScrollIndicatorInsetsBeforeSearchHeader = tableView.scrollIndicatorInsets;
+    BOOL shouldKeepAtTop = !tableView.window || tableView.contentOffset.y <= -tableView.adjustedContentInset.top + 1.0;
+
+    UIEdgeInsets contentInset = tableView.contentInset;
+    contentInset.top += CGRectGetHeight(self.headerView.bounds);
+    tableView.contentInset = contentInset;
+
+    UIEdgeInsets indicatorInsets = tableView.scrollIndicatorInsets;
+    indicatorInsets.top += CGRectGetHeight(self.headerView.bounds);
+    tableView.scrollIndicatorInsets = indicatorInsets;
+    self.hasInstalledPinnedHeaderInsets = YES;
+
+    if (shouldKeepAtTop) {
+        [tableView setContentOffset:CGPointMake(tableView.contentOffset.x, -tableView.adjustedContentInset.top) animated:NO];
+    }
+}
+
+- (void)restorePinnedHeaderInsets {
+    UITableView *tableView = self.settingsVC.tableView;
+    if (!tableView || !self.hasInstalledPinnedHeaderInsets) {
+        return;
+    }
+
+    UIEdgeInsets contentInset = tableView.contentInset;
+    contentInset.top = self.tableContentInsetBeforeSearchHeader.top;
+    tableView.contentInset = contentInset;
+
+    UIEdgeInsets indicatorInsets = tableView.scrollIndicatorInsets;
+    indicatorInsets.top = self.tableScrollIndicatorInsetsBeforeSearchHeader.top;
+    tableView.scrollIndicatorInsets = indicatorInsets;
+    self.hasInstalledPinnedHeaderInsets = NO;
 }
 
 - (void)updateLayout {
@@ -1301,16 +1346,25 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
         return;
     }
 
-    BOOL needsHeaderUpdate = fabs(self.headerView.frame.size.width - width) > 0.5;
-    self.headerView.frame = CGRectMake(0, 0, width, 64);
+    UIView *settingsView = self.settingsVC.view;
+    UIView *tableSuperview = tableView.superview;
+    if (!settingsView || !tableSuperview) {
+        return;
+    }
+
+    CGRect tableFrame = [tableSuperview convertRect:tableView.frame toView:settingsView];
+    CGFloat automaticTopInset = MAX(0.0, tableView.adjustedContentInset.top - tableView.contentInset.top);
+    self.headerView.frame = CGRectMake(CGRectGetMinX(tableFrame), CGRectGetMinY(tableFrame) + automaticTopInset, width, 64);
     self.containerView.frame = CGRectMake(16, 8, width - 32, 44);
     self.searchTextField.frame = self.containerView.bounds;
+    UIColor *pinnedBackgroundColor = tableView.backgroundColor;
+    if (!pinnedBackgroundColor || CGColorGetAlpha(pinnedBackgroundColor.CGColor) < 0.99) {
+        pinnedBackgroundColor = settingsView.backgroundColor;
+    }
+    self.headerView.backgroundColor = pinnedBackgroundColor ?: [UIColor systemBackgroundColor];
 
     [self updateSearchPlaceholderVisibilityAnimated:NO];
-
-    if (needsHeaderUpdate) {
-        tableView.tableHeaderView = self.headerView;
-    }
+    [settingsView bringSubviewToFront:self.headerView];
 
     [self installNavigationInterceptors];
     [self updateNavigationGestureState];
@@ -1584,6 +1638,7 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
 - (void)dealloc {
     [self restoreNavigationGestureState];
+    [self restorePinnedHeaderInsets];
 }
 
 @end
