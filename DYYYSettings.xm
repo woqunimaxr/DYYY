@@ -1358,11 +1358,7 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     self.containerView.frame = CGRectMake(16, 0, width - 32, 44);
     self.containerView.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.containerView.bounds cornerRadius:self.containerView.layer.cornerRadius].CGPath;
     self.searchTextField.frame = self.containerView.bounds;
-    UIColor *pinnedBackgroundColor = tableView.backgroundColor;
-    if (!pinnedBackgroundColor || CGColorGetAlpha(pinnedBackgroundColor.CGColor) < 0.99) {
-        pinnedBackgroundColor = settingsView.backgroundColor;
-    }
-    self.headerView.backgroundColor = pinnedBackgroundColor ?: [UIColor systemBackgroundColor];
+    self.headerView.backgroundColor = UIColor.clearColor;
 
     [self updateSearchPlaceholderVisibilityAnimated:NO];
     [settingsView bringSubviewToFront:self.headerView];
