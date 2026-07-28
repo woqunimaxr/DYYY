@@ -28,6 +28,7 @@
 #import "DYYYConstants.h"
 #import "DYYYFloatClearButton.h"
 #import "DYYYFloatSpeedButton.h"
+#import "DYYYLivePreStreamLayoutCoordinator.h"
 #import "DYYYLoginBypassManager.h"
 #import "DYYYSettingViewController.h"
 #import "DYYYToast.h"
@@ -15353,93 +15354,29 @@ static void DYYYRemoveKeyboardObserver(void) {
 
 %end
 
-static Class GuideViewClass = nil;
-static Class MuteViewClass = nil;
-static Class TagViewClass = nil;
-static __weak UIView *dyyyLivePreStreamTabBar = nil;
+%hook AWELiveNewPreStreamViewController
 
-static BOOL DYYYLivePreStreamShouldUseNestedLiveStack(UIView *stackView) {
-    Class liveStackClass = NSClassFromString(@"IESLiveStackView");
-    if (!stackView || !liveStackClass) {
-        return NO;
-    }
-
-    // 新版层级可能在两个 StackView 之间插入包装视图；递归选择最内层直播栈，避免重复位移。
-    NSArray<UIView *> *liveStacks = [DYYYUtils findAllSubviewsOfClass:liveStackClass inContainer:stackView];
-    for (UIView *liveStack in liveStacks) {
-        if (liveStack != stackView) {
-            return YES;
-        }
-    }
-    return NO;
+- (void)viewWillAppear:(BOOL)animated {
+    %orig;
+    [DYYYLivePreStreamLayoutCoordinator activateLayoutForController:self];
 }
 
-static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffineTransform baseTransform) {
-    if (!stackView || !DYYYGetBool(@"DYYYEnableFullScreen")) {
-        return 0.0;
-    }
-
-    UIWindow *window = stackView.window ?: [DYYYUtils getActiveWindow];
-    Class tabBarClass = NSClassFromString(@"AWENormalModeTabBar");
-    if (!window || !tabBarClass) {
-        return 0.0;
-    }
-
-    UIView *targetTabBar = dyyyLivePreStreamTabBar;
-    if (!targetTabBar || targetTabBar.window != window || targetTabBar.hidden || targetTabBar.alpha <= 0.01 || CGRectIsEmpty(targetTabBar.bounds)) {
-        targetTabBar = nil;
-        CGRect lowestTabBarRect = CGRectNull;
-        NSArray<UIView *> *tabBars = [DYYYUtils findAllSubviewsOfClass:tabBarClass inContainer:window];
-        for (UIView *tabBar in tabBars) {
-            if (!tabBar.window || tabBar.hidden || tabBar.alpha <= 0.01 || CGRectIsEmpty(tabBar.bounds)) {
-                continue;
-            }
-
-            CGRect tabBarRect = [tabBar convertRect:tabBar.bounds toView:window];
-            if (CGRectIsNull(tabBarRect) || CGRectIsInfinite(tabBarRect) || CGRectIsEmpty(tabBarRect)) {
-                continue;
-            }
-
-            if (!targetTabBar || CGRectGetMaxY(tabBarRect) > CGRectGetMaxY(lowestTabBarRect)) {
-                targetTabBar = tabBar;
-                lowestTabBarRect = tabBarRect;
-            }
-        }
-        dyyyLivePreStreamTabBar = targetTabBar;
-    }
-
-    if (!targetTabBar) {
-        return 0.0;
-    }
-
-    CGRect targetTabBarRect = [targetTabBar convertRect:targetTabBar.bounds toView:window];
-    if (CGRectIsNull(targetTabBarRect) || CGRectIsInfinite(targetTabBarRect) || CGRectIsEmpty(targetTabBarRect)) {
-        return 0.0;
-    }
-
-    // 先恢复不含底栏补偿的变换再测量，避免用上一次的位移反推重叠而产生来回跳动。
-    if (!CGAffineTransformEqualToTransform(stackView.transform, baseTransform)) {
-        stackView.transform = baseTransform;
-    }
-
-    CGRect stackRect = [stackView convertRect:stackView.bounds toView:window];
-    if (CGRectIsNull(stackRect) || CGRectIsInfinite(stackRect) || CGRectIsEmpty(stackRect) ||
-        CGRectGetMaxX(stackRect) <= CGRectGetMinX(targetTabBarRect) || CGRectGetMinX(stackRect) >= CGRectGetMaxX(targetTabBarRect)) {
-        return 0.0;
-    }
-
-    CGFloat overlap = CGRectGetMaxY(stackRect) - CGRectGetMinY(targetTabBarRect);
-    if (!isfinite(overlap) || overlap <= 0.0) {
-        return 0.0;
-    }
-
-    CGFloat maximumOffset = CGRectGetHeight(targetTabBarRect);
-    if (gCurrentTabBarHeight > 0.0) {
-        maximumOffset = MIN(maximumOffset, gCurrentTabBarHeight);
-    }
-    // 即使宿主返回异常几何值，单次补偿也不得超过当前可见底栏。
-    return MIN(overlap, MAX(maximumOffset, 0.0));
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    [DYYYLivePreStreamLayoutCoordinator activateLayoutForController:self];
 }
+
+- (void)viewDidLayoutSubviews {
+    %orig;
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:self];
+}
+
+- (void)viewDidDisappear:(BOOL)animated {
+    %orig;
+    [DYYYLivePreStreamLayoutCoordinator restoreLayoutForController:self];
+}
+
+%end
 
 %hook AWEElementStackView
 
@@ -15528,12 +15465,6 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
     }
 }
 
-+ (void)initialize {
-    GuideViewClass = NSClassFromString(@"AWELivePrestreamGuideView");
-    MuteViewClass = NSClassFromString(@"AFDCancelMuteAwemeView");
-    TagViewClass = NSClassFromString(@"AWELiveFeedLabelTagView");
-}
-
 - (void)viewDidAppear:(BOOL)animated {
     %orig;
     dyyyCommentViewVisible = NO;
@@ -15556,6 +15487,17 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
     } else {
         [[NSNotificationCenter defaultCenter] removeObserver:self name:kDYYYGlobalTransparencyDidChangeNotification object:nil];
     }
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
+}
+
+- (void)didAddSubview:(UIView *)subview {
+    %orig(subview);
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
+}
+
+- (void)willRemoveSubview:(UIView *)subview {
+    %orig(subview);
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
 }
 
 - (void)dealloc {
@@ -15569,52 +15511,7 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
     UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
 
     if ([viewController isKindOfClass:%c(AWELiveNewPreStreamViewController)]) {
-        if (DYYYLivePreStreamShouldUseNestedLiveStack(self)) {
-            if (!CGAffineTransformEqualToTransform(self.transform, CGAffineTransformIdentity)) {
-                self.transform = CGAffineTransformIdentity;
-            }
-            return;
-        }
-
-        const BOOL shouldShiftUp = DYYYGetBool(@"DYYYEnableFullScreen");
-        const CGFloat labelScaleValue = DYYYGetFloat(@"DYYYNicknameScale");
-        const CGFloat targetLabelScale = (labelScaleValue != 0.0) ? MAX(0.01, labelScaleValue) : 1.0;
-        const CGFloat elementScaleValue = DYYYGetFloat(@"DYYYElementScale");
-        const CGFloat targetElementScale = (elementScaleValue != 0.0) ? MAX(0.01, elementScaleValue) : 1.0;
-
-        CGAffineTransform targetTransform = CGAffineTransformIdentity;
-        CGFloat boundsWidth = self.bounds.size.width;
-        CGFloat currentScale = 1.0;
-        CGFloat tx = 0;
-        CGFloat ty = 0;
-
-        if ([DYYYUtils containsSubviewOfClass:GuideViewClass inContainer:self]) {
-            currentScale = targetLabelScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / 2 - boundsWidth * (1 - currentScale); // 左对齐
-        } else if ([DYYYUtils containsSubviewOfClass:MuteViewClass inContainer:self]) {
-            currentScale = targetElementScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / 2; // 右对齐
-        } else if ([DYYYUtils containsSubviewOfClass:TagViewClass inContainer:self]) {
-            currentScale = targetLabelScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / -2; // 左对齐
-        }
-
-        NSArray *subviews = [self.subviews copy];
-        for (UIView *view in subviews) {
-            CGFloat viewHeight = view.bounds.size.height;
-            ty += (viewHeight - viewHeight * currentScale) / 2;
-        }
-
-        CGAffineTransform baseTransform = CGAffineTransformMake(currentScale, 0, 0, currentScale, tx, ty);
-        if (shouldShiftUp) {
-            ty -= DYYYLivePreStreamRequiredUpwardOffset(self, baseTransform);
-        }
-
-        targetTransform = CGAffineTransformMake(currentScale, 0, 0, currentScale, tx, ty);
-
-        if (!CGAffineTransformEqualToTransform(self.transform, targetTransform)) {
-            self.transform = targetTransform;
-        }
+        [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:viewController];
     }
 
     if ([viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
@@ -15695,6 +15592,7 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
             }
         }
     }
+
 }
 
 - (NSArray<__kindof UIView *> *)arrangedSubviews {
@@ -15732,12 +15630,6 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
 
 %hook IESLiveStackView
 
-+ (void)initialize {
-    GuideViewClass = NSClassFromString(@"AWELivePrestreamGuideView");
-    MuteViewClass = NSClassFromString(@"AFDCancelMuteAwemeView");
-    TagViewClass = NSClassFromString(@"AWELiveFeedLabelTagView");
-}
-
 - (void)setAlpha:(CGFloat)alpha {
     BOOL isApplyingGlobal = (dyyyGlobalTransparencyMutationDepth > 0);
     if (!isApplyingGlobal) {
@@ -15773,6 +15665,17 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
     } else {
         [[NSNotificationCenter defaultCenter] removeObserver:self name:kDYYYGlobalTransparencyDidChangeNotification object:nil];
     }
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
+}
+
+- (void)didAddSubview:(UIView *)subview {
+    %orig(subview);
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
+}
+
+- (void)willRemoveSubview:(UIView *)subview {
+    %orig(subview);
+    [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForView:self];
 }
 
 - (void)dealloc {
@@ -15786,51 +15689,7 @@ static CGFloat DYYYLivePreStreamRequiredUpwardOffset(UIView *stackView, CGAffine
     UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
 
     if ([viewController isKindOfClass:%c(AWELiveNewPreStreamViewController)]) {
-        if (DYYYLivePreStreamShouldUseNestedLiveStack(self)) {
-            if (!CGAffineTransformEqualToTransform(self.transform, CGAffineTransformIdentity)) {
-                self.transform = CGAffineTransformIdentity;
-            }
-            return;
-        }
-
-        const BOOL shouldShiftUp = DYYYGetBool(@"DYYYEnableFullScreen");
-        const CGFloat labelScaleValue = DYYYGetFloat(@"DYYYNicknameScale");
-        const CGFloat targetLabelScale = (labelScaleValue != 0.0) ? MAX(0.01, labelScaleValue) : 1.0;
-        const CGFloat elementScaleValue = DYYYGetFloat(@"DYYYElementScale");
-        const CGFloat targetElementScale = (elementScaleValue != 0.0) ? MAX(0.01, elementScaleValue) : 1.0;
-
-        CGAffineTransform targetTransform = CGAffineTransformIdentity;
-        CGFloat boundsWidth = self.bounds.size.width;
-        CGFloat currentScale = 1.0;
-        CGFloat tx = 0;
-        CGFloat ty = 0;
-
-        if ([DYYYUtils containsSubviewOfClass:GuideViewClass inContainer:self]) {
-            currentScale = targetLabelScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / 2 - boundsWidth * (1 - currentScale); // 左对齐
-        } else if ([DYYYUtils containsSubviewOfClass:MuteViewClass inContainer:self]) {
-            currentScale = targetElementScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / 2; // 右对齐
-        } else if ([DYYYUtils containsSubviewOfClass:TagViewClass inContainer:self]) {
-            currentScale = targetLabelScale;
-            tx = (boundsWidth - boundsWidth * currentScale) / -2; // 左对齐
-        }
-
-        NSArray *subviews = [self.subviews copy];
-        for (UIView *view in subviews) {
-            CGFloat viewHeight = view.bounds.size.height;
-            ty += (viewHeight - viewHeight * currentScale) / 2;
-        }
-
-        CGAffineTransform baseTransform = CGAffineTransformMake(currentScale, 0, 0, currentScale, tx, ty);
-        if (shouldShiftUp) {
-            ty -= DYYYLivePreStreamRequiredUpwardOffset(self, baseTransform);
-        }
-        targetTransform = CGAffineTransformMake(currentScale, 0, 0, currentScale, tx, ty);
-
-        if (!CGAffineTransformEqualToTransform(self.transform, targetTransform)) {
-            self.transform = targetTransform;
-        }
+        [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:viewController];
     }
 }
 
