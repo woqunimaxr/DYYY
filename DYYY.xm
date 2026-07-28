@@ -7586,6 +7586,69 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 
 %end
 
+static char kDYYYCommentSearchAnchorManagedHiddenKey;
+static char kDYYYCommentSearchAnchorPreviousHiddenKey;
+
+static void DYYYApplyCommentSearchAnchorVisibility(UIView *view) {
+    if (!view) {
+        return;
+    }
+
+    @try {
+        BOOL shouldHide = DYYYGetBool(@"DYYYHideCommentViews");
+        NSNumber *managedHidden = objc_getAssociatedObject(view, &kDYYYCommentSearchAnchorManagedHiddenKey);
+
+        if (shouldHide) {
+            if (![managedHidden boolValue]) {
+                objc_setAssociatedObject(view,
+                                         &kDYYYCommentSearchAnchorPreviousHiddenKey,
+                                         @(view.hidden),
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                objc_setAssociatedObject(view,
+                                         &kDYYYCommentSearchAnchorManagedHiddenKey,
+                                         @YES,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
+            view.hidden = YES;
+            return;
+        }
+
+        if ([managedHidden boolValue]) {
+            NSNumber *previousHidden = objc_getAssociatedObject(view, &kDYYYCommentSearchAnchorPreviousHiddenKey);
+            view.hidden = previousHidden ? previousHidden.boolValue : NO;
+            objc_setAssociatedObject(view, &kDYYYCommentSearchAnchorManagedHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(view, &kDYYYCommentSearchAnchorPreviousHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[DYYY][CommentSearchAnchor] visibility update failed on %@: %@",
+              NSStringFromClass([view class]),
+              exception.reason);
+    }
+}
+
+%group CommentSearchAnchorGroup
+
+%hook AWECommentSearchAnchorView
+
+- (void)updateWithModel:(id)model {
+    %orig(model);
+    DYYYApplyCommentSearchAnchorVisibility(self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    DYYYApplyCommentSearchAnchorVisibility(self);
+}
+
+- (void)didMoveToWindow {
+    %orig;
+    DYYYApplyCommentSearchAnchorVisibility(self);
+}
+
+%end
+
+%end
+
 // 隐藏评论区免费去看短剧
 %hook AWEShowPlayletCommentHeaderView
 - (void)layoutSubviews {
@@ -7702,7 +7765,10 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 %hook AWESearchAnchorListModel
 
 - (BOOL)hideWords {
-    return DYYYGetBool(@"DYYYHideCommentViews");
+    if (DYYYGetBool(@"DYYYHideCommentViews")) {
+        return YES;
+    }
+    return %orig;
 }
 
 %end
@@ -16532,12 +16598,23 @@ static void findTargetViewInView(UIView *view) {
         }
 
         // 动态获取 Swift 类并初始化对应的组
-        Class commentHeaderGeneralClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView");
+        Class commentSearchAnchorViewClass = objc_getClass("AWECommentSearchAnchorView");
+        if (commentSearchAnchorViewClass) {
+            %init(CommentSearchAnchorGroup, AWECommentSearchAnchorView = commentSearchAnchorViewClass);
+        }
+
+        Class commentHeaderGeneralClass = objc_getClass("AWECommentCommerceSwiftImpl.CommentHeaderGeneralView");
+        if (!commentHeaderGeneralClass) {
+            commentHeaderGeneralClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGeneralView");
+        }
         if (commentHeaderGeneralClass) {
             %init(CommentHeaderGeneralGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGeneralView = commentHeaderGeneralClass);
         }
 
-        Class commentHeaderGoodsClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView");
+        Class commentHeaderGoodsClass = objc_getClass("AWECommentCommerceSwiftImpl.CommentHeaderGoodsView");
+        if (!commentHeaderGoodsClass) {
+            commentHeaderGoodsClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentHeaderGoodsView");
+        }
         if (commentHeaderGoodsClass) {
             %init(CommentHeaderGoodsGroup, AWECommentPanelHeaderSwiftImpl_CommentHeaderGoodsView = commentHeaderGoodsClass);
         }

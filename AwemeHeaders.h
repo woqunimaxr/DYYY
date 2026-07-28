@@ -938,6 +938,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWECommentSearchAnchorView : UIView
 - (void)setHidden:(BOOL)hidden;
 - (BOOL)isHidden;
+- (void)updateWithModel:(id)model;
 - (void)layoutSubviews;
 @end
 
