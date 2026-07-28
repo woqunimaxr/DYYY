@@ -7720,6 +7720,53 @@ static void DYYYApplyCommentSearchAnchorVisibility(UIView *view) {
     }
 }
 
+static BOOL DYYYShouldCollapseCommentHeaderModel(id model) {
+    if (!model) {
+        return NO;
+    }
+
+    id component = DYYYIvarValueIfPossible(model, "component");
+    if (!component) {
+        component = DYYYIvarValueIfPossible(model, "_component");
+    }
+    if (!component) {
+        component = DYYYKVCValueIfPossible(model, @"component");
+    }
+    if (!component) {
+        return NO;
+    }
+
+    NSString *componentClassName = NSStringFromClass([component class]);
+    if (componentClassName.length == 0) {
+        return NO;
+    }
+
+    static NSArray<NSString *> *targetComponentSuffixes = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      targetComponentSuffixes = @[
+          @"CommentPanelHeaderCellBizSearchComponent",
+          @"CommentPanelHeaderCellBizPushSearchComponent",
+          @"CommentPanelHeaderCellBizLunaComponent",
+          @"CommentPanelHeaderCellBizPOIComponent",
+          @"CommentPanelHeaderCellBizPOITradeComponent",
+          @"CommentPanelHeaderCellBizMediumComponent",
+          @"CommentPanelHeaderCellBizPlayletComponent",
+          @"CommentPanelHeaderCellBizGeneralComponent",
+          @"CommentPanelHeaderCellBizGoodsComponent",
+          @"CommentPanelHeaderCellBizTemplateComponent"
+      ];
+    });
+
+    for (NSString *suffix in targetComponentSuffixes) {
+        if ([componentClassName hasSuffix:suffix]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
 %group CommentSearchAnchorGroup
 
 %hook AWECommentSearchAnchorView
@@ -7737,6 +7784,22 @@ static void DYYYApplyCommentSearchAnchorVisibility(UIView *view) {
 - (void)didMoveToWindow {
     %orig;
     DYYYApplyCommentSearchAnchorVisibility(self);
+}
+
+%end
+
+%end
+
+%group CommentPanelHeaderSectionControllerGroup
+
+%hook AWECommentPanelHeaderSwiftImpl_CommentPanelHeaderSectionController
+
+- (CGSize)sizeForItemAtIndex:(NSInteger)index model:(id)model collectionViewSize:(CGSize)collectionViewSize {
+    CGSize originalSize = %orig(index, model, collectionViewSize);
+    if (DYYYGetBool(@"DYYYHideCommentViews") && DYYYShouldCollapseCommentHeaderModel(model)) {
+        originalSize.height = 0.0;
+    }
+    return originalSize;
 }
 
 %end
@@ -15773,6 +15836,12 @@ static void findTargetViewInView(UIView *view) {
         Class commentSearchAnchorViewClass = objc_getClass("AWECommentSearchAnchorView");
         if (commentSearchAnchorViewClass) {
             %init(CommentSearchAnchorGroup, AWECommentSearchAnchorView = commentSearchAnchorViewClass);
+        }
+
+        Class commentHeaderSectionControllerClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentPanelHeaderSectionController");
+        if (commentHeaderSectionControllerClass) {
+            %init(CommentPanelHeaderSectionControllerGroup,
+                  AWECommentPanelHeaderSwiftImpl_CommentPanelHeaderSectionController = commentHeaderSectionControllerClass);
         }
 
         Class commentHeaderGeneralClass = objc_getClass("AWECommentCommerceSwiftImpl.CommentHeaderGeneralView");
