@@ -1275,7 +1275,6 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
     self.centerPlaceholderView = [[UIView alloc] initWithFrame:CGRectZero];
     self.centerPlaceholderView.userInteractionEnabled = NO;
-    self.centerPlaceholderView.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
     [self.containerView addSubview:self.centerPlaceholderView];
 
     self.centerIconView = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"magnifyingglass"]];
