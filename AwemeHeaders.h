@@ -1092,7 +1092,13 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWESettingBaseViewController : UIViewController
 @property(nonatomic, strong) UIView *view;
 @property(nonatomic, strong) UITableView *tableView;
+@property(nonatomic, assign) NSInteger colorStyle;
+@property(nonatomic, assign) BOOL useCardUIStyle;
 - (AWESettingBaseViewModel *)viewModel;
+@end
+
+@interface AWEUIColor : NSObject
++ (UIColor *)colorNamed:(NSString *)colorName;
 @end
 
 @interface AWESettingsViewModel : AWESettingBaseViewModel

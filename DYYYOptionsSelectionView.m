@@ -10,7 +10,8 @@ static UIColor *DYYYThemeColor(UIColor *darkColor, UIColor *lightColor, BOOL dar
 }
 
 static UIColor *DYYYSelectionSheetBackgroundColor(BOOL darkMode) {
-    return DYYYThemeColor([UIColor colorWithRed:29 / 255.0 green:31 / 255.0 blue:42 / 255.0 alpha:1.0], [UIColor whiteColor], darkMode);
+    (void)darkMode;
+    return [DYYYUtils douyinPanelBackgroundColor];
 }
 
 static UIColor *DYYYSelectionSheetTextColor(BOOL darkMode) {
@@ -18,7 +19,8 @@ static UIColor *DYYYSelectionSheetTextColor(BOOL darkMode) {
 }
 
 static UIColor *DYYYSelectionSheetSeparatorColor(BOOL darkMode) {
-    return DYYYThemeColor([UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0], [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0], darkMode);
+    (void)darkMode;
+    return [DYYYUtils douyinSeparatorColor];
 }
 
 static BOOL DYYYColorGetRGBA(UIColor *color, CGFloat *red, CGFloat *green, CGFloat *blue, CGFloat *alpha) {

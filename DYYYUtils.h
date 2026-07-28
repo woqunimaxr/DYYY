@@ -105,6 +105,48 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)usesDouyinLightBackground;
 
 /**
+ * 调用抖音 AWEUIColor 主题接口获取动态颜色；接口不可用或返回异常时使用 fallbackColor。
+ */
++ (UIColor *)douyinColorNamed:(NSString *)colorName fallbackColor:(UIColor *)fallbackColor;
+
+/**
+ * 抖音原生设置页 colorStyle=2 使用的中性页面背景色。
+ */
++ (UIColor *)douyinSettingsPageBackgroundColor;
+
+/**
+ * 抖音原生设置卡片的最终不透明显示色。
+ * 将 BGCard2 按原生规则合成到 BGDoubleRow，避免把半透明 token 直接赋给自定义控件。
+ */
++ (UIColor *)douyinOpaqueSettingsCardBackgroundColor;
+
+/**
+ * 抖音原生输入/交互控件的最终不透明显示色。
+ * 将 BGInput2 按原生规则合成到 BGPanelTint，保持自定义输入框 alpha=1。
+ */
++ (UIColor *)douyinOpaqueInputBackgroundColor;
+
+/**
+ * 抖音原生过滤、关键词等交互控件背景色。
+ */
++ (UIColor *)douyinInteractiveControlBackgroundColor;
+
+/**
+ * 抖音原生浮层/面板背景色。
+ */
++ (UIColor *)douyinPanelBackgroundColor;
+
+/**
+ * 抖音原生分隔线颜色。
+ */
++ (UIColor *)douyinSeparatorColor;
+
+/**
+ * 抖音原生高对比度交互区域分割线颜色。
+ */
++ (UIColor *)douyinInteractiveSeparatorColor;
+
+/**
  * 准备全屏模态浮层的初始状态。调用方完成视图组装后、添加到窗口前调用。
  */
 + (void)prepareModalOverlayView:(UIView *)overlayView contentView:(UIView *)contentView;

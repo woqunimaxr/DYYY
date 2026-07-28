@@ -34,7 +34,7 @@
         // 创建内容视图 - 根据模式选择背景色
         self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, contentHeight)];
         self.contentView.center = CGPointMake(self.frame.size.width / 2, self.frame.size.height / 2);
-        self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
+        self.contentView.backgroundColor = [DYYYUtils douyinPanelBackgroundColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
         [self addSubview:self.contentView];
@@ -103,8 +103,7 @@
 
         // 添加内容和按钮之间的分割线，调整位置和颜色
         UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, contentHeight - buttonHeight, 300, 0.5)];
-        contentButtonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        contentButtonSeparator.backgroundColor = [DYYYUtils douyinSeparatorColor];
         [self.contentView addSubview:contentButtonSeparator];
 
         // 确认按钮 - 根据模式调整颜色

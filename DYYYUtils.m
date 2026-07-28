@@ -33,6 +33,48 @@ static const void *kLabelColorStateKey = &kLabelColorStateKey;
 static const NSTimeInterval kDYYYUtilsDefaultFrameDelay = 0.1f;
 static const void *kDYYYModalOverlayDismissingKey = &kDYYYModalOverlayDismissingKey;
 
+static BOOL DYYYGetColorRGBA(UIColor *color, CGFloat *red, CGFloat *green, CGFloat *blue, CGFloat *alpha) {
+    if ([color getRed:red green:green blue:blue alpha:alpha]) {
+        return YES;
+    }
+
+    CGFloat white = 0.0;
+    if ([color getWhite:&white alpha:alpha]) {
+        *red = white;
+        *green = white;
+        *blue = white;
+        return YES;
+    }
+
+    return NO;
+}
+
+static UIColor *DYYYOpaqueColorByCompositingColor(UIColor *foregroundColor, UIColor *backgroundColor, UIColor *fallbackColor) {
+    CGFloat foregroundRed = 0.0;
+    CGFloat foregroundGreen = 0.0;
+    CGFloat foregroundBlue = 0.0;
+    CGFloat foregroundAlpha = 0.0;
+    CGFloat backgroundRed = 0.0;
+    CGFloat backgroundGreen = 0.0;
+    CGFloat backgroundBlue = 0.0;
+    CGFloat backgroundAlpha = 0.0;
+    if (!DYYYGetColorRGBA(foregroundColor, &foregroundRed, &foregroundGreen, &foregroundBlue, &foregroundAlpha) ||
+        !DYYYGetColorRGBA(backgroundColor, &backgroundRed, &backgroundGreen, &backgroundBlue, &backgroundAlpha)) {
+        return fallbackColor;
+    }
+
+    CGFloat outputAlpha = foregroundAlpha + backgroundAlpha * (1.0 - foregroundAlpha);
+    if (outputAlpha <= 0.0) {
+        return fallbackColor;
+    }
+
+    CGFloat backgroundFactor = backgroundAlpha * (1.0 - foregroundAlpha);
+    CGFloat outputRed = (foregroundRed * foregroundAlpha + backgroundRed * backgroundFactor) / outputAlpha;
+    CGFloat outputGreen = (foregroundGreen * foregroundAlpha + backgroundGreen * backgroundFactor) / outputAlpha;
+    CGFloat outputBlue = (foregroundBlue * foregroundAlpha + backgroundBlue * backgroundFactor) / outputAlpha;
+    return [UIColor colorWithRed:outputRed green:outputGreen blue:outputBlue alpha:1.0];
+}
+
 static NSString *DYYYRuntimeLogFilePath(void) {
     static NSString *logPath = nil;
     static dispatch_once_t onceToken;
@@ -1189,6 +1231,82 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     }
 
     return NO;
+}
+
++ (UIColor *)douyinColorNamed:(NSString *)colorName fallbackColor:(UIColor *)fallbackColor {
+    if (colorName.length == 0) {
+        return fallbackColor;
+    }
+
+    Class colorClass = NSClassFromString(@"AWEUIColor");
+    SEL colorNamedSEL = NSSelectorFromString(@"colorNamed:");
+    if (colorClass && [colorClass respondsToSelector:colorNamedSEL]) {
+        @try {
+            id color = ((id (*)(id, SEL, id))objc_msgSend)(colorClass, colorNamedSEL, colorName);
+            if ([color isKindOfClass:[UIColor class]]) {
+                return color;
+            }
+        } @catch (NSException *exception) {
+        }
+    }
+
+    return fallbackColor;
+}
+
++ (UIColor *)douyinSettingsPageBackgroundColor {
+    UIColor *fallbackColor = [self usesDouyinLightBackground] ? [UIColor whiteColor] : [UIColor colorWithWhite:22.0 / 255.0 alpha:1.0];
+    return [self douyinColorNamed:@"BGDoubleRow" fallbackColor:fallbackColor];
+}
+
++ (UIColor *)douyinOpaqueSettingsCardBackgroundColor {
+    BOOL usesLightBackground = [self usesDouyinLightBackground];
+    if (usesLightBackground) {
+        return [UIColor whiteColor];
+    }
+
+    UIColor *pageBackgroundColor = [self douyinSettingsPageBackgroundColor];
+    UIColor *cardOverlayFallback = [UIColor colorWithWhite:1.0 alpha:15.0 / 255.0];
+    UIColor *cardOverlayColor = [self douyinColorNamed:@"BGCard2" fallbackColor:cardOverlayFallback];
+    UIColor *opaqueFallback = [UIColor colorWithWhite:36.0 / 255.0 alpha:1.0];
+    return DYYYOpaqueColorByCompositingColor(cardOverlayColor, pageBackgroundColor, opaqueFallback);
+}
+
++ (UIColor *)douyinOpaqueInputBackgroundColor {
+    BOOL usesLightBackground = [self usesDouyinLightBackground];
+    if (usesLightBackground) {
+        return [UIColor whiteColor];
+    }
+
+    UIColor *panelBackgroundColor = [self douyinPanelBackgroundColor];
+    UIColor *inputOverlayFallback = [UIColor colorWithWhite:1.0 alpha:8.0 / 255.0];
+    UIColor *inputOverlayColor = [self douyinColorNamed:@"BGInput2" fallbackColor:inputOverlayFallback];
+    UIColor *opaqueFallback = [UIColor colorWithWhite:45.0 / 255.0 alpha:1.0];
+    return DYYYOpaqueColorByCompositingColor(inputOverlayColor, panelBackgroundColor, opaqueFallback);
+}
+
++ (UIColor *)douyinInteractiveControlBackgroundColor {
+    UIColor *fallbackColor = [self usesDouyinLightBackground]
+                                 ? [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:8.0 / 255.0]
+                                 : [UIColor colorWithWhite:1.0 alpha:15.0 / 255.0];
+    return [self douyinColorNamed:@"BGCard2" fallbackColor:fallbackColor];
+}
+
++ (UIColor *)douyinPanelBackgroundColor {
+    UIColor *fallbackColor = [self usesDouyinLightBackground] ? [UIColor whiteColor] : [UIColor colorWithWhite:38.0 / 255.0 alpha:1.0];
+    return [self douyinColorNamed:@"BGPanelTint" fallbackColor:fallbackColor];
+}
+
++ (UIColor *)douyinSeparatorColor {
+    UIColor *fallbackColor =
+        [self usesDouyinLightBackground] ? [UIColor colorWithWhite:22.0 / 255.0 alpha:20.0 / 255.0] : [UIColor colorWithWhite:1.0 alpha:20.0 / 255.0];
+    return [self douyinColorNamed:@"LineSecondary" fallbackColor:fallbackColor];
+}
+
++ (UIColor *)douyinInteractiveSeparatorColor {
+    UIColor *fallbackColor = [self usesDouyinLightBackground]
+                                 ? [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:51.0 / 255.0]
+                                 : [UIColor colorWithWhite:1.0 alpha:51.0 / 255.0];
+    return [self douyinColorNamed:@"LinePrimary2" fallbackColor:fallbackColor];
 }
 
 #pragma mark - Public File Management (公共文件管理)

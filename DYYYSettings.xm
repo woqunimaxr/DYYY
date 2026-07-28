@@ -1175,8 +1175,9 @@ static UIColor *DYYYSettingsColorFromARGB(NSUInteger argb) {
 }
 
 static UIColor *DYYYSettingsSearchContainerColor(BOOL usesLightBackground) {
-    // AWEUIColor BGCardSolid: d=FF1D1F2A, dl=FFFFFFFF.
-    return DYYYSettingsColorFromARGB(usesLightBackground ? 0xFFFFFFFF : 0xFF1D1F2A);
+    // 将抖音 BGCard2 合成到 BGDoubleRow 后再赋值，保持搜索框原有 alpha=1。
+    (void)usesLightBackground;
+    return [DYYYUtils douyinOpaqueSettingsCardBackgroundColor];
 }
 
 static UIColor *DYYYSettingsSearchTextColor(BOOL usesLightBackground) {
@@ -2016,6 +2017,7 @@ extern "C"
 #endif
 void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     AWESettingBaseViewController *settingsVC = [[%c(AWESettingBaseViewController) alloc] init];
+    settingsVC.colorStyle = 2;
     if (!hasAgreed) {
         [DYYYSettingsHelper showAboutDialog:@"用户协议"
                                     message:@"本插件为开源项目\n仅供学习交流用途\n如有侵权请联系, GitHub 仓库：huami1314/DYYY\n请遵守当地法律法规, "
@@ -2041,7 +2043,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     });
 
     AWESettingsViewModel *viewModel = [[%c(AWESettingsViewModel) alloc] init];
-    viewModel.colorStyle = 0;
+    viewModel.colorStyle = 2;
 
     // 创建主分类列表
     AWESettingSectionModel *mainSection = [[%c(AWESettingSectionModel) alloc] init];
@@ -2057,7 +2059,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     basicSettingItem.type = 0;
     basicSettingItem.svgIconImageName = @"ic_gearsimplify_outlined_20";
     basicSettingItem.cellType = 26;
-    basicSettingItem.colorStyle = 0;
+    basicSettingItem.colorStyle = 2;
     basicSettingItem.isEnable = YES;
     basicSettingItem.cellTappedBlock = ^{
       // 创建基本设置二级界面的设置项
@@ -2616,7 +2618,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     uiSettingItem.type = 0;
     uiSettingItem.svgIconImageName = @"ic_ipadiphone_outlined";
     uiSettingItem.cellType = 26;
-    uiSettingItem.colorStyle = 0;
+    uiSettingItem.colorStyle = 2;
     uiSettingItem.isEnable = YES;
     uiSettingItem.cellTappedBlock = ^{
       // 创建界面设置二级界面的设置项
@@ -2803,7 +2805,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     hideSettingItem.type = 0;
     hideSettingItem.svgIconImageName = @"ic_eyeslash_outlined_20";
     hideSettingItem.cellType = 26;
-    hideSettingItem.colorStyle = 0;
+    hideSettingItem.colorStyle = 2;
     hideSettingItem.isEnable = YES;
     hideSettingItem.cellTappedBlock = ^{
       // 创建隐藏设置二级界面的设置项
@@ -3624,7 +3626,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     removeSettingItem.type = 0;
     removeSettingItem.svgIconImageName = @"ic_doublearrowup_outlined_20";
     removeSettingItem.cellType = 26;
-    removeSettingItem.colorStyle = 0;
+    removeSettingItem.colorStyle = 2;
     removeSettingItem.isEnable = YES;
     removeSettingItem.cellTappedBlock = ^{
       // 创建顶栏移除二级界面的设置项
@@ -3716,7 +3718,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           item.type = 1000;
           item.svgIconImageName = dict[@"imageName"];
           item.cellType = [dict[@"cellType"] integerValue];
-          item.colorStyle = 0;
+          item.colorStyle = 2;
           item.isEnable = YES;
           item.isSwitchOn = [DYYYSettingsHelper getUserDefaults:item.identifier];
           __weak AWESettingItemModel *weakItem = item;
@@ -3753,7 +3755,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     enhanceSettingItem.type = 0;
     enhanceSettingItem.svgIconImageName = @"ic_squaresplit_outlined_20";
     enhanceSettingItem.cellType = 26;
-    enhanceSettingItem.colorStyle = 0;
+    enhanceSettingItem.colorStyle = 2;
     enhanceSettingItem.isEnable = YES;
     enhanceSettingItem.cellTappedBlock = ^{
       // 创建增强设置二级界面的设置项
@@ -4751,7 +4753,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     floatButtonSettingItem.type = 0;
     floatButtonSettingItem.svgIconImageName = @"ic_gongchuang_outlined_20";
     floatButtonSettingItem.cellType = 26;
-    floatButtonSettingItem.colorStyle = 0;
+    floatButtonSettingItem.colorStyle = 2;
     floatButtonSettingItem.isEnable = YES;
     floatButtonSettingItem.cellTappedBlock = ^{
       // 创建悬浮按钮设置二级界面的设置项
@@ -4774,7 +4776,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       speedSettingsItem.type = 0;
       speedSettingsItem.svgIconImageName = @"ic_speed_outlined_20";
       speedSettingsItem.cellType = 26;
-      speedSettingsItem.colorStyle = 0;
+      speedSettingsItem.colorStyle = 2;
       speedSettingsItem.isEnable = YES;
 
       NSString *savedSpeedSettings = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYSpeedSettings"];
@@ -4803,7 +4805,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       autoRestoreSpeedItem.type = 1000;
       autoRestoreSpeedItem.svgIconImageName = @"ic_switch_outlined";
       autoRestoreSpeedItem.cellType = 6;
-      autoRestoreSpeedItem.colorStyle = 0;
+      autoRestoreSpeedItem.colorStyle = 2;
       autoRestoreSpeedItem.isEnable = YES;
       autoRestoreSpeedItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoRestoreSpeed"];
       autoRestoreSpeedItem.switchChangedBlock = ^{
@@ -4820,7 +4822,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       showXItem.type = 1000;
       showXItem.svgIconImageName = @"ic_pensketch_outlined_20";
       showXItem.cellType = 6;
-      showXItem.colorStyle = 0;
+      showXItem.colorStyle = 2;
       showXItem.isEnable = YES;
       showXItem.isSwitchOn = [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYSpeedButtonShowX"];
       showXItem.switchChangedBlock = ^{
@@ -4840,7 +4842,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       buttonSizeItem.type = 0;
       buttonSizeItem.svgIconImageName = @"ic_zoomin_outlined_20";
       buttonSizeItem.cellType = 26;
-      buttonSizeItem.colorStyle = 0;
+      buttonSizeItem.colorStyle = 2;
       buttonSizeItem.isEnable = YES;
       buttonSizeItem.cellTappedBlock = ^{
         [DYYYSettingsHelper showTextInputAlert:@"设置按钮大小"
@@ -4921,7 +4923,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       clearButtonSizeItem.type = 0;
       clearButtonSizeItem.svgIconImageName = @"ic_zoomin_outlined_20";
       clearButtonSizeItem.cellType = 26;
-      clearButtonSizeItem.colorStyle = 0;
+      clearButtonSizeItem.colorStyle = 2;
       clearButtonSizeItem.isEnable = YES;
       clearButtonSizeItem.cellTappedBlock = nil;
       [clearButtonItems addObject:clearButtonSizeItem];
@@ -5085,7 +5087,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     backupItem.type = 0;
     backupItem.svgIconImageName = @"ic_memorycard_outlined_20";
     backupItem.cellType = 26;
-    backupItem.colorStyle = 0;
+    backupItem.colorStyle = 2;
     backupItem.isEnable = YES;
     backupItem.cellTappedBlock = ^{
       dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -5132,7 +5134,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     restoreItem.type = 0;
     restoreItem.svgIconImageName = @"ic_phonearrowup_outlined_20";
     restoreItem.cellType = 26;
-    restoreItem.colorStyle = 0;
+    restoreItem.colorStyle = 2;
     restoreItem.isEnable = YES;
     __weak AWESettingItemModel *weakRestoreItem = restoreItem;
     restoreItem.cellTappedBlock = ^{
@@ -5242,7 +5244,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     cleanSettingsItem.type = 0;
     cleanSettingsItem.svgIconImageName = @"ic_trash_outlined_20";
     cleanSettingsItem.cellType = 26;
-    cleanSettingsItem.colorStyle = 0;
+    cleanSettingsItem.colorStyle = 2;
     cleanSettingsItem.isEnable = YES;
     cleanSettingsItem.cellTappedBlock = ^{
       [DYYYBottomAlertView showAlertWithTitle:@"清除设置"
@@ -5336,7 +5338,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     cleanCacheItem.type = 0;
     cleanCacheItem.svgIconImageName = @"ic_broom_outlined";
     cleanCacheItem.cellType = 26;
-    cleanCacheItem.colorStyle = 0;
+    cleanCacheItem.colorStyle = 2;
     cleanCacheItem.isEnable = NO;
     cleanCacheItem.detail = @"计算中...";
     __block unsigned long long initialSize = 0;
@@ -5422,7 +5424,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     aboutItem.type = 0;
     aboutItem.iconImageName = @"awe-settings-icon-about";
     aboutItem.cellType = 26;
-    aboutItem.colorStyle = 0;
+    aboutItem.colorStyle = 2;
     aboutItem.isEnable = YES;
     aboutItem.cellTappedBlock = ^{
       [DYYYSettingsHelper showAboutDialog:@"关于DYYY"
@@ -5446,7 +5448,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     licenseItem.type = 0;
     licenseItem.iconImageName = @"awe-settings-icon-opensource-notice";
     licenseItem.cellType = 26;
-    licenseItem.colorStyle = 0;
+    licenseItem.colorStyle = 2;
     licenseItem.isEnable = YES;
     licenseItem.cellTappedBlock = ^{
       [DYYYSettingsHelper showAboutDialog:@"MIT License"

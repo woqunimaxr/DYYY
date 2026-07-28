@@ -476,7 +476,7 @@ static NSArray *allSettingsViewControllers(void) {
 
     item.svgIconImageName = dict[@"imageName"];
     item.cellType = [dict[@"cellType"] integerValue];
-    item.colorStyle = 0;
+    item.colorStyle = 2;
     item.isEnable = YES;
     item.isSwitchOn = [self getUserDefaults:item.identifier];
 
@@ -614,7 +614,7 @@ static void showIconOptionsDialog(NSString *title, UIImage *previewImage, void (
     item.type = 0;
     item.svgIconImageName = svgIconName;
     item.cellType = 26;
-    item.colorStyle = 0;
+    item.colorStyle = 2;
     item.isEnable = YES;
 
     __weak AWESettingItemModel *weakItem = item;
@@ -679,6 +679,7 @@ static void showIconOptionsDialog(NSString *title, UIImage *previewImage, void (
 
 + (AWESettingBaseViewController *)createSubSettingsViewController:(NSString *)title sections:(NSArray *)sectionsArray {
     AWESettingBaseViewController *settingsVC = [[NSClassFromString(@"AWESettingBaseViewController") alloc] init];
+    settingsVC.colorStyle = 2;
     dispatch_async(dispatch_get_main_queue(), ^{
       if ([settingsVC.view isKindOfClass:[UIView class]]) {
           Class navBarClass = NSClassFromString(@"AWENavigationBar");
@@ -696,7 +697,7 @@ static void showIconOptionsDialog(NSString *title, UIImage *previewImage, void (
     });
 
     AWESettingsViewModel *viewModel = [[NSClassFromString(@"AWESettingsViewModel") alloc] init];
-    viewModel.colorStyle = 0;
+    viewModel.colorStyle = 2;
     viewModel.sectionDataArray = sectionsArray;
     objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 

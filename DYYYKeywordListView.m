@@ -48,7 +48,7 @@
         self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 300, contentHeight)];
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 3);
         self.originalFrame = self.contentView.frame;
-        self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
+        self.contentView.backgroundColor = [DYYYUtils douyinPanelBackgroundColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
         [self addSubview:self.contentView];
@@ -71,21 +71,18 @@
         self.keywordsTableView = [[UITableView alloc] initWithFrame:CGRectMake(20, 54, 260, tableHeight)];
         self.keywordsTableView.delegate = self;
         self.keywordsTableView.dataSource = self;
-        self.keywordsTableView.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:45 / 255.0 green:45 / 255.0 blue:45 / 255.0 alpha:1.0] : [UIColor colorWithRed:245 / 255.0 green:245 / 255.0 blue:245 / 255.0 alpha:1.0];
+        self.keywordsTableView.backgroundColor = [DYYYUtils douyinInteractiveControlBackgroundColor];
         self.keywordsTableView.layer.cornerRadius = 8;
         self.keywordsTableView.tableFooterView = [UIView new];  // 隐藏空行分隔线
         self.keywordsTableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
         self.keywordsTableView.separatorInset = UIEdgeInsetsMake(0, 15, 0, 15);
-        self.keywordsTableView.separatorColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        self.keywordsTableView.separatorColor = [DYYYUtils douyinInteractiveSeparatorColor];
         [self.contentView addSubview:self.keywordsTableView];
 
         // 添加按钮 - 根据模式设置背景色
         self.addButton = [UIButton buttonWithType:UIButtonTypeSystem];
         self.addButton.frame = CGRectMake(20, addButtonY, 260, 40);
-        self.addButton.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:45 / 255.0 green:45 / 255.0 blue:45 / 255.0 alpha:1.0] : [UIColor colorWithRed:245 / 255.0 green:245 / 255.0 blue:245 / 255.0 alpha:1.0];
+        self.addButton.backgroundColor = [DYYYUtils douyinInteractiveControlBackgroundColor];
         self.addButton.layer.cornerRadius = 8;
         NSString *addTitle = self.addItemTitle ?: @"添加";
         [self.addButton setTitle:[@"+ " stringByAppendingString:addTitle] forState:UIControlStateNormal];
@@ -95,8 +92,7 @@
 
         // 添加内容和按钮之间的分割线 - 根据模式设置颜色
         UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, buttonSeparatorY, 300, 0.5)];
-        contentButtonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        contentButtonSeparator.backgroundColor = [DYYYUtils douyinInteractiveSeparatorColor];
         [self.contentView addSubview:contentButtonSeparator];
 
         // 按钮容器
@@ -116,8 +112,7 @@
 
         // 按钮之间的分割线 - 根据模式设置颜色
         UIView *buttonSeparator = [[UIView alloc] initWithFrame:CGRectMake(149.5, 0, 0.5, 55.5)];
-        buttonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        buttonSeparator.backgroundColor = [DYYYUtils douyinInteractiveSeparatorColor];
         [buttonContainer addSubview:buttonSeparator];
 
         // 确认按钮 - 根据模式设置文本颜色

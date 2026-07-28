@@ -10,6 +10,7 @@
         self.backgroundColor = [UIColor colorWithWhite:0 alpha:0.2];
 
         BOOL isDarkMode = [DYYYUtils isDarkMode];
+        BOOL usesLightBackground = [DYYYUtils usesDouyinLightBackground];
 
         self.blurView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:isDarkMode ? UIBlurEffectStyleDark : UIBlurEffectStyleLight]];
         self.blurView.frame = self.bounds;
@@ -21,7 +22,7 @@
         CGFloat screenHeight = UIScreen.mainScreen.bounds.size.height;
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 3);
         self.originalFrame = self.contentView.frame;
-        self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
+        self.contentView.backgroundColor = [DYYYUtils douyinPanelBackgroundColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
         [self addSubview:self.contentView];
@@ -37,8 +38,7 @@
 
         // 输入框 - 根据模式设置背景和文字颜色
         self.inputTextField = [[UITextField alloc] initWithFrame:CGRectMake(20, 64, 260, 40)];
-        self.inputTextField.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:45 / 255.0 green:45 / 255.0 blue:45 / 255.0 alpha:1.0] : [UIColor colorWithRed:245 / 255.0 green:245 / 255.0 blue:245 / 255.0 alpha:1.0];
+        self.inputTextField.backgroundColor = [DYYYUtils douyinOpaqueInputBackgroundColor];
         self.inputTextField.textColor =
             isDarkMode ? [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:235 / 255.0 alpha:1.0] : [UIColor colorWithRed:45 / 255.0 green:47 / 255.0 blue:56 / 255.0 alpha:1.0];
 
@@ -51,6 +51,8 @@
         self.inputTextField.leftView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 10, 40)];
         self.inputTextField.leftViewMode = UITextFieldViewModeAlways;
         self.inputTextField.layer.cornerRadius = 8;
+        self.inputTextField.layer.borderWidth = usesLightBackground ? 1.0 : 0.0;
+        self.inputTextField.layer.borderColor = usesLightBackground ? [DYYYUtils douyinInteractiveSeparatorColor].CGColor : nil;
         self.inputTextField.tintColor = [UIColor colorWithRed:11 / 255.0 green:223 / 255.0 blue:154 / 255.0 alpha:1.0];  // #0BDF9A 强调色保持不变
         self.inputTextField.delegate = self;
         self.inputTextField.returnKeyType = UIReturnKeyDone;
@@ -65,8 +67,7 @@
 
         // 添加内容和按钮之间的分割线，根据模式设置颜色
         UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, 124, 300, 0.5)];
-        contentButtonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        contentButtonSeparator.backgroundColor = [DYYYUtils douyinSeparatorColor];
         [self.contentView addSubview:contentButtonSeparator];
 
         // 按钮容器
@@ -86,8 +87,7 @@
 
         // 按钮之间的分割线，根据模式设置颜色
         UIView *buttonSeparator = [[UIView alloc] initWithFrame:CGRectMake(149.5, 0, 0.5, 55.5)];
-        buttonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        buttonSeparator.backgroundColor = [DYYYUtils douyinSeparatorColor];
         [buttonContainer addSubview:buttonSeparator];
 
         // 确认按钮 - 根据模式设置颜色

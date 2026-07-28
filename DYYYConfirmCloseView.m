@@ -38,7 +38,7 @@
         self.contentView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, contentWidth, 200)];
         CGFloat screenHeight = UIScreen.mainScreen.bounds.size.height;
         self.contentView.center = CGPointMake(self.frame.size.width / 2, screenHeight / 2);
-        self.contentView.backgroundColor = isDarkMode ? [UIColor colorWithRed:30 / 255.0 green:30 / 255.0 blue:30 / 255.0 alpha:1.0] : [UIColor whiteColor];
+        self.contentView.backgroundColor = [DYYYUtils douyinPanelBackgroundColor];
         self.contentView.layer.cornerRadius = 12;
         self.contentView.layer.masksToBounds = YES;
         [self addSubview:self.contentView];
@@ -73,8 +73,7 @@
 
         // 添加内容和按钮之间的分割线 - 根据模式设置颜色
         UIView *contentButtonSeparator = [[UIView alloc] initWithFrame:CGRectMake(0, 160, contentWidth, 0.5)];
-        contentButtonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        contentButtonSeparator.backgroundColor = [DYYYUtils douyinSeparatorColor];
         [self.contentView addSubview:contentButtonSeparator];
 
         // 按钮容器
@@ -94,8 +93,7 @@
 
         // 按钮之间的分割线 - 根据模式设置颜色
         UIView *buttonSeparator = [[UIView alloc] initWithFrame:CGRectMake(contentWidth / 2 - 0.25, 0, 0.5, 55.5)];
-        buttonSeparator.backgroundColor =
-            isDarkMode ? [UIColor colorWithRed:60 / 255.0 green:60 / 255.0 blue:60 / 255.0 alpha:1.0] : [UIColor colorWithRed:230 / 255.0 green:230 / 255.0 blue:230 / 255.0 alpha:1.0];
+        buttonSeparator.backgroundColor = [DYYYUtils douyinSeparatorColor];
         [buttonContainer addSubview:buttonSeparator];
 
         // 确认按钮 - 根据模式设置颜色
