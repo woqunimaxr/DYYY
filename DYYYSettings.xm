@@ -1242,13 +1242,13 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
         return;
     }
 
-    self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 64)];
+    self.headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.bounds.size.width, 44)];
     self.headerView.backgroundColor = [UIColor clearColor];
     self.headerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
 
-    self.containerView = [[UIView alloc] initWithFrame:CGRectMake(16, 8, self.headerView.bounds.size.width - 32, 44)];
+    self.containerView = [[UIView alloc] initWithFrame:CGRectMake(16, 0, self.headerView.bounds.size.width - 32, 44)];
     self.containerView.layer.cornerRadius = 12;
-    self.containerView.layer.masksToBounds = YES;
+    self.containerView.layer.masksToBounds = NO;
     self.containerView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
     [self.headerView addSubview:self.containerView];
 
@@ -1354,8 +1354,9 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
     CGRect tableFrame = [tableSuperview convertRect:tableView.frame toView:settingsView];
     CGFloat automaticTopInset = MAX(0.0, tableView.adjustedContentInset.top - tableView.contentInset.top);
-    self.headerView.frame = CGRectMake(CGRectGetMinX(tableFrame), CGRectGetMinY(tableFrame) + automaticTopInset, width, 64);
-    self.containerView.frame = CGRectMake(16, 8, width - 32, 44);
+    self.headerView.frame = CGRectMake(CGRectGetMinX(tableFrame), CGRectGetMinY(tableFrame) + automaticTopInset, width, 44);
+    self.containerView.frame = CGRectMake(16, 0, width - 32, 44);
+    self.containerView.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.containerView.bounds cornerRadius:self.containerView.layer.cornerRadius].CGPath;
     self.searchTextField.frame = self.containerView.bounds;
     UIColor *pinnedBackgroundColor = tableView.backgroundColor;
     if (!pinnedBackgroundColor || CGColorGetAlpha(pinnedBackgroundColor.CGColor) < 0.99) {
@@ -1395,7 +1396,7 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 }
 
 - (void)updateSearchPlaceholderVisibilityAnimated:(BOOL)animated {
-    BOOL hasSearchText = [self trimmedSearchText].length > 0;
+    BOOL hasSearchText = self.searchTextField.text.length > 0;
     BOOL showPlaceholderView = !hasSearchText;
     BOOL leftAligned = self.searchTextField.isEditing;
     CGRect targetFrame = [self placeholderFrameForLeftAlignment:leftAligned];
@@ -1446,6 +1447,10 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
     UIColor *placeholderColor = DYYYSettingsSearchPlaceholderColor(usesLightBackground);
 
     self.containerView.backgroundColor = containerColor;
+    self.containerView.layer.shadowColor = UIColor.blackColor.CGColor;
+    self.containerView.layer.shadowOpacity = usesLightBackground ? 0.08 : 0.16;
+    self.containerView.layer.shadowOffset = CGSizeMake(0, 3.0);
+    self.containerView.layer.shadowRadius = 3.5;
     self.searchTextField.textColor = textColor;
     self.searchTextField.tintColor = textColor;
     self.searchTextField.keyboardAppearance = usesLightBackground ? UIKeyboardAppearanceDefault : UIKeyboardAppearanceDark;
