@@ -1487,6 +1487,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (id)playVideoViewController;
 - (CGFloat)longPressFastSpeedValue;
 - (void)changeSpeed:(double)speed;
+- (void)showToastWithText:(NSString *)text;
 - (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture;
 @end
 
@@ -1520,6 +1521,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEDSpeedPortraitContainer : NSObject
 @property(nonatomic, strong) AFDFastSpeedView *longPressFastSpeedView;
 - (double)longPressSpeedValue;
+- (void)showToastWithText:(NSString *)text;
 - (void)updateFastSpeedView:(double)speed;
 @end
 

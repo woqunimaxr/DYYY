@@ -6140,6 +6140,15 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
     return %orig;
 }
 
+- (void)showToastWithText:(NSString *)text {
+    if ([text isKindOfClass:NSString.class] &&
+        [text containsString:@"已取消"] &&
+        [text containsString:@"倍速播放"]) {
+        text = DYYYAdjustedNativeLongPressSpeedHint(text);
+    }
+    %orig(text);
+}
+
 %end
 
 %hook AWEDSpeedCoreContainer
@@ -6264,6 +6273,15 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
         return (CGFloat)configuredSpeed;
     }
     return %orig;
+}
+
+- (void)showToastWithText:(NSString *)text {
+    if ([text isKindOfClass:NSString.class] &&
+        [text containsString:@"已取消"] &&
+        [text containsString:@"倍速播放"]) {
+        text = DYYYAdjustedNativeLongPressSpeedHint(text);
+    }
+    %orig(text);
 }
 
 - (void)handleLongPressFastSpeed:(UILongPressGestureRecognizer *)gesture {
