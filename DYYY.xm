@@ -7720,51 +7720,95 @@ static void DYYYApplyCommentSearchAnchorVisibility(UIView *view) {
     }
 }
 
-static BOOL DYYYShouldCollapseCommentHeaderModel(id model) {
-    if (!model) {
+static char kDYYYCommentHeaderVerifiedCollapseModelKey;
+
+static BOOL DYYYIsCommentHeaderLeafViewHiddenBySetting(UIView *view) {
+    if (!view) {
         return NO;
     }
 
-    id component = DYYYIvarValueIfPossible(model, "component");
-    if (!component) {
-        component = DYYYIvarValueIfPossible(model, "_component");
-    }
-    if (!component) {
-        component = DYYYKVCValueIfPossible(model, @"component");
-    }
-    if (!component) {
-        return NO;
-    }
-
-    NSString *componentClassName = NSStringFromClass([component class]);
-    if (componentClassName.length == 0) {
-        return NO;
-    }
-
-    static NSArray<NSString *> *targetComponentSuffixes = nil;
+    NSString *className = NSStringFromClass([view class]);
+    static NSArray<NSString *> *hiddenViewClassSuffixes = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-      targetComponentSuffixes = @[
-          @"CommentPanelHeaderCellBizSearchComponent",
-          @"CommentPanelHeaderCellBizPushSearchComponent",
-          @"CommentPanelHeaderCellBizLunaComponent",
-          @"CommentPanelHeaderCellBizPOIComponent",
-          @"CommentPanelHeaderCellBizPOITradeComponent",
-          @"CommentPanelHeaderCellBizMediumComponent",
-          @"CommentPanelHeaderCellBizPlayletComponent",
-          @"CommentPanelHeaderCellBizGeneralComponent",
-          @"CommentPanelHeaderCellBizGoodsComponent",
-          @"CommentPanelHeaderCellBizTemplateComponent"
+      hiddenViewClassSuffixes = @[
+          @"AWECommentSearchAnchorView",
+          @"AWEShowPlayletCommentHeaderView",
+          @"AWEPOIEntryAnchorView",
+          @"AWECommentGuideLunaAnchorView",
+          @"CommentHeaderGeneralView",
+          @"CommentHeaderGoodsView",
+          @"CommentHeaderTemplateAnchorView"
       ];
     });
 
-    for (NSString *suffix in targetComponentSuffixes) {
-        if ([componentClassName hasSuffix:suffix]) {
+    for (NSString *suffix in hiddenViewClassSuffixes) {
+        if ([className hasSuffix:suffix]) {
             return YES;
         }
     }
-
     return NO;
+}
+
+static BOOL DYYYCommentHeaderViewTreeContainsHiddenLeaf(UIView *view, NSUInteger depth) {
+    if (!view || depth > 4) {
+        return NO;
+    }
+    if (DYYYIsCommentHeaderLeafViewHiddenBySetting(view)) {
+        return YES;
+    }
+    for (UIView *subview in view.subviews) {
+        if (DYYYCommentHeaderViewTreeContainsHiddenLeaf(subview, depth + 1)) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static BOOL DYYYCommentHeaderCellContainsOnlyHiddenLeaf(UIView *cell) {
+    if (!cell) {
+        return NO;
+    }
+
+    UIView *contentContainer = cell;
+    if ([cell isKindOfClass:[UICollectionViewCell class]]) {
+        contentContainer = ((UICollectionViewCell *)cell).contentView;
+    }
+
+    // 39.7.0 的实机日志显示：产生空行的 Header Cell 只有一个业务叶子分支。
+    // 若 Cell 同时承载其他分支（例如页签），保持宿主原高度，避免再次误伤。
+    if (contentContainer.subviews.count != 1) {
+        return NO;
+    }
+    return DYYYCommentHeaderViewTreeContainsHiddenLeaf(contentContainer.subviews.firstObject, 0);
+}
+
+static void DYYYSetCommentHeaderModelVerifiedCollapse(id model, BOOL shouldCollapse) {
+    if (!model) {
+        return;
+    }
+    objc_setAssociatedObject(model,
+                             &kDYYYCommentHeaderVerifiedCollapseModelKey,
+                             @(shouldCollapse),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
+    return DYYYGetBool(@"DYYYHideCommentViews") &&
+           [objc_getAssociatedObject(model, &kDYYYCommentHeaderVerifiedCollapseModelKey) boolValue];
+}
+
+static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
+    id models = DYYYKVCValueIfPossible(controller, @"modelsArray");
+    if (![models isKindOfClass:[NSArray class]] || [(NSArray *)models count] == 0) {
+        return NO;
+    }
+    for (id model in (NSArray *)models) {
+        if (!DYYYShouldVerifiedCollapseCommentHeaderModel(model)) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 %group CommentSearchAnchorGroup
@@ -7790,16 +7834,29 @@ static BOOL DYYYShouldCollapseCommentHeaderModel(id model) {
 
 %end
 
-%group CommentPanelHeaderSectionControllerGroup
+%group CommentPanelHeaderVerifiedCollapseGroup
 
 %hook AWECommentPanelHeaderSwiftImpl_CommentPanelHeaderSectionController
 
 - (CGSize)sizeForItemAtIndex:(NSInteger)index model:(id)model collectionViewSize:(CGSize)collectionViewSize {
     CGSize originalSize = %orig(index, model, collectionViewSize);
-    if (DYYYGetBool(@"DYYYHideCommentViews") && DYYYShouldCollapseCommentHeaderModel(model)) {
+    if (DYYYShouldVerifiedCollapseCommentHeaderModel(model)) {
         originalSize.height = 0.0;
     }
     return originalSize;
+}
+
+- (double)currentHeight {
+    double originalHeight = %orig;
+    return DYYYAllCommentHeaderModelsAreVerifiedCollapsed(self) ? 0.0 : originalHeight;
+}
+
+- (void)configCell:(id)cell index:(NSInteger)index model:(id)model {
+    %orig(cell, index, model);
+    BOOL shouldCollapse = DYYYGetBool(@"DYYYHideCommentViews") &&
+                          [cell isKindOfClass:[UIView class]] &&
+                          DYYYCommentHeaderCellContainsOnlyHiddenLeaf((UIView *)cell);
+    DYYYSetCommentHeaderModelVerifiedCollapse(model, shouldCollapse);
 }
 
 %end
@@ -15840,7 +15897,7 @@ static void findTargetViewInView(UIView *view) {
 
         Class commentHeaderSectionControllerClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentPanelHeaderSectionController");
         if (commentHeaderSectionControllerClass) {
-            %init(CommentPanelHeaderSectionControllerGroup,
+            %init(CommentPanelHeaderVerifiedCollapseGroup,
                   AWECommentPanelHeaderSwiftImpl_CommentPanelHeaderSectionController = commentHeaderSectionControllerClass);
         }
 
