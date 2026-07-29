@@ -15798,6 +15798,8 @@ static void findTargetViewInView(UIView *view) {
 }
 
 %ctor {
+    [DYYYLoginBypassManager configureInitialStateIfNeeded];
+
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         @"DYYYDisableFeedNowPlayingInfo" : @YES,
         @"DYYYSpeedSettings" : @"1.0,1.25,1.5,2.0",

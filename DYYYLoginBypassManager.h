@@ -4,6 +4,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface DYYYLoginBypassManager : NSObject
 
++ (void)configureInitialStateIfNeeded;
 + (void)handleOfficialLoginCompletionWithUserID:(nullable NSString *)userID;
 
 @end
