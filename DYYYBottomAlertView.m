@@ -1,8 +1,22 @@
 #import "DYYYBottomAlertView.h"
+#import <objc/runtime.h>
 #import "AwemeHeaders.h"
 #import "DYYYUtils.h"
 
+static char kDYYYManagedHalfScreenViewControllerKey;
+
 @implementation DYYYBottomAlertView
+
++ (void)markManagedHalfScreenViewController:(UIViewController *)viewController {
+    if (!viewController) {
+        return;
+    }
+    objc_setAssociatedObject(viewController, &kDYYYManagedHalfScreenViewControllerKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
++ (BOOL)isManagedHalfScreenViewController:(UIViewController *)viewController {
+    return [objc_getAssociatedObject(viewController, &kDYYYManagedHalfScreenViewControllerKey) boolValue];
+}
 
 + (UIViewController *)showAlertWithTitle:(NSString *)title
                                  message:(NSString *)message
@@ -16,6 +30,8 @@
 
     if (!vc)
         return nil;
+
+    [self markManagedHalfScreenViewController:vc];
 
     if (cancelButtonText.length == 0) {
         cancelButtonText = @"取消";

@@ -8,6 +8,12 @@ typedef void (^DYYYAlertActionHandler)(void);
 @interface DYYYBottomAlertView : UIView
 
 /**
+ * 标记并识别由 DYYY 创建的原生半屏弹窗，避免自定义配色影响抖音官方实例。
+ */
++ (void)markManagedHalfScreenViewController:(UIViewController *)viewController;
++ (BOOL)isManagedHalfScreenViewController:(UIViewController *)viewController;
+
+/**
  * 显示带头像的警告框，支持自定义按钮文本
  * @param title 标题文本
  * @param message 消息文本

@@ -12951,13 +12951,10 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 %end
 
-%hook AFDPrivacyHalfScreenViewController
-
-%new
-- (void)updateDarkModeAppearance {
+static void DYYYUpdateManagedPrivacyHalfScreenAppearance(AFDPrivacyHalfScreenViewController *viewController) {
     BOOL isDarkMode = [DYYYUtils isDarkMode];
 
-    UIView *contentView = self.view.subviews.count > 1 ? self.view.subviews[1] : nil;
+    UIView *contentView = viewController.view.subviews.count > 1 ? viewController.view.subviews[1] : nil;
     if (contentView) {
         if (isDarkMode) {
             contentView.backgroundColor = [UIColor colorWithRed:0.13 green:0.13 blue:0.13 alpha:1.0];
@@ -12967,43 +12964,49 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
     }
 
     // 修改标题文本颜色
-    if (self.titleLabel) {
+    if (viewController.titleLabel) {
         if (isDarkMode) {
-            self.titleLabel.textColor = [UIColor whiteColor];
+            viewController.titleLabel.textColor = [UIColor whiteColor];
         } else {
-            self.titleLabel.textColor = [UIColor blackColor];
+            viewController.titleLabel.textColor = [UIColor blackColor];
         }
     }
 
     // 修改内容文本颜色
-    if (self.contentLabel) {
+    if (viewController.contentLabel) {
         if (isDarkMode) {
-            self.contentLabel.textColor = [UIColor lightGrayColor];
+            viewController.contentLabel.textColor = [UIColor lightGrayColor];
         } else {
-            self.contentLabel.textColor = [UIColor darkGrayColor];
+            viewController.contentLabel.textColor = [UIColor darkGrayColor];
         }
     }
 
     // 修改左侧按钮颜色和文字颜色
-    if (self.leftCancelButton) {
+    if (viewController.leftCancelButton) {
         if (isDarkMode) {
-            [self.leftCancelButton setBackgroundColor:[UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]]; // 暗色模式按钮背景色
-            [self.leftCancelButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];          // 暗色模式文字颜色
+            [viewController.leftCancelButton setBackgroundColor:[UIColor colorWithRed:0.25 green:0.25 blue:0.25 alpha:1.0]];
+            [viewController.leftCancelButton setTitleColor:[UIColor lightGrayColor] forState:UIControlStateNormal];
         } else {
-            [self.leftCancelButton setBackgroundColor:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0]]; // 默认按钮背景色
-            [self.leftCancelButton setTitleColor:[UIColor darkTextColor] forState:UIControlStateNormal];        // 默认文字颜色
+            [viewController.leftCancelButton setBackgroundColor:[UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0]];
+            [viewController.leftCancelButton setTitleColor:[UIColor darkTextColor] forState:UIControlStateNormal];
         }
     }
 }
 
+%hook AFDPrivacyHalfScreenViewController
+
 - (void)viewDidLoad {
     %orig;
-    [self updateDarkModeAppearance];
+    if ([DYYYBottomAlertView isManagedHalfScreenViewController:self]) {
+        DYYYUpdateManagedPrivacyHalfScreenAppearance(self);
+    }
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
-    [self updateDarkModeAppearance];
+    if ([DYYYBottomAlertView isManagedHalfScreenViewController:self]) {
+        DYYYUpdateManagedPrivacyHalfScreenAppearance(self);
+    }
 }
 
 - (void)configWithImageView:(UIImageView *)imageView
@@ -13017,7 +13020,9 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
      leftButtonClickedBlock:(void (^)(void))leftBtnBlock {
 
     %orig;
-    [self updateDarkModeAppearance];
+    if ([DYYYBottomAlertView isManagedHalfScreenViewController:self]) {
+        DYYYUpdateManagedPrivacyHalfScreenAppearance(self);
+    }
 }
 
 %end
