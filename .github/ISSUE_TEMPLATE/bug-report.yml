@@ -260,7 +260,7 @@ body:
       description: 可上传截图、录屏、日志或压缩后的配置文件。
     validations:
       required: false
-      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.log,.txt,.json,.zip,.gz,.tar.gz"
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.log,.txt,.json,.zip,.gz"
 
   - type: textarea
     id: additional-information
