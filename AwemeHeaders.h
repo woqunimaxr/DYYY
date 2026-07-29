@@ -834,6 +834,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)reportUserDetailVisitIfNeeded:(id)user;
 @end
 
+@interface AWENetworkService : NSObject
++ (id)postWithURLString:(NSString *)URLString params:(id)params completion:(id)completion;
+@end
+
 // AWEVersionUpdateManager相关接口声明
 @interface AWEVersionUpdateManager : NSObject
 @property(nonatomic, strong) id networkModule;

@@ -31,6 +31,7 @@
 #import "DYYYLivePreStreamLayoutCoordinator.h"
 #import "DYYYLoginBypassManager.h"
 #import "DYYYMiniProgramRewardBypass.h"
+#import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
@@ -1597,112 +1598,10 @@ static void DYYYScheduleCurrentAwemeTracking(id source, id fallbackAweme) {
 %end
 
 // 抖音 39.1.0 访问他人主页时会由详情组件直接上传访客记录
-static NSString *const kDYYYDisableProfileVisitRecordUploadKey = @"DYYYDisableProfileVisitRecordUpload";
-static NSString *const kDYYYProfileVisitRecordUploadPath = @"/aweme/v1/profile/record/";
-
-static BOOL DYYYShouldBlockProfileVisitRecordUpload(void) {
-    return DYYYGetBool(kDYYYDisableProfileVisitRecordUploadKey);
-}
-
-static id DYYYProfileVisitRecordValueForSelector(id object, SEL selector) {
-    if (!object || !selector || ![object respondsToSelector:selector]) {
-        return nil;
-    }
-
-    @try {
-        return ((id (*)(id, SEL))objc_msgSend)(object, selector);
-    } @catch (__unused NSException *exception) {
-        return nil;
-    }
-}
-
-static NSString *DYYYProfileVisitRecordURLStringFromObject(id object, NSUInteger depth) {
-    if (!object || depth > 3) {
-        return nil;
-    }
-
-    if ([object isKindOfClass:NSString.class]) {
-        return (NSString *)object;
-    }
-
-    if ([object isKindOfClass:NSURL.class]) {
-        return [(NSURL *)object absoluteString];
-    }
-
-    if ([object isKindOfClass:NSURLRequest.class]) {
-        return ((NSURLRequest *)object).URL.absoluteString;
-    }
-
-    SEL selectors[] = {
-        @selector(URL),
-        @selector(url),
-        @selector(requestURL),
-        @selector(requestUrl),
-        @selector(requestUrlString),
-        @selector(URLString),
-        @selector(urlString),
-        @selector(absoluteString),
-        @selector(request),
-        @selector(currentRequest),
-        @selector(originalRequest)
-    };
-
-    for (NSUInteger idx = 0; idx < sizeof(selectors) / sizeof(selectors[0]); idx++) {
-        id value = DYYYProfileVisitRecordValueForSelector(object, selectors[idx]);
-        if (!value || value == object) {
-            continue;
-        }
-
-        NSString *urlString = DYYYProfileVisitRecordURLStringFromObject(value, depth + 1);
-        if (urlString.length > 0) {
-            return urlString;
-        }
-    }
-
-    return nil;
-}
-
-static BOOL DYYYIsProfileVisitRecordUploadURLString(NSString *urlString) {
-    if (![urlString isKindOfClass:NSString.class] || urlString.length == 0) {
-        return NO;
-    }
-
-    if ([urlString isEqualToString:kDYYYProfileVisitRecordUploadPath]) {
-        return YES;
-    }
-
-    if ([urlString containsString:kDYYYProfileVisitRecordUploadPath]) {
-        NSURLComponents *components = [NSURLComponents componentsWithString:urlString];
-        NSString *path = components.path;
-        if (path.length > 0) {
-            return [path isEqualToString:kDYYYProfileVisitRecordUploadPath];
-        }
-
-        return [urlString containsString:kDYYYProfileVisitRecordUploadPath];
-    }
-
-    return NO;
-}
-
-static BOOL DYYYShouldBlockProfileVisitRecordRequestObject(id requestObject) {
-    if (!DYYYShouldBlockProfileVisitRecordUpload()) {
-        return NO;
-    }
-
-    NSString *urlString = DYYYProfileVisitRecordURLStringFromObject(requestObject, 0);
-    return DYYYIsProfileVisitRecordUploadURLString(urlString);
-}
-
-static NSError *DYYYProfileVisitRecordBlockedError(void) {
-    return [NSError errorWithDomain:@"DYYY.ProfileVisitRecordUpload"
-                               code:NSURLErrorCancelled
-                           userInfo:@{NSLocalizedDescriptionKey : @"DYYY blocked profile visit record upload"}];
-}
-
 %hook AWEProfileUserDetailComponent
 
 - (void)reportUserDetailVisitIfNeeded:(id)user {
-    if (DYYYShouldBlockProfileVisitRecordUpload()) {
+    if ([DYYYPrivacyRecordUploadGuard isProfileVisitRecordUploadDisabled]) {
         return;
     }
 
@@ -1715,7 +1614,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 %hook AWEProfileRecordHelper
 
 + (void)postProfileRecordWithParams:(id)params {
-    if (DYYYShouldBlockProfileVisitRecordUpload()) {
+    if ([DYYYPrivacyRecordUploadGuard isProfileVisitRecordUploadDisabled]) {
         return;
     }
 
@@ -1723,7 +1622,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 }
 
 + (void)postProfileRecordWithParams:(id)params completionBlock:(id)completionBlock {
-    if (DYYYShouldBlockProfileVisitRecordUpload()) {
+    if ([DYYYPrivacyRecordUploadGuard isProfileVisitRecordUploadDisabled]) {
         return;
     }
 
@@ -1731,7 +1630,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 }
 
 + (void)postProfileRecordWithKey:(id)key valueDic:(id)valueDic {
-    if (DYYYShouldBlockProfileVisitRecordUpload()) {
+    if ([DYYYPrivacyRecordUploadGuard isProfileVisitRecordUploadDisabled]) {
         return;
     }
 
@@ -1739,7 +1638,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 }
 
 + (void)postProfileRecordWithKey:(id)key valueDic:(id)valueDic completionBlock:(id)completionBlock {
-    if (DYYYShouldBlockProfileVisitRecordUpload()) {
+    if ([DYYYPrivacyRecordUploadGuard isProfileVisitRecordUploadDisabled]) {
         return;
     }
 
@@ -1748,10 +1647,34 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 
 %end
 
+%hook AWENetworkService
+
++ (id)postWithURLString:(NSString *)URLString params:(id)params completion:(id)completion {
+    if (!completion && [DYYYPrivacyRecordUploadGuard shouldBlockAwemeViewRecordURLString:URLString]) {
+        return nil;
+    }
+
+    return %orig;
+}
+
+%end
+
+static BOOL DYYYShouldSkipPrivacyRecordTaskStart(id task) {
+    BOOL shouldBlock = [DYYYPrivacyRecordUploadGuard isTaskMarkedForBlocking:task] ||
+                       [DYYYPrivacyRecordUploadGuard shouldBlockRequestObject:task];
+    if (!shouldBlock) {
+        return NO;
+    }
+
+    // 即使任务对象不支持 cancel，也必须阻止原始启动，避免隐私请求继续发出。
+    (void)[DYYYPrivacyRecordUploadGuard cancelTaskIfPossible:task];
+    return YES;
+}
+
 %hook TTHttpTask
 
 - (void)resume {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(self)) {
+    if (DYYYShouldSkipPrivacyRecordTaskStart(self)) {
         return;
     }
 
@@ -1763,7 +1686,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 %hook TTHttpTaskChromium
 
 - (void)runRequestFiltersAndStart {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(self)) {
+    if (DYYYShouldSkipPrivacyRecordTaskStart(self)) {
         return;
     }
 
@@ -1771,7 +1694,19 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 }
 
 - (void)resume {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(self)) {
+    if (DYYYShouldSkipPrivacyRecordTaskStart(self)) {
+        return;
+    }
+
+    %orig;
+}
+
+%end
+
+%hook TTConcurrentHttpTask
+
+- (void)resume {
+    if (DYYYShouldSkipPrivacyRecordTaskStart(self)) {
         return;
     }
 
@@ -1783,8 +1718,7 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 %hook NSURLSessionTask
 
 - (void)resume {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(self)) {
-        [self cancel];
+    if (DYYYShouldSkipPrivacyRecordTaskStart(self)) {
         return;
     }
 
@@ -1796,125 +1730,81 @@ static NSError *DYYYProfileVisitRecordBlockedError(void) {
 %hook NSURLSession
 
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(url)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDataTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:url];
+    return task;
 }
 
 - (NSURLSessionDataTask *)dataTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(url)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDataTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:url];
+    return task;
 }
 
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDataTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDataTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionDownloadTask *)downloadTaskWithURL:(NSURL *)url {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(url)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDownloadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:url];
+    return task;
 }
 
 - (NSURLSessionDownloadTask *)downloadTaskWithURL:(NSURL *)url completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(url)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDownloadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:url];
+    return task;
 }
 
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDownloadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request completionHandler:(void (^)(NSURL *location, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionDownloadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromData:(NSData *)bodyData {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionUploadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromData:(NSData *)bodyData completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionUploadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromFile:(NSURL *)fileURL {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionUploadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromFile:(NSURL *)fileURL completionHandler:(void (^)(NSData *data, NSURLResponse *response, NSError *error))completionHandler {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        if (completionHandler) {
-            completionHandler(nil, nil, DYYYProfileVisitRecordBlockedError());
-        }
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionUploadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request {
-    if (DYYYShouldBlockProfileVisitRecordRequestObject(request)) {
-        return nil;
-    }
-
-    return %orig;
+    NSURLSessionUploadTask *task = %orig;
+    [DYYYPrivacyRecordUploadGuard markTaskForBlockingIfNeeded:task requestObject:request];
+    return task;
 }
 
 %end
