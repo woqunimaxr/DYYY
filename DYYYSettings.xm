@@ -1185,7 +1185,6 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 @interface DYYYSettingsSearchCoordinator : NSObject <UITextFieldDelegate, UIGestureRecognizerDelegate>
 @property(nonatomic, weak) AWESettingBaseViewController *settingsVC;
 @property(nonatomic, weak) UINavigationController *navigationController;
-@property(nonatomic, weak) id<UIGestureRecognizerDelegate> previousInteractivePopGestureDelegate;
 @property(nonatomic, assign) BOOL previousInteractivePopGestureEnabled;
 @property(nonatomic, assign) BOOL hasStoredInteractivePopGestureEnabled;
 @property(nonatomic, strong) AWESettingsViewModel *viewModel;
@@ -1210,6 +1209,7 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 - (void)applyThemeColors;
 - (void)updateLayout;
 - (void)updateSearchPlaceholderVisibilityAnimated:(BOOL)animated;
+- (BOOL)isTopSettingsViewController;
 - (void)updateNavigationGestureState;
 - (void)restoreNavigationGestureState;
 - (BOOL)handleBackNavigationRequest;
@@ -1524,6 +1524,10 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 }
 
 - (BOOL)handleBackNavigationRequest {
+    UINavigationController *navigationController = self.settingsVC.navigationController ?: self.navigationController;
+    if (navigationController && navigationController.topViewController != self.settingsVC) {
+        return NO;
+    }
     if (![self isSearchInteractionActive]) {
         return NO;
     }
@@ -1545,21 +1549,13 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 
 - (void)installNavigationInterceptors {
     UINavigationController *navigationController = self.settingsVC.navigationController;
-    UIGestureRecognizer *popGesture = navigationController.interactivePopGestureRecognizer;
-    if (!navigationController || !popGesture) {
+    if (!navigationController) {
         return;
     }
 
     self.navigationController = navigationController;
-    if (!self.hasStoredInteractivePopGestureEnabled) {
-        self.previousInteractivePopGestureEnabled = popGesture.enabled;
-        self.hasStoredInteractivePopGestureEnabled = YES;
-    }
-    if (popGesture.delegate != (id<UIGestureRecognizerDelegate>)self) {
-        self.previousInteractivePopGestureDelegate = popGesture.delegate;
-        popGesture.delegate = (id<UIGestureRecognizerDelegate>)self;
-    }
-
+    // 系统返回手势代理由宿主导航控制器管理；搜索态改用独立边缘手势，
+    // 避免多个设置页协调器互相保存为 previous delegate 并形成代理环。
     if (!self.searchBackGestureRecognizer) {
         self.searchBackGestureRecognizer = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(handleSearchBackGesture:)];
         self.searchBackGestureRecognizer.edges = UIRectEdgeLeft;
@@ -1567,10 +1563,26 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
         self.searchBackGestureRecognizer.enabled = NO;
         [self.settingsVC.view addGestureRecognizer:self.searchBackGestureRecognizer];
     }
+
+    UIGestureRecognizer *popGesture = navigationController.interactivePopGestureRecognizer;
+    if ([self isTopSettingsViewController] && popGesture && !self.hasStoredInteractivePopGestureEnabled) {
+        self.previousInteractivePopGestureEnabled = popGesture.enabled;
+        self.hasStoredInteractivePopGestureEnabled = YES;
+    }
+}
+
+- (BOOL)isTopSettingsViewController {
+    UINavigationController *navigationController = self.settingsVC.navigationController ?: self.navigationController;
+    return navigationController && navigationController.topViewController == self.settingsVC;
 }
 
 - (void)updateNavigationGestureState {
     UINavigationController *navigationController = self.settingsVC.navigationController ?: self.navigationController;
+    if (![self isTopSettingsViewController]) {
+        self.searchBackGestureRecognizer.enabled = NO;
+        return;
+    }
+
     UIGestureRecognizer *popGesture = navigationController.interactivePopGestureRecognizer;
     BOOL searchActive = [self isSearchInteractionActive];
 
@@ -1592,12 +1604,10 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 - (void)restoreNavigationGestureState {
     UINavigationController *navigationController = self.settingsVC.navigationController ?: self.navigationController;
     UIGestureRecognizer *popGesture = navigationController.interactivePopGestureRecognizer;
-    if (popGesture.delegate == (id<UIGestureRecognizerDelegate>)self) {
-        popGesture.delegate = self.previousInteractivePopGestureDelegate;
-    }
-    if (self.hasStoredInteractivePopGestureEnabled) {
+    if (popGesture && self.hasStoredInteractivePopGestureEnabled) {
         popGesture.enabled = self.previousInteractivePopGestureEnabled;
     }
+    self.hasStoredInteractivePopGestureEnabled = NO;
     self.searchBackGestureRecognizer.enabled = NO;
 }
 
@@ -1608,20 +1618,10 @@ static UIColor *DYYYSettingsSearchPlaceholderColor(BOOL usesLightBackground) {
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (gestureRecognizer == self.searchBackGestureRecognizer) {
-        return [self isSearchInteractionActive];
+    if (gestureRecognizer != self.searchBackGestureRecognizer) {
+        return YES;
     }
-
-    if (gestureRecognizer == self.navigationController.interactivePopGestureRecognizer && [self handleBackNavigationRequest]) {
-        return NO;
-    }
-
-    id<UIGestureRecognizerDelegate> delegate = self.previousInteractivePopGestureDelegate;
-    if (delegate && delegate != (id<UIGestureRecognizerDelegate>)self && [delegate respondsToSelector:@selector(gestureRecognizerShouldBegin:)]) {
-        return [delegate gestureRecognizerShouldBegin:gestureRecognizer];
-    }
-
-    return YES;
+    return [self isTopSettingsViewController] && [self isSearchInteractionActive];
 }
 
 - (void)textFieldDidBeginEditing:(UITextField *)textField {
