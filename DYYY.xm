@@ -7095,7 +7095,11 @@ static id DYYYAvatarObjectForSelector(id object, SEL selector) {
     }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-    return [object performSelector:selector];
+    @try {
+        return [object performSelector:selector];
+    } @catch (__unused NSException *exception) {
+        return nil;
+    }
 #pragma clang diagnostic pop
 }
 
@@ -7104,6 +7108,7 @@ static UIView *DYYYAvatarViewForSelector(id object, SEL selector) {
     return [value isKindOfClass:[UIView class]] ? value : nil;
 }
 
+static char kDYYYAvatarFollowApplyingKey;
 static char kDYYYAvatarFollowDeferredApplyKey;
 static char kDYYYAvatarFollowScopeViewKey;
 static char kDYYYAvatarActionHiddenViewKey;
@@ -7563,18 +7568,41 @@ static void DYYYApplyAvatarFollowPromptSettings(id owner) {
     DYYYApplyAvatarFollowSettingsForContext(DYYYAvatarObjectForSelector(owner, NSSelectorFromString(@"userAvatarContext")));
 }
 
+static void DYYYApplyAvatarFollowPromptSettingsSafely(id owner) {
+    if (!owner || !DYYYAvatarFollowOptionsEnabled() ||
+        objc_getAssociatedObject(owner, &kDYYYAvatarFollowApplyingKey)) {
+        return;
+    }
+
+    // 必须在任何动态 getter 探测前建立屏障。部分版本的 userAvatarView getter
+    // 会同步回调 controllerStartConfigAvatarView:，若稍后再标记会形成无限递归。
+    objc_setAssociatedObject(owner, &kDYYYAvatarFollowApplyingKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    @try {
+        DYYYApplyAvatarFollowPromptSettings(owner);
+    } @catch (__unused NSException *exception) {
+        // 宿主私有 getter 在版本变化时可能抛出异常；头像附加功能失败不应终止主进程。
+    } @finally {
+        objc_setAssociatedObject(owner, &kDYYYAvatarFollowApplyingKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
 static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
-    DYYYApplyAvatarFollowPromptSettings(owner);
-    if (!owner || !DYYYAvatarFollowOptionsEnabled() || objc_getAssociatedObject(owner, &kDYYYAvatarFollowDeferredApplyKey)) {
+    if (!owner || !DYYYAvatarFollowOptionsEnabled() ||
+        objc_getAssociatedObject(owner, &kDYYYAvatarFollowApplyingKey)) {
+        return;
+    }
+
+    DYYYApplyAvatarFollowPromptSettingsSafely(owner);
+    if (objc_getAssociatedObject(owner, &kDYYYAvatarFollowDeferredApplyKey)) {
         return;
     }
 
     objc_setAssociatedObject(owner, &kDYYYAvatarFollowDeferredApplyKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     id target = owner;
     dispatch_async(dispatch_get_main_queue(), ^{
-        DYYYApplyAvatarFollowPromptSettings(target);
+        DYYYApplyAvatarFollowPromptSettingsSafely(target);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            DYYYApplyAvatarFollowPromptSettings(target);
+            DYYYApplyAvatarFollowPromptSettingsSafely(target);
             objc_setAssociatedObject(target, &kDYYYAvatarFollowDeferredApplyKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         });
     });
