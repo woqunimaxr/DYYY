@@ -4,11 +4,11 @@ set -euo pipefail
 shopt -s nullglob
 
 package_version=${PACKAGE_VERSION:-$(awk -F': ' '$1 == "Version" { print $2; exit }' control)}
-source_deb_glob=${SOURCE_DEB_GLOB:-packages/*arm64e*.deb}
-fallback_deb_glob=${FALLBACK_DEB_GLOB:-packages/*roothide*.deb}
+source_deb_glob=${SOURCE_DEB_GLOB:-packages/*_iphoneos-arm64-rootless.deb}
+fallback_deb_glob=${FALLBACK_DEB_GLOB:-packages/*_iphoneos-arm64.deb}
 output_dir=${OUTPUT_DIR:-packages}
 tweak_dylib_name=${TWEAK_DYLIB_NAME:-DYYY.dylib}
-required_arch=${REQUIRED_ARCH:-arm64e}
+required_arch=${REQUIRED_ARCH:-arm64}
 
 if [[ -z "$package_version" ]]; then
     echo "Unable to read package version from control" >&2
@@ -27,7 +27,7 @@ if [[ "${#matching_debs[@]}" -eq 0 && -n "$fallback_deb_glob" ]]; then
 fi
 
 if [[ "${#matching_debs[@]}" -ne 1 ]]; then
-    echo "Expected exactly one arm64e Deb package, found ${#matching_debs[@]}:" >&2
+    echo "Expected exactly one arm64 Deb package, found ${#matching_debs[@]}:" >&2
     printf '  %s\n' "${matching_debs[@]}" >&2
     exit 1
 fi

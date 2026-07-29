@@ -165,7 +165,7 @@ jobs:
 
           printf 'Package artifact: %s\n' "${deb_files[@]}"
 
-      - name: Extract arm64e dylib
+      - name: Extract arm64 dylib
         env:
           PACKAGE_VERSION: ${{ steps.package.outputs.version }}
         run: .github/scripts/extract-release-dylib.sh
