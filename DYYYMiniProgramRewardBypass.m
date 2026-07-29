@@ -22,6 +22,7 @@ typedef NS_ENUM(NSUInteger, DYYYMiniProgramRewardSessionState) {
 @interface DYYYMiniProgramRewardSession : NSObject
 @property(nonatomic, assign) DYYYMiniProgramRewardSessionState state;
 @property(nonatomic, assign) BOOL diagnosticFailureLogged;
+@property(nonatomic, assign) NSUInteger presentationGeneration;
 @end
 
 @implementation DYYYMiniProgramRewardSession
@@ -225,17 +226,36 @@ static void DYYYMiniProgramScheduleClose(id controller) {
     }
 
     DYYYMiniProgramRewardSession *session = DYYYMiniProgramSessionForController(controller, YES);
+    NSUInteger presentationGeneration = 0;
+    BOOL reusedController = NO;
     @synchronized(session) {
-        if (session.state == DYYYMiniProgramRewardSessionStateCloseScheduled ||
-            session.state == DYYYMiniProgramRewardSessionStateFinished) {
+        if (session.state == DYYYMiniProgramRewardSessionStateCloseScheduled) {
             return;
         }
+
+        if (session.state == DYYYMiniProgramRewardSessionStateFinished) {
+            session.state = DYYYMiniProgramRewardSessionStateCreated;
+            session.diagnosticFailureLogged = NO;
+            session.presentationGeneration++;
+            reusedController = YES;
+        } else if (session.presentationGeneration == 0) {
+            session.presentationGeneration = 1;
+        }
+
+        presentationGeneration = session.presentationGeneration;
         session.state = DYYYMiniProgramRewardSessionStateAppeared;
+    }
+
+    if (reusedController) {
+        NSLog(@"[DYYY][小程序跳广告] 检测到控制器复用，开始第 %lu 轮广告：%@",
+              (unsigned long)presentationGeneration,
+              NSStringFromClass([controller class]));
     }
 
     if (!DYYYMiniProgramPrepareLocalRewardState(controller)) {
         @synchronized(session) {
-            if (!session.diagnosticFailureLogged) {
+            if (session.presentationGeneration == presentationGeneration &&
+                !session.diagnosticFailureLogged) {
                 session.diagnosticFailureLogged = YES;
                 NSLog(@"[DYYY][小程序跳广告] 本地奖励状态未确认，保留原广告流程：%@",
                       NSStringFromClass([controller class]));
@@ -245,7 +265,8 @@ static void DYYYMiniProgramScheduleClose(id controller) {
     }
 
     @synchronized(session) {
-        if (session.state == DYYYMiniProgramRewardSessionStateFinished) {
+        if (session.presentationGeneration != presentationGeneration ||
+            session.state == DYYYMiniProgramRewardSessionStateFinished) {
             return;
         }
         session.state = DYYYMiniProgramRewardSessionStateCloseScheduled;
@@ -267,7 +288,8 @@ static void DYYYMiniProgramScheduleClose(id controller) {
       }
 
       @synchronized(strongSession) {
-          if (strongSession.state != DYYYMiniProgramRewardSessionStateCloseScheduled) {
+          if (strongSession.presentationGeneration != presentationGeneration ||
+              strongSession.state != DYYYMiniProgramRewardSessionStateCloseScheduled) {
               return;
           }
           if (!DYYYMiniProgramRewardEnabled()) {
@@ -279,19 +301,24 @@ static void DYYYMiniProgramScheduleClose(id controller) {
       if (!DYYYMiniProgramControllerIsVisible(strongController) ||
           !DYYYMiniProgramPrepareLocalRewardState(strongController)) {
           @synchronized(strongSession) {
-              strongSession.state = DYYYMiniProgramRewardSessionStateAppeared;
+              if (strongSession.presentationGeneration == presentationGeneration) {
+                  strongSession.state = DYYYMiniProgramRewardSessionStateAppeared;
+              }
           }
           return;
       }
 
       BOOL closed = DYYYMiniProgramCloseController(strongController);
       @synchronized(strongSession) {
-          strongSession.state = closed
-                                    ? DYYYMiniProgramRewardSessionStateFinished
-                                    : DYYYMiniProgramRewardSessionStateAppeared;
+          if (strongSession.presentationGeneration == presentationGeneration) {
+              strongSession.state = closed
+                                        ? DYYYMiniProgramRewardSessionStateFinished
+                                        : DYYYMiniProgramRewardSessionStateAppeared;
+          }
       }
       if (closed) {
-          NSLog(@"[DYYY][小程序跳广告] 已确认本地奖励状态并关闭广告控制器：%@",
+          NSLog(@"[DYYY][小程序跳广告] 第 %lu 轮已确认本地奖励状态并关闭广告控制器：%@",
+                (unsigned long)presentationGeneration,
                 NSStringFromClass([strongController class]));
       }
     });
