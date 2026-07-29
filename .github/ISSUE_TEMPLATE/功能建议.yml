@@ -1,0 +1,199 @@
+name: 功能建议
+description: 用于提交 DYYY 抖音插件的新功能建议、功能优化以及体验改进需求。请按表单填写用途、场景和预期效果。
+title: "[Feature] "
+labels:
+  - 增强
+  - 改进
+  - 新增
+assignees:
+  - VexCove
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的建议。
+
+        提交前建议先查看：
+
+        - [项目说明文档](https://github.com/VexCove/DYYY)
+        - [已有 Issues](https://github.com/VexCove/DYYY/issues)
+
+        请尽量完整说明使用场景和预期效果，这将帮助我们评估实现方案。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前确认
+      description: 请逐项确认以下情况。
+      options:
+        - label: 我已经搜索过已有 Issue，确认没有相同或类似需求
+          required: true
+        - label: 我确认该功能符合 DYYY 项目方向
+          required: true
+        - label: 我已经尽可能描述清楚功能需求和使用场景
+          required: true
+
+  - type: markdown
+    attributes:
+      value: "## 功能信息"
+
+  - type: input
+    id: feature-name
+    attributes:
+      label: 功能名称
+      description: 请用一句话概括希望新增或改进的功能。
+      placeholder: 例如新增视频自动跳过功能
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature-type
+    attributes:
+      label: 功能类型
+      options:
+        - 新增功能
+        - 功能优化
+        - 性能优化
+        - UI / 交互优化
+        - 兼容性改进
+        - 其他
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## 需求描述"
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: 功能描述
+      description: 请详细描述希望实现什么。
+      placeholder: 例如希望增加一个功能，可以自动识别并跳过视频中的广告内容
+    validations:
+      required: true
+
+  - type: textarea
+    id: usage-scenario
+    attributes:
+      label: 使用场景
+      description: 请描述什么时候会使用该功能。
+      placeholder: 例如刷视频过程中经常遇到广告，希望减少手动操作
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-problem
+    attributes:
+      label: 当前问题
+      description: 请说明当前操作方式存在的问题。
+      placeholder: 例如现在需要手动滑过广告，操作比较繁琐
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## 方案建议"
+
+  - type: textarea
+    id: expected-implementation
+    attributes:
+      label: 期望实现方式
+      description: 如果已有想法，请描述期望的交互或实现方式。
+      placeholder: 例如增加一个设置开关，在设置页面控制开启或关闭
+    validations:
+      required: false
+
+  - type: input
+    id: reference
+    attributes:
+      label: 参考软件或功能
+      description: 如果其他软件存在类似功能，可填写名称或链接。
+      placeholder: 例如 XXX 软件的 XXX 功能
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "## 功能细节"
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: 设置选项需求
+      description: 如需增加设置项，请描述建议的位置和名称。
+      placeholder: 例如设置 → 视频功能 → 自动跳过广告
+    validations:
+      required: false
+
+  - type: dropdown
+    id: default-state
+    attributes:
+      label: 默认状态
+      options:
+        - 默认开启
+        - 默认关闭
+        - 用户自行选择
+        - 不适用
+    validations:
+      required: false
+
+  - type: dropdown
+    id: applicable-scope
+    attributes:
+      label: 适用范围
+      description: 可多选。
+      multiple: true
+      options:
+        - 首页
+        - 关注页
+        - 搜索页
+        - 直播页面
+        - 个人主页
+        - 全局
+        - 其他
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "## 影响评估"
+
+  - type: textarea
+    id: performance-impact
+    attributes:
+      label: 可能的性能影响
+      description: 如已知，请说明该功能可能带来的耗电、检测频率或资源占用。
+      placeholder: 例如可能增加检测频率
+    validations:
+      required: false
+
+  - type: textarea
+    id: stability-impact
+    attributes:
+      label: 可能的稳定性影响
+      description: 如已知，请说明可能涉及的 Hook、兼容性或崩溃风险。
+      placeholder: 例如可能涉及 Hook XXX 方法
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "## 补充信息"
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: 截图或视频
+      description: 可上传功能演示、参考截图或操作录屏。
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov"
+
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: 其他说明
+      description: 补充其他可能有助于评估的信息。
+    validations:
+      required: false

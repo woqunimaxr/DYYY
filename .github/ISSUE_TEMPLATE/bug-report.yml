@@ -1,0 +1,272 @@
+name: Bug Report
+description: 用于提交 DYYY 抖音插件开发过程中的 Bug、崩溃、功能异常等问题反馈。请按表单填写完整信息，方便快速定位问题。
+title: "[BUG] "
+labels:
+  - BUG
+  - 增强
+  - 改进
+assignees:
+  - VexCove
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的反馈。
+
+        提交前建议先查看：
+
+        - [项目说明文档](https://github.com/VexCove/DYYY)
+        - [已有 Issues](https://github.com/VexCove/DYYY/issues)
+
+        如果你能附上日志、截图或录屏，通常会大幅提升排查效率。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 提交前确认
+      description: 请逐项确认以下情况。
+      options:
+        - label: 我已经搜索过已有 Issue，确认没有重复问题
+          required: true
+        - label: 我已经阅读项目说明文档，并按照说明配置插件
+          required: true
+        - label: 我已经尝试重启抖音或重新安装插件，问题仍然存在
+          required: true
+        - label: 我确认该问题不是由于配置错误导致
+          required: true
+
+  - type: markdown
+    attributes:
+      value: "## 设备环境"
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备型号
+      description: 请填写完整设备型号。
+      placeholder: 例如 iPhone 17 Pro Max
+    validations:
+      required: true
+
+  - type: input
+    id: system-version
+    attributes:
+      label: 系统版本
+      description: 请填写完整的 iOS / iPadOS 版本。
+      placeholder: 例如 iOS 26.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: 运行环境
+      description: 请选择插件当前的运行环境。
+      options:
+        - TrollStore
+        - 自签 IPA
+        - 越狱环境
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: signing-method
+    attributes:
+      label: 签名方式
+      description: 自签 IPA 用户请选择签名工具；其他环境可选择“不适用”。
+      options:
+        - ESign
+        - SideStore
+        - AltStore
+        - LCSign
+        - 其他
+        - 不适用
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "## 抖音与插件信息"
+
+  - type: input
+    id: douyin-version
+    attributes:
+      label: 抖音版本
+      placeholder: 例如 35.x.x
+    validations:
+      required: true
+
+  - type: input
+    id: dyyy-version
+    attributes:
+      label: DYYY 版本
+      placeholder: 例如 v1.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-source
+    attributes:
+      label: 安装来源
+      options:
+        - GitHub Release
+        - 自编译
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source-modified
+    attributes:
+      label: 是否修改过源码
+      options:
+        - 未修改，使用 Release 版本
+        - 修改过源码
+    validations:
+      required: true
+
+  - type: textarea
+    id: source-changes
+    attributes:
+      label: 源码修改内容
+      description: 如果修改过源码，请说明改动内容；未修改可留空。
+      placeholder: 例如修改了某个 Hook 或设置项
+    validations:
+      required: false
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit 信息
+      description: 自编译版本建议填写对应的完整 Commit SHA。
+      placeholder: 例如 a83bd92
+    validations:
+      required: false
+
+  - type: textarea
+    id: affected-versions
+    attributes:
+      label: 版本范围
+      description: 如果已知，请分别填写最后正常工作的版本和首次出现问题的版本。
+      placeholder: |
+        最后正常工作的版本：v1.1.5
+        首次出现问题的版本：v1.2.0
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "## 问题模块"
+
+  - type: input
+    id: related-feature
+    attributes:
+      label: 相关功能
+      description: 请填写出现问题的具体功能或模块。
+      placeholder: 例如视频去水印、广告过滤、UI 修改、评论功能
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feature-enabled
+    attributes:
+      label: 功能是否已开启
+      options:
+        - 是
+        - 否
+    validations:
+      required: true
+
+  - type: textarea
+    id: configuration
+    attributes:
+      label: 相关配置
+      description: 请列出与问题相关的已开启、已关闭配置及自定义参数。
+      placeholder: |
+        开启：
+        - XXX 功能
+
+        关闭：
+        - XXX 功能
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## 问题详情"
+
+  - type: textarea
+    id: problem-description
+    attributes:
+      label: 问题描述
+      description: 请清楚说明发生了什么问题。
+      placeholder: 例如进入抖音首页后，开启 XXX 功能，滑动视频时出现闪退
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现步骤
+      description: 请提供能够稳定触发问题的完整操作步骤。
+      value: |
+        1. 打开抖音
+        2.
+        3.
+        4.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: 实际表现
+      description: 请描述执行上述步骤后的实际结果。
+      placeholder: 例如功能无效、页面异常或应用闪退
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 出现频率
+      options:
+        - 每次都会出现
+        - 经常出现
+        - 偶尔出现
+        - 只出现过一次
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "## 日志与附件"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Crash / Console 日志
+      description: 请粘贴 App 崩溃、系统 Crash、Console、Frida 或注入日志；没有可填写“无”。
+      placeholder: 在此粘贴日志
+      render: shell
+    validations:
+      required: false
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: 附件
+      description: 可上传截图、录屏、日志或压缩后的配置文件。
+    validations:
+      required: false
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.log,.txt,.json,.zip,.gz,.tar.gz"
+
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: 其他说明
+      description: 补充任何可能帮助定位问题的信息。
+      placeholder: 例如最近修改内容、特殊环境或复现限制
+    validations:
+      required: false
