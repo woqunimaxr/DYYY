@@ -1,12 +1,6 @@
 name: 功能建议
 description: 用于提交 DYYY 抖音插件的新功能建议、功能优化以及体验改进需求。请按表单填写用途、场景和预期效果。
 title: "[Feature] "
-labels:
-  - 增强
-  - 改进
-  - 新增
-assignees:
-  - VexCove
 body:
   - type: markdown
     attributes:

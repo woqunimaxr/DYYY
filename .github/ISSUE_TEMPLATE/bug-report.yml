@@ -1,12 +1,6 @@
 name: Bug Report
 description: 用于提交 DYYY 抖音插件开发过程中的 Bug、崩溃、功能异常等问题反馈。请按表单填写完整信息，方便快速定位问题。
 title: "[BUG] "
-labels:
-  - BUG
-  - 增强
-  - 改进
-assignees:
-  - VexCove
 body:
   - type: markdown
     attributes:
@@ -71,19 +65,20 @@ body:
       required: true
 
   - type: dropdown
-    id: signing-method
+    id: injection-method
     attributes:
-      label: 签名方式
-      description: 自签 IPA 用户请选择签名工具；其他环境可选择“不适用”。
+      label: 注入方式
+      description: 请选择当前使用的插件注入方式。
       options:
         - ESign
         - SideStore
         - AltStore
         - LCSign
+        - TrollFools
+        - 越狱
         - 其他
-        - 不适用
     validations:
-      required: false
+      required: true
 
   - type: markdown
     attributes:
@@ -144,14 +139,21 @@ body:
     validations:
       required: false
 
-  - type: textarea
-    id: affected-versions
+  - type: input
+    id: last-working-version
     attributes:
-      label: 版本范围
-      description: 如果已知，请分别填写最后正常工作的版本和首次出现问题的版本。
-      placeholder: |
-        最后正常工作的版本：v1.1.5
-        首次出现问题的版本：v1.2.0
+      label: 最后正常工作的版本
+      description: 如果已知，请填写问题出现前最后正常工作的 DYYY 版本。
+      placeholder: 例如 v1.1.5
+    validations:
+      required: false
+
+  - type: input
+    id: first-affected-version
+    attributes:
+      label: 首次出现问题的版本
+      description: 如果已知，请填写首次出现该问题的 DYYY 版本。
+      placeholder: 例如 v1.2.0
     validations:
       required: false
 
@@ -215,15 +217,6 @@ body:
         2.
         3.
         4.
-    validations:
-      required: true
-
-  - type: textarea
-    id: actual-behavior
-    attributes:
-      label: 实际表现
-      description: 请描述执行上述步骤后的实际结果。
-      placeholder: 例如功能无效、页面异常或应用闪退
     validations:
       required: true
 
