@@ -69,34 +69,22 @@ static char kDYYYManagedHalfScreenViewControllerKey;
         });
     }
 
-    __block DYYYAlertActionHandler pendingAction = nil;
-    __block BOOL didRunPendingAction = NO;
-    void (^executePendingActionIfNeeded)(void) = ^{
-      if (didRunPendingAction || !pendingAction) {
-          return;
-      }
-      didRunPendingAction = YES;
-      DYYYAlertActionHandler action = pendingAction;
-      pendingAction = nil;
-      action();
-    };
-    void (^schedulePendingActionFallback)(void) = ^{
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)), dispatch_get_main_queue(), executePendingActionIfNeeded);
-    };
-
     DYYYAlertActionHandler wrappedCancelAction = ^{
-      pendingAction = [cancelAction copy];
-      schedulePendingActionFallback();
+      if (cancelAction)
+          cancelAction();
     };
 
     DYYYAlertActionHandler wrappedCloseActionBlock = ^{
-      pendingAction = closeAction ? [closeAction copy] : [cancelAction copy];
-      schedulePendingActionFallback();
+      if (closeAction) {
+          closeAction();
+      } else {
+          wrappedCancelAction();
+      }
     };
 
     DYYYAlertActionHandler wrappedConfirmAction = ^{
-      pendingAction = [confirmAction copy];
-      schedulePendingActionFallback();
+      if (confirmAction)
+          confirmAction();
     };
 
     vc.closeButtonClickedBlock = wrappedCloseActionBlock;
@@ -119,7 +107,6 @@ static char kDYYYManagedHalfScreenViewControllerKey;
     } else {
         [vc setUseCardUIStyle:YES];
     }
-    vc.afterDismissBlock = executePendingActionIfNeeded;
 
     UIViewController *topVC = [DYYYUtils topView];
     if (topVC && [vc respondsToSelector:@selector(presentOnViewController:)] && ![topVC isBeingPresented] && ![topVC isBeingDismissed]) {
