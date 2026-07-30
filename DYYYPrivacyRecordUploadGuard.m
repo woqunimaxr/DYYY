@@ -2,6 +2,7 @@
 
 #import <objc/message.h>
 #import <objc/runtime.h>
+#import <string.h>
 
 #import "AwemeHeaders.h"
 
@@ -21,6 +22,9 @@ static NSString *const kDYYYDisableProfileVisitRecordUploadKey = @"DYYYDisablePr
 static NSString *const kDYYYDisableAwemeViewRecordUploadKey = @"DYYYDisableAwemeViewRecordUpload";
 static NSString *const kDYYYProfileVisitRecordUploadPath = @"/aweme/v1/profile/record";
 static NSString *const kDYYYAwemeViewRecordUploadPath = @"/aweme/v1/familiar/video/stats";
+// 二进制内字面量为 /aweme/v1/familiar/video/stats/，归一化去尾斜杠后与上式对齐；marker 兼容版本号变化。
+static NSString *const kDYYYProfileVisitRecordUploadMarker = @"/profile/record";
+static NSString *const kDYYYAwemeViewRecordUploadMarker = @"/familiar/video/stats";
 static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordUploadBlockedTaskKey;
 
 @interface DYYYPrivacyRecordUploadGuard ()
@@ -28,6 +32,8 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
 + (DYYYPrivacyRecordUploadMask)enabledUploadMask;
 + (BOOL)shouldBlockUploadKind:(DYYYPrivacyRecordUploadKind)kind enabledMask:(DYYYPrivacyRecordUploadMask)enabledMask;
 + (DYYYPrivacyRecordUploadKind)uploadKindForURLString:(nullable NSString *)URLString;
++ (DYYYPrivacyRecordUploadKind)uploadKindForNormalizedPath:(nullable NSString *)path;
++ (BOOL)normalizedPath:(nullable NSString *)path matchesMarker:(NSString *)marker;
 + (nullable NSString *)normalizedPathFromURLString:(nullable NSString *)URLString;
 + (nullable id)valueForSelector:(SEL)selector fromObject:(nullable id)object;
 + (BOOL)objectContainsBlockedUpload:(nullable id)object
@@ -38,6 +44,7 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
                             enabledMask:(DYYYPrivacyRecordUploadMask)enabledMask
                                   depth:(NSUInteger)depth
                                 visited:(NSMutableSet<NSValue *> *)visited;
++ (BOOL)isBlockObject:(id)object;
 
 @end
 
@@ -49,6 +56,16 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
 
 + (BOOL)isAwemeViewRecordUploadDisabled {
     return DYYYGetBool(kDYYYDisableAwemeViewRecordUploadKey);
+}
+
++ (BOOL)shouldBlockURLString:(NSString *)URLString {
+    DYYYPrivacyRecordUploadMask enabledMask = [self enabledUploadMask];
+    if (enabledMask == DYYYPrivacyRecordUploadMaskNone) {
+        return NO;
+    }
+
+    DYYYPrivacyRecordUploadKind kind = [self uploadKindForURLString:URLString];
+    return [self shouldBlockUploadKind:kind enabledMask:enabledMask];
 }
 
 + (BOOL)shouldBlockRequestObject:(id)requestObject {
@@ -104,6 +121,22 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
     }
 }
 
++ (void)invokeCancelledCompletionIfPossible:(id)completion {
+    if (![self isBlockObject:completion]) {
+        return;
+    }
+
+    NSError *error = [NSError errorWithDomain:NSURLErrorDomain
+                                         code:NSURLErrorCancelled
+                                     userInfo:@{NSLocalizedDescriptionKey : @"cancelled by DYYY privacy guard"}];
+
+    // 抖音网络回调以 (response, error) 为主；失败时吞掉异常，避免错误签名导致崩溃。
+    @try {
+        ((void (^)(id, NSError *))completion)(nil, error);
+    } @catch (__unused NSException *exception) {
+    }
+}
+
 #pragma mark - URL 识别
 
 + (DYYYPrivacyRecordUploadMask)enabledUploadMask {
@@ -134,20 +167,65 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
         return DYYYPrivacyRecordUploadKindNone;
     }
 
-    BOOL mayBeProfileVisit = [URLString containsString:kDYYYProfileVisitRecordUploadPath];
-    BOOL mayBeAwemeView = [URLString containsString:kDYYYAwemeViewRecordUploadPath];
+    BOOL mayBeProfileVisit = [URLString containsString:kDYYYProfileVisitRecordUploadMarker] ||
+                             [URLString containsString:kDYYYProfileVisitRecordUploadPath];
+    BOOL mayBeAwemeView = [URLString containsString:kDYYYAwemeViewRecordUploadMarker] ||
+                          [URLString containsString:kDYYYAwemeViewRecordUploadPath];
     if (!mayBeProfileVisit && !mayBeAwemeView) {
         return DYYYPrivacyRecordUploadKindNone;
     }
 
     NSString *path = [self normalizedPathFromURLString:URLString];
-    if (mayBeProfileVisit && [path isEqualToString:kDYYYProfileVisitRecordUploadPath]) {
-        return DYYYPrivacyRecordUploadKindProfileVisit;
+    DYYYPrivacyRecordUploadKind pathKind = [self uploadKindForNormalizedPath:path];
+    if (pathKind != DYYYPrivacyRecordUploadKindNone) {
+        return pathKind;
     }
-    if (mayBeAwemeView && [path isEqualToString:kDYYYAwemeViewRecordUploadPath]) {
+
+    // 某些请求对象只暴露相对 path / 未带 scheme 的片段，退回 marker 匹配。
+    if (mayBeAwemeView && [URLString containsString:kDYYYAwemeViewRecordUploadMarker]) {
         return DYYYPrivacyRecordUploadKindAwemeView;
     }
+    if (mayBeProfileVisit && [URLString containsString:kDYYYProfileVisitRecordUploadMarker]) {
+        return DYYYPrivacyRecordUploadKindProfileVisit;
+    }
     return DYYYPrivacyRecordUploadKindNone;
+}
+
++ (DYYYPrivacyRecordUploadKind)uploadKindForNormalizedPath:(NSString *)path {
+    if (path.length == 0) {
+        return DYYYPrivacyRecordUploadKindNone;
+    }
+
+    if ([path isEqualToString:kDYYYAwemeViewRecordUploadPath] ||
+        [self normalizedPath:path matchesMarker:kDYYYAwemeViewRecordUploadMarker]) {
+        return DYYYPrivacyRecordUploadKindAwemeView;
+    }
+    if ([path isEqualToString:kDYYYProfileVisitRecordUploadPath] ||
+        [self normalizedPath:path matchesMarker:kDYYYProfileVisitRecordUploadMarker]) {
+        return DYYYPrivacyRecordUploadKindProfileVisit;
+    }
+    return DYYYPrivacyRecordUploadKindNone;
+}
+
++ (BOOL)normalizedPath:(NSString *)path matchesMarker:(NSString *)marker {
+    if (path.length == 0 || marker.length == 0) {
+        return NO;
+    }
+
+    NSRange range = [path rangeOfString:marker];
+    if (range.location == NSNotFound) {
+        return NO;
+    }
+
+    // marker 以 '/' 开头，已具备路径边界；仅拒绝 statsExtra 这类后缀粘连。
+    NSUInteger endIndex = range.location + range.length;
+    if (endIndex < path.length) {
+        unichar next = [path characterAtIndex:endIndex];
+        if (next != '/' && next != '?' && next != '#') {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 + (NSString *)normalizedPathFromURLString:(NSString *)URLString {
@@ -267,7 +345,17 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
         @selector(request),
         @selector(currentRequest),
         @selector(originalRequest),
+        NSSelectorFromString(@"path"),
+        NSSelectorFromString(@"apiPath"),
+        NSSelectorFromString(@"requestPath"),
+        NSSelectorFromString(@"uri"),
+        NSSelectorFromString(@"URI"),
+        NSSelectorFromString(@"endpoint"),
+        NSSelectorFromString(@"relativeString"),
         NSSelectorFromString(@"outerApiParams"),
+        NSSelectorFromString(@"requestModel"),
+        NSSelectorFromString(@"apiRequest"),
+        NSSelectorFromString(@"httpRequest"),
     };
 
     for (NSUInteger index = 0; index < sizeof(selectors) / sizeof(selectors[0]); index++) {
@@ -306,6 +394,15 @@ static const void *kDYYYPrivacyRecordUploadBlockedTaskKey = &kDYYYPrivacyRecordU
         }
     }
     return NO;
+}
+
++ (BOOL)isBlockObject:(id)object {
+    if (!object) {
+        return NO;
+    }
+
+    const char *blockClassName = object_getClassName(object);
+    return blockClassName && strstr(blockClassName, "Block") != NULL;
 }
 
 @end

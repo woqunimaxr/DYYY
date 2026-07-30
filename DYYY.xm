@@ -1647,13 +1647,123 @@ static void DYYYScheduleCurrentAwemeTracking(id source, id fallbackAweme) {
 
 %end
 
+// 抖音 39.7.0：作品浏览记录由 AFDPlayerAndInteractionService 上报至
+// /aweme/v1/familiar/video/stats/（scene 常见值 FeedVideoViewedDedicatedStats）
+%hook AFDPlayerAndInteractionService
+
+- (void)statisticsVideoViewedWithID:(NSString *)itemID scene:(NSString *)scene {
+    if ([DYYYPrivacyRecordUploadGuard isAwemeViewRecordUploadDisabled]) {
+        return;
+    }
+
+    %orig;
+}
+
+- (void)statisticsVideoViewedWithID:(NSString *)itemID
+                           authorID:(NSString *)authorID
+                       followStatus:(long long)followStatus
+                     followerStatus:(long long)followerStatus
+                            isStory:(BOOL)isStory
+                  isRequestDirectly:(BOOL)isRequestDirectly
+                              scene:(NSString *)scene {
+    if ([DYYYPrivacyRecordUploadGuard isAwemeViewRecordUploadDisabled]) {
+        return;
+    }
+
+    %orig;
+}
+
+%end
+
+static BOOL DYYYTryBlockPrivacyNetworkRequest(NSString *URLString, id completion) {
+    if (![DYYYPrivacyRecordUploadGuard shouldBlockURLString:URLString]) {
+        return NO;
+    }
+
+    [DYYYPrivacyRecordUploadGuard invokeCancelledCompletionIfPossible:completion];
+    return YES;
+}
+
 %hook AWENetworkService
 
 + (id)postWithURLString:(NSString *)URLString params:(id)params completion:(id)completion {
-    if (!completion && [DYYYPrivacyRecordUploadGuard shouldBlockAwemeViewRecordURLString:URLString]) {
+    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
         return nil;
     }
+    return %orig;
+}
 
++ (id)getWithURLString:(NSString *)URLString params:(id)params completion:(id)completion {
+    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
+        return nil;
+    }
+    return %orig;
+}
+
++ (id)requestWithURLString:(NSString *)URLString params:(id)params method:(id)method completion:(id)completion {
+    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
+        return nil;
+    }
+    return %orig;
+}
+
++ (id)postWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion {
+    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
+        return nil;
+    }
+    return %orig;
+}
+
++ (id)getWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion {
+    if (DYYYTryBlockPrivacyNetworkRequest(URLString, completion)) {
+        return nil;
+    }
+    return %orig;
+}
+
+%end
+
+%hook TTNetworkManager
+
+- (id)requestForJSONWithURL:(NSString *)url
+                     params:(id)params
+                     method:(NSString *)method
+           needCommonParams:(BOOL)needCommonParams
+                headerField:(id)headerField
+          requestSerializer:(Class)requestSerializerClass
+         responseSerializer:(Class)responseSerializerClass
+                 autoResume:(BOOL)autoResume
+                   callback:(id)callback {
+    if (DYYYTryBlockPrivacyNetworkRequest(url, callback)) {
+        return nil;
+    }
+    return %orig;
+}
+
+- (id)requestForJSONWithResponse:(NSString *)url
+                          params:(id)params
+                          method:(NSString *)method
+                needCommonParams:(BOOL)needCommonParams
+                     headerField:(id)headerField
+               requestSerializer:(Class)requestSerializerClass
+              responseSerializer:(Class)responseSerializerClass
+                      autoResume:(BOOL)autoResume
+                        callback:(id)callback {
+    if (DYYYTryBlockPrivacyNetworkRequest(url, callback)) {
+        return nil;
+    }
+    return %orig;
+}
+
+- (id)requestForBinaryWithResponse:(NSString *)url
+                            params:(id)params
+                            method:(NSString *)method
+                  needCommonParams:(BOOL)needCommonParams
+                       headerField:(id)headerField
+                          callback:(id)callback {
+    if (DYYYTryBlockPrivacyNetworkRequest(url, callback)) {
+        return nil;
+    }
     return %orig;
 }
 

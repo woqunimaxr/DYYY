@@ -834,8 +834,52 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)reportUserDetailVisitIfNeeded:(id)user;
 @end
 
+// 抖音 39.7.0：作品浏览记录上传业务入口（AwemeCore）
+@interface AFDPlayerAndInteractionService : NSObject
+- (void)statisticsVideoViewedWithID:(NSString *)itemID scene:(NSString *)scene;
+- (void)statisticsVideoViewedWithID:(NSString *)itemID
+                           authorID:(NSString *)authorID
+                       followStatus:(long long)followStatus
+                     followerStatus:(long long)followerStatus
+                            isStory:(BOOL)isStory
+                  isRequestDirectly:(BOOL)isRequestDirectly
+                              scene:(NSString *)scene;
+@end
+
 @interface AWENetworkService : NSObject
 + (id)postWithURLString:(NSString *)URLString params:(id)params completion:(id)completion;
++ (id)getWithURLString:(NSString *)URLString params:(id)params completion:(id)completion;
++ (id)requestWithURLString:(NSString *)URLString params:(id)params method:(id)method completion:(id)completion;
++ (id)postWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion;
++ (id)getWithURLString:(NSString *)URLString params:(id)params headerField:(id)headerField completion:(id)completion;
+@end
+
+@interface TTNetworkManager : NSObject
++ (instancetype)shareInstance;
+- (id)requestForJSONWithURL:(NSString *)url
+                     params:(id)params
+                     method:(NSString *)method
+           needCommonParams:(BOOL)needCommonParams
+                headerField:(id)headerField
+          requestSerializer:(Class)requestSerializerClass
+         responseSerializer:(Class)responseSerializerClass
+                 autoResume:(BOOL)autoResume
+                   callback:(id)callback;
+- (id)requestForJSONWithResponse:(NSString *)url
+                          params:(id)params
+                          method:(NSString *)method
+                needCommonParams:(BOOL)needCommonParams
+                     headerField:(id)headerField
+               requestSerializer:(Class)requestSerializerClass
+              responseSerializer:(Class)responseSerializerClass
+                      autoResume:(BOOL)autoResume
+                        callback:(id)callback;
+- (id)requestForBinaryWithResponse:(NSString *)url
+                            params:(id)params
+                            method:(NSString *)method
+                  needCommonParams:(BOOL)needCommonParams
+                       headerField:(id)headerField
+                          callback:(id)callback;
 @end
 
 // AWEVersionUpdateManager相关接口声明
