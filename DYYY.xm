@@ -3981,6 +3981,18 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 %end
 
+// 关注二次确认：弹窗关闭后再触发原逻辑，且不再传入已失效的手势对象。
+static void DYYYRunDeferredFollowConfirm(void (^action)(void)) {
+    if (!action) {
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            action();
+        });
+    });
+}
+
 %hook AWEPlayInteractionUserAvatarElement
 - (void)onFollowViewClicked:(UITapGestureRecognizer *)gesture {
     if (DYYYGetBool(@"DYYYFollowTips")) {
@@ -4032,7 +4044,9 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
                                    cancelAction:nil
                                     closeAction:nil
                                   confirmAction:^{
-                                    %orig(gesture);
+                                    DYYYRunDeferredFollowConfirm(^{
+                                        %orig(nil);
+                                    });
                                   }];
     } else {
         %orig;
@@ -4092,7 +4106,9 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
                                    cancelAction:nil
                                     closeAction:nil
                                   confirmAction:^{
-                                    %orig(gesture);
+                                    DYYYRunDeferredFollowConfirm(^{
+                                        %orig(nil);
+                                    });
                                   }];
     } else {
         %orig;
@@ -12168,7 +12184,9 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
                                    cancelAction:nil
                                     closeAction:nil
                                   confirmAction:^{
-                                    %orig(gesture);
+                                    DYYYRunDeferredFollowConfirm(^{
+                                        %orig(nil);
+                                    });
                                   }];
     } else {
         %orig;
