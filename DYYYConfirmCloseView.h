@@ -2,10 +2,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/**
- * 自定义确认关闭弹窗类
- * 用于显示一个带倒计时的确认关闭弹窗
- */
+/** 带倒计时的自定义确认关闭弹窗。 */
 @interface DYYYConfirmCloseView : UIView
 
 @property(nonatomic, strong) UIVisualEffectView *blurView;
@@ -18,22 +15,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, assign) NSInteger countdown;
 @property(nonatomic, strong) NSTimer *countdownTimer;
 
-/**
- * 初始化确认关闭弹窗
- * @param title 弹窗标题
- * @param message 弹窗消息内容
- * @return 确认关闭弹窗实例
- */
+/** 初始化确认关闭弹窗 */
 - (instancetype)initWithTitle:(NSString *)title message:(NSString *)message;
 
-/**
- * 显示弹窗
- */
+/** 显示弹窗 */
 - (void)show;
 
-/**
- * 关闭弹窗
- */
+/** 关闭弹窗 */
 - (void)dismiss;
 
 @end

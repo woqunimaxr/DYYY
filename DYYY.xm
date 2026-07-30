@@ -2249,7 +2249,6 @@ static NSInteger DYYYBitrateForBitrateModel(id model) {
 }
 
 - (NSArray *)bitrateModels {
-
     NSArray *originalModels = %orig;
 
     if (DYYYShouldDisableAllHDR()) {
@@ -3919,24 +3918,24 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{10,13})([\\s\\S]*)" options:0 error:&error];
-    
+
     NSTextCheckingResult *match = [regex firstMatchInString:text options:0 range:NSMakeRange(0, text.length)];
 
     if (match) {
         NSString *rawTs = [text substringWithRange:[match rangeAtIndex:1]];
         NSString *suffix = [text substringWithRange:[match rangeAtIndex:2]];
-        
+
         long long ts = [rawTs longLongValue];
-        
+
         if (ts > 100000000000) {
             ts = ts / 1000;
         }
-        
+
         NSDate *date = [NSDate dateWithTimeIntervalSince1970:ts];
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
         [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
         NSString *formattedDate = [formatter stringFromDate:date];
-        
+
         NSString *newText = [NSString stringWithFormat:@"%@%@", formattedDate, suffix];
         %orig(newText);
     } else {
@@ -3951,7 +3950,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 - (void)setText:(NSString *)text {
     %orig(text); // 先让系统把文本赋上去
-    
+
     if (!DYYYGetBool(@"DYYYCommentExactTime")) {
         return;
     }
@@ -3974,11 +3973,11 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
     if (font) {
         CGFloat expectedWidth = ceilf([text sizeWithAttributes:@{NSFontAttributeName: font}].width);
         CGRect currentFrame = label.frame;
-        
+
         // 如果当前宽度不够，并且不是尚未初始化的状态（>0），则强行修改并重新赋值
         if (currentFrame.size.width < expectedWidth && currentFrame.size.width > 0) {
             currentFrame.size.width = expectedWidth;
-            label.frame = currentFrame; 
+            label.frame = currentFrame;
             label.clipsToBounds = NO;
         }
     }
@@ -3998,7 +3997,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
         if ([text isEqualToString:@"翻译"] || [text isEqualToString:@"隐藏翻译"]) {
             CGFloat screenWidth = [UIScreen mainScreen].bounds.size.width;
             frame.origin.x = screenWidth - 100.0 - frame.size.width;
-        } 
+        }
         // --- 2. 拦截时间文本，如果不够宽则扩充宽度 ---
         else if ([self respondsToSelector:@selector(font)]) {
             UIFont *font = label.font;
@@ -4037,19 +4036,19 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
     if (match) {
         NSString *rawTs = [plainText substringWithRange:[match rangeAtIndex:1]];
         long long ts = [rawTs longLongValue];
-        
+
         if (ts > 100000000000) {
             ts = ts / 1000;
         }
-        
+
         NSDate *date = [NSDate dateWithTimeIntervalSince1970:ts];
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
         [formatter setDateFormat:@"yyyy-MM-dd HH:mm:ss"];
         NSString *formattedDate = [formatter stringFromDate:date];
-        
+
         NSMutableAttributedString *newAttrStr = [attributedText mutableCopy];
         [newAttrStr replaceCharactersInRange:[match rangeAtIndex:1] withString:formattedDate];
-        
+
         %orig(newAttrStr);
     } else {
         %orig(attributedText);
@@ -4165,7 +4164,6 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
 // 拦截手指拖动
 - (void)handlePan:(UIPanGestureRecognizer *)pan {
-
     /* 仅处理横屏Feed列表。其余collectionView直接走系统逻辑 */
     if (self != gFeedCV || !DYYYGetBool(@"DYYYVideoGesture")) {
         %orig;
@@ -4180,17 +4178,14 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
     /* BEGAN：判定左右 20 % 区域 → 进入亮度 / 音量模式 */
     if (st == UIGestureRecognizerStateBegan) {
-
         gStartY = loc.y;
 
         if (xPct <= 0.20) { // 左边缘 → 亮度
             gMode = DYEdgeModeBrightness;
             gStartVal = [UIScreen mainScreen].brightness;
-
         } else if (xPct >= 0.80) { // 右边缘 → 音量
             gMode = DYEdgeModeVolume;
             gStartVal = [[objc_getClass("AVSystemController") sharedAVSystemController] volumeForCategory:@"Audio/Video"];
-
         } else {
             gMode = DYEdgeModeNone; // 中间区域走原逻辑
         }
@@ -4198,9 +4193,7 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
 
     /* 调节阶段：左右边缘时吞掉滚动、修改亮度/音量 */
     if (gMode != DYEdgeModeNone) {
-
         if (st == UIGestureRecognizerStateChanged) {
-
             CGFloat delta = (gStartY - loc.y) / self.bounds.size.height; // ↑ 为正
             const CGFloat kScale = 2.0;                                  // 灵敏度
             float newVal = gStartVal + delta * kScale;
@@ -4210,7 +4203,6 @@ static void DYYYDisableAVPlayerItemHDRMetadata(AVPlayerItem *item) {
                 [UIScreen mainScreen].brightness = newVal;
                 // 弹系统亮度 HUD
                 [[%c(SBHUDController) sharedInstance] presentHUDWithIcon:@"Brightness" level:newVal];
-
             } else { // DYEdgeModeVolume
                 // iOS 18 音量控制 + 系统音量 HUD
                 [[objc_getClass("AVSystemController") sharedAVSystemController] setVolumeTo:newVal forCategory:@"Audio/Video"];
@@ -5093,7 +5085,6 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
 
     // 只有收藏按钮才显示确认弹窗
     if (DYYYGetBool(@"DYYYCollectTips") && DYYYIsFeedVideoCollectButton(self)) {
-
         dispatch_async(dispatch_get_main_queue(), ^{
           [DYYYBottomAlertView showAlertWithTitle:@"收藏确认"
                                           message:@"是否确认/取消收藏？"
@@ -6081,7 +6072,6 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 %new
 - (void)handleHighPriorityLongPress:(UILongPressGestureRecognizer *)gestureRecognizer {
     if (gestureRecognizer.state == UIGestureRecognizerStateBegan) {
-
         NSString *description = self.text;
 
         if (description.length > 0) {
@@ -6190,7 +6180,6 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %hook AWENormalModeTabBarGeneralPlusButton
 - (void)setImage:(UIImage *)image forState:(UIControlState)state {
-
     UIImage *imageToApply = image;
     if ([self.accessibilityLabel isEqualToString:@"拍摄"]) {
         UIImage *customImage = DYYYLoadCustomImage(@"tab_plus.png", CGSizeZero);
@@ -7465,19 +7454,19 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
     AWECommentLongPressPanelContext *context = [self commentPageContext];
     AWECommentLongPressPanelParam *params = [context params];
     AWECommentModel *comment = [context selectdComment] ?: [params selectdComment];
-    
+
     // 判断保存类型(表情包/音频/图片)
     AWEIMStickerModel *sticker = [comment sticker];
 
     AWECommentAudioModel *audio = [comment audioModel];
     BOOL hasAudio = (audio && audio.content);
-    
+
     NSArray *imageList = nil;
     if ([comment respondsToSelector:@selector(imageList)]) {
         imageList = [comment imageList];
     }
     BOOL hasImages = (imageList && imageList.count > 0);
-    
+
     // 整条评论菜单不提供表情保存；表情仅通过直接长按保存
     if (sticker && DYYYGetBool(@"DYYYForceDownloadEmotion")) {
         return;
@@ -7486,7 +7475,7 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
     // 音频保存逻辑
     if (hasAudio && DYYYGetBool(@"DYYYForceDownloadCommentAudio")) {
         NSString *audioContent = audio.content;
-        
+
         NSString *userName = @"未知用户";
         if (comment.author && [comment.author respondsToSelector:@selector(nickname)]) {
             NSString *nickname = [comment.author performSelector:@selector(nickname)];
@@ -7494,7 +7483,7 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
                 userName = nickname;
             }
         }
-        
+
         [DYYYManager downloadAndShareCommentAudio:audioContent
                                          userName:userName
                                        createTime:comment.createTime];
@@ -7514,17 +7503,17 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
                 isPicInflow = [isPicInflowValue integerValue] == 1;
             }
         }
-        
+
         NSInteger currentIndex = -1; // -1 表示保存全部
-        
+
         if (isPicInflow) {
             // 使用 DYYYUtils 封装的方法查找目标控制器
             UIViewController *topVC = [DYYYUtils topView];
-            
+
             // 获取 Ivar 定义的类和目标控制器类
             Class ivarClass = NSClassFromString(@"AWECommentMediaFeedSwfitImpl.CommentMediaFeedCellViewController");
             Class targetClass = NSClassFromString(@"AWECommentMediaFeedSwfitImpl.CommentMediaFeedCommonImageCellViewController");
-            
+
             if (ivarClass && targetClass && topVC) {
                 Ivar multiIndexIvar = class_getInstanceVariable(ivarClass, "currentIndexInMultiImageList");
                 if (multiIndexIvar) {
@@ -7537,11 +7526,11 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
                 }
             }
         }
-        
-        NSString *hint = (currentIndex >= 0) ? @"正在保存当前图片..." : 
+
+        NSString *hint = (currentIndex >= 0) ? @"正在保存当前图片..." :
             [NSString stringWithFormat:@"正在保存 %lu 张图片...", (unsigned long)imageList.count];
         [DYYYUtils showToast:hint];
-        
+
         [DYYYManager saveCommentImages:imageList
                             currentIndex:currentIndex
                             completion:^(NSInteger successCount, NSInteger livePhotoCount, NSInteger failedCount) {
@@ -7556,7 +7545,7 @@ static __weak YYAnimatedImageView *targetStickerView = nil;
         }];
         return;
     }
-    
+
     // 默认行为
     %orig;
 }
@@ -8441,7 +8430,6 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 }
 %end
 
-
 // 隐藏右下音乐和取消静音按钮
 %hook AFDCancelMuteAwemeView
 - (void)layoutSubviews {
@@ -8807,8 +8795,6 @@ static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
 
 %end
 
-
-
 // 隐藏消息页顶栏头像气泡
 %hook AFDSkylightCellBubble
 - (void)layoutSubviews {
@@ -8861,7 +8847,6 @@ static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
 // 隐藏我的添加朋友
 %hook AWEProfileNavigationButton
 - (void)setupUI {
-
     if (DYYYGetBool(@"DYYYHideButton")) {
         return;
     }
@@ -8906,7 +8891,6 @@ static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
 }
 
 %end
-
 
 %hook AWELeftSideBarEntranceView
 
@@ -10355,7 +10339,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 %end
 
-
 %hook AWEPlayInteractionSearchAnchorView
 
 - (void)layoutSubviews {
@@ -10367,7 +10350,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 %end
-
 
 // 隐藏暂停关键词
 %hook AWEFeedPauseRelatedWordComponent
@@ -10415,7 +10397,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 %hook AWESearchEntranceView
 
 - (void)layoutSubviews {
-
     if (DYYYGetBool(@"DYYYHideSearchEntrance")) {
         self.hidden = YES;
         return;
@@ -10492,8 +10473,6 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 }
 
 %end
-
-
 
 // 隐藏直播发现
 %hook AWEFeedLiveTabRevisitControlView
@@ -10645,7 +10624,6 @@ static NSHashTable *processedParentViews = nil;
         UIView *grandparentView = parentView.superview; // 爷爷视图
 
         if (grandparentView) {
-
             dispatch_async(dispatch_get_main_queue(), ^{
               if ([grandparentView isKindOfClass:[UIStackView class]]) {
                   UIStackView *stackView = (UIStackView *)grandparentView;
@@ -11038,7 +11016,6 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 
 %hook AWELiveFeedLabelTagView
 - (void)layoutSubviews {
-
     if (DYYYGetBool(@"DYYYHideLiveCapsuleView")) {
         UIView *parentView = self.superview;
         if (parentView) {
@@ -11455,7 +11432,6 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 
 %hook IESLiveHotMessageView
 - (void)layoutSubviews {
-
     if (DYYYGetBool(@"DYYYHideLiveHotMessage")) {
         self.hidden = YES;
         return;
@@ -12265,7 +12241,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 	return %orig;
 }
 
-
 // 屏蔽相关视频推荐
 - (id)relatedVideoExtra {
 	BOOL DYYYHideBottomRelated = DYYYGetBool(@"DYYYHideBottomRelated");
@@ -12476,7 +12451,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 // 屏蔽通用锚点（合并到锚点信息）
 - (id)commonAnchor {
 	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) { 
+	if (DYYYHideFeedAnchorContainer) {
 		return nil;
 	}
 	return %orig;
@@ -12511,8 +12486,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 %end
 
-
-
 //以下部分为新增
 // 屏蔽头像直播
 %hook AWEUserModel
@@ -12526,7 +12499,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 }
 
 %end
-
 
 // 屏蔽头像光圈
 %hook AWEUserModel
@@ -12628,7 +12600,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 }
 
 %end
-
 
 // 隐藏下面底部热点框
 %hook AWEHotSpotListModel
@@ -12810,7 +12781,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
 %end
 
-
 // 拦截开屏广告 - hook TTAdSplashModel，直接返回 nil
 %hook TTAdSplashModel
 
@@ -12893,18 +12863,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 	return %orig;
 }
 %end
-
-
-
-
-
-
-
-
-
-
-
-
 
 %hook AWEFeedCommentConfigModel
 - (void)setCommentInputConfigText:(NSString *)text {
@@ -13511,7 +13469,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加下载选项
         if (DYYYGetBool(@"DYYYDoubleTapDownload") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapDownload"]) {
-
             AWEUserSheetAction *downloadAction = [NSClassFromString(@"AWEUserSheetAction")
                 actionWithTitle:downloadTitle
                         imgName:nil
@@ -13659,7 +13616,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加下载音频选项
         if (DYYYGetBool(@"DYYYDoubleTapDownloadAudio") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapDownloadAudio"]) {
-
             AWEUserSheetAction *downloadAudioAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"保存音频"
                                                                                                         imgName:nil
                                                                                                         handler:^{
@@ -13759,7 +13715,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加复制文案选项
         if (DYYYGetBool(@"DYYYDoubleTapCopyDesc") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapCopyDesc"]) {
-
             AWEUserSheetAction *copyTextAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"复制文案"
                                                                                                    imgName:nil
                                                                                                    handler:^{
@@ -13772,7 +13727,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加打开评论区选项
         if (DYYYGetBool(@"DYYYDoubleTapComment") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapComment"]) {
-
             AWEUserSheetAction *openCommentAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"打开评论"
                                                                                                       imgName:nil
                                                                                                       handler:^{
@@ -13783,7 +13737,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加分享选项
         if (DYYYGetBool(@"DYYYDoubleTapshowSharePanel") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapshowSharePanel"]) {
-
             AWEUserSheetAction *showSharePanel = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"分享视频"
                                                                                                    imgName:nil
                                                                                                    handler:^{
@@ -13794,7 +13747,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加点赞视频选项
         if (DYYYGetBool(@"DYYYDoubleTapLike") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapLike"]) {
-
             AWEUserSheetAction *likeAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"点赞视频"
                                                                                                imgName:nil
                                                                                                handler:^{
@@ -13805,7 +13757,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 
         // 添加长按面板
         if (DYYYGetBool(@"DYYYDoubleTapshowDislikeOnVideo") || ![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDoubleTapshowDislikeOnVideo"]) {
-
             AWEUserSheetAction *showDislikeOnVideo = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"长按面板"
                                                                                                        imgName:nil
                                                                                                        handler:^{
@@ -13894,7 +13845,6 @@ static void DYYYUpdateManagedPrivacyHalfScreenAppearance(AFDPrivacyHalfScreenVie
      rightConfirmButtonText:(NSString *)rightButtonText
        rightBtnClickedBlock:(void (^)(void))rightBtnBlock
      leftButtonClickedBlock:(void (^)(void))leftBtnBlock {
-
     %orig;
     if ([DYYYBottomAlertView isManagedHalfScreenViewController:self]) {
         DYYYUpdateManagedPrivacyHalfScreenAppearance(self);
@@ -14380,7 +14330,6 @@ static Class tabBarButtonClass = nil;
                 });
             }
         }
-
     } @catch (NSException *exception) {
         return;
     }
@@ -14479,7 +14428,6 @@ static Class tabBarButtonClass = nil;
                 });
             }
         }
-
     } @catch (NSException *exception) {
         return;
     }
@@ -14588,7 +14536,6 @@ static Class tabBarButtonClass = nil;
     if (transparentValue && transparentValue.length > 0) {
         CGFloat alphaValue = [transparentValue floatValue];
         if (alphaValue >= 0.0 && alphaValue <= 1.0) {
-
             UIView *parentView = self.view.superview;
             if (parentView) {
                 for (UIView *subview in parentView.subviews) {
@@ -15501,7 +15448,7 @@ static void DYYYRemoveKeyboardObserver(void) {
         [[NSUserDefaults standardUserDefaults] removeObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey context:DYYYGlobalTransparencyContext];
     } @catch (NSException *exception) {
         NSLog(@"[DYYY] KVO removeObserver failed: %@", exception);
-    } 
+    }
     %orig;
 }
 
@@ -15729,7 +15676,6 @@ static void DYYYRemoveKeyboardObserver(void) {
             DYYYApplyPlayInteractionLeftStackElementTransforms(self);
         }
     }
-
 }
 
 - (NSArray<__kindof UIView *> *)arrangedSubviews {
@@ -16406,46 +16352,11 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
 %end
 
-@interface UIDropShadowView : UIView
-@end
-
-// 修复 ios26 模态透明效果
-// %hook UIDropShadowView
-
-// - (void)didMoveToSuperview {
-//     %orig;
-
-//     if (@available(iOS 26.0, *)) {
-//         self.backgroundColor = UIColor.clearColor;
-//         self.opaque = NO;
-//     }
-// }
-
-// - (void)layoutSubviews {
-//     %orig;
-
-//     if (@available(iOS 26.0, *)) {
-//         self.backgroundColor = UIColor.clearColor;
-//         self.opaque = NO;
-//     }
-// }
-
-// - (void)setBackgroundColor:(UIColor *)color {
-//     if (@available(iOS 26.0, *)) {
-//         %orig(UIColor.clearColor);
-//         return;
-//     }
-//     %orig;
-// }
-
-// %end
-
 %hook AFDViewedBottomView
 - (void)layoutSubviews {
     %orig;
 
     if (DYYYGetBool(@"DYYYEnableFullScreen")) {
-
         self.backgroundColor = [UIColor clearColor];
 
         self.effectView.hidden = YES;
@@ -16518,7 +16429,6 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 }
 
 %end
-
 
 // 隐藏键盘 AI
 static __weak UIView *cachedHideView = nil;
@@ -16600,7 +16510,7 @@ static void findTargetViewInView(UIView *view) {
     if (interactionBaseLabelClass) {
         %init(DYYYCommentExactTimeGroup, AWECommentSwiftBizUI_CommentInteractionBaseLabel = interactionBaseLabelClass);
     }
-    
+
     Class imMenuComponentClass = objc_getClass("AWEIMCustomMenuComponent");
     if (imMenuComponentClass) {
         SEL legacySelector = NSSelectorFromString(@"msg_showMenuForBubbleFrameInScreen:tapLocationInScreen:menuItemList:moreEmoticon:onCell:extra:");

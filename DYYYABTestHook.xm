@@ -123,11 +123,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
 
 @implementation DYYYABTestHook
 
-/**
- * 判断当前是否为覆写模式
- * 通过DYYYABTestModeString判断，返回YES表示覆写模式，NO表示替换模式
- * 转换为类方法
- */
+/** 依据 DYYYABTestModeString 判断模式：YES 覆写，NO 替换。 */
 + (BOOL)isPatchMode {
     NSString *savedMode = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYABTestModeString"];
     if (savedMode) {
@@ -148,10 +144,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     return YES;
 }
 
-/**
- * 获取本地文件是否已加载的状态
- * 使用 dispatch_sync 在队列上同步读取 s_localABTestData 的状态
- */
+/** 本地文件是否已加载。 */
 + (BOOL)isLocalConfigLoaded {
     __block BOOL loaded = NO;
     DYYYQueueSync(^{
@@ -160,9 +153,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     return loaded;
 }
 
-/**
- * 当前是否处于远程模式
- */
+/** 当前是否处于远程模式。 */
 + (BOOL)isRemoteMode {
     NSString *savedMode = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYABTestModeString"];
     if (savedMode) {
@@ -171,10 +162,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     return NO;
 }
 
-/**
- * 获取禁止下发配置的状态
- * 使用 dispatch_sync 在队列上同步读取状态
- */
+/** 禁止下发配置是否开启。 */
 + (BOOL)isABTestBlockEnabled {
     __block BOOL enabled = NO;
     DYYYQueueSync(^{
@@ -183,20 +171,14 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     return enabled;
 }
 
-/**
- * 设置禁止下发配置的状态
- * 使用 dispatch_async 在队列上异步设置状态
- */
+/** 设置禁止下发配置开关。 */
 + (void)setABTestBlockEnabled:(BOOL)enabled {
     dispatch_async(DYYYABTestQueue(), ^{
       s_abTestBlockEnabled = enabled;
     });
 }
 
-/**
- * 清除本地加载的ABTest数据，为下次调用 loadLocalABTestConfig 做准备
- * 使用 dispatch_async 在队列上异步清除数据
- */
+/** 清除本地 ABTest 数据并重置 once 令牌，供 loadLocalABTestConfig 重新加载。 */
 + (void)cleanLocalABTestData {
     dispatch_async(DYYYABTestQueue(), ^{
       s_localABTestData = nil;
@@ -205,12 +187,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     });
 }
 
-/**
- * 加载本地ABTest配置文件
- * 只加载文件和处理数据，不负责应用
- * 使用 dispatch_once 确保只加载一次
- * 整个加载过程在队列上异步执行
- */
+/** 加载本地 ABTest 配置文件（dispatch_once 仅加载一次），不负责应用。 */
 + (void)loadLocalABTestConfig {
     dispatch_async(DYYYABTestQueue(), ^{
       dispatch_once(&s_loadOnceToken, ^{
@@ -264,11 +241,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     });
 }
 
-/**
- * 应用本地ABTest配置数据 (负责根据模式处理并应用到 Manager)
- * 包含是否应该应用的条件判断
- * 整个应用过程在队列上异步执行
- */
+/** 按当前模式把本地 ABTest 数据应用到 Manager，内部含应用条件判断。 */
 + (void)applyFixedABTestData {
     dispatch_async(DYYYABTestQueue(), ^{
       if (!s_abTestBlockEnabled || !s_localABTestData) {
@@ -316,17 +289,13 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     });
 }
 
-/**
- * 获取当前ABTest数据
- */
+/** 获取当前ABTest数据 */
 + (NSDictionary *)getCurrentABTestData {
     AWEABTestManager *manager = [%c(AWEABTestManager) sharedManager];
     return manager ? [manager abTestData] : nil;
 }
 
-/**
- * 从网络检查并下载最新配置
- */
+/** 从网络检查并下载最新配置 */
 + (void)checkForRemoteConfigUpdate:(BOOL)notify {
     dispatch_async(DYYYABTestQueue(), ^{
       NSString *urlString = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYRemoteConfigURL"];
@@ -406,11 +375,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
 
 %hook AWEABTestManager
 
-/**
- * Hook: 设置ABTest数据
- * 阻止在禁止下发模式下更新数据，除非当前正在应用本地配置
- * 使用 dispatch_sync 在队列上同步检查状态标志
- */
+/** Hook 设置 ABTest 数据：禁止下发模式下拦截，正在应用本地配置时放行。 */
 - (void)setAbTestData:(id)data {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{
@@ -437,11 +402,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     %orig(finalData);
 }
 
-/**
- * Hook: 增量更新ABTest数据
- * 在禁止下发模式下阻止增量更新
- * 使用 dispatch_sync 在队列上同步检查状态
- */
+/** Hook 增量更新 ABTest 数据：禁止下发模式下拦截。 */
 - (void)incrementalUpdateData:(id)data unchangedKeyList:(id)keyList {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{
@@ -455,11 +416,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     %orig;
 }
 
-/**
- * Hook: 从网络获取配置(带重试)
- * 在禁止下发模式下拦截网络请求，并立即返回空结果
- * 使用 dispatch_sync 在队列上同步检查状态
- */
+/** Hook 网络拉取配置（带重试）：禁止下发模式下拦截并立即返回空结果。 */
 - (void)fetchConfigurationWithRetry:(BOOL)retry completion:(id)completion {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{
@@ -478,11 +435,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     %orig;
 }
 
-/**
- * Hook: 从网络获取配置
- * 在禁止下发模式下阻止网络请求
- * 使用 dispatch_sync 在队列上同步检查状态
- */
+/** Hook 网络拉取配置：禁止下发模式下拦截。 */
 - (void)fetchConfiguration:(id)arg1 {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{
@@ -496,11 +449,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     %orig;
 }
 
-/**
- * Hook: 重写ABTest数据
- * 在禁止下发模式下阻止覆盖数据
- * 使用 dispatch_sync 在队列上同步检查状态
- */
+/** Hook 重写 ABTest 数据：禁止下发模式下拦截。 */
 - (void)overrideABTestData:(id)data needCleanCache:(BOOL)cleanCache {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{
@@ -514,11 +463,7 @@ static void DYYYApplyTabBarHeightToCurrentABTestDataIfNeeded(void) {
     %orig;
 }
 
-/**
- * Hook: 保存ABTest数据
- * 在禁止下发模式下阻止保存
- * 使用 dispatch_sync 在队列上同步检查状态
- */
+/** Hook 保存 ABTest 数据：禁止下发模式下拦截。 */
 - (void)_saveABTestData:(id)data {
     __block BOOL shouldBlock = NO;
     DYYYQueueSync(^{

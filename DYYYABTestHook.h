@@ -31,8 +31,8 @@
 + (BOOL)isRemoteMode;
 
 /**
- * 从网络检查并下载最新配置
- * @param notify 是否在完成后显示提示
+ * 从网络检查并下载最新配置。
+ * @param notify 完成后是否显示提示
  */
 + (void)checkForRemoteConfigUpdate:(BOOL)notify;
 

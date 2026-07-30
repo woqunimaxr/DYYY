@@ -6,147 +6,85 @@
 @property(nonatomic, assign) BOOL isLightTheme;
 @end
 
-/**
- * DYYY 主管理器类
- * 处理UI、媒体下载、保存和视频合成等功能
- */
+/** DYYY 主管理器：UI、媒体下载、保存与视频合成。 */
 @interface DYYYManager : NSObject
 
 #pragma mark - 属性和基础方法
 // 存储文件类型
 @property(nonatomic, strong) NSMutableDictionary *fileLinks;
 
-/**
- * 获取单例实例
- */
+/** 获取单例实例 */
 + (instancetype)shared;
 
 #pragma mark - UI相关方法
 
 #pragma mark - 媒体保存方法
-/**
- * 保存媒体文件到相册
- * @param mediaURL 媒体文件URL
- * @param mediaType 媒体类型
- * @param completion 完成回调
- */
+/** 保存媒体文件到相册 */
 + (void)saveMedia:(NSURL *)mediaURL mediaType:(MediaType)mediaType completion:(void (^)(BOOL success))completion;
 
-/**
- * 保存实况照片
- * @param imageSourcePath 图片源路径
- * @param videoSourcePath 视频源路径
- */
+/** 保存实况照片 */
 - (void)saveLivePhoto:(NSString *)imageSourcePath videoUrl:(NSString *)videoSourcePath;
 
 #pragma mark - 媒体下载方法
-/**
- * 下载媒体文件
- * @param url 媒体URL
- * @param mediaType 媒体类型
- * @param completion 完成回调
- */
+/** 下载媒体文件 */
 + (void)downloadMedia:(NSURL *)url mediaType:(MediaType)mediaType audio:(NSURL *)audioURL completion:(void (^)(BOOL success))completion;
 
-/**
- * 带进度的媒体下载
- * @param url 媒体URL
- * @param mediaType 媒体类型
- * @param progressBlock 进度回调
- * @param completion 完成回调
- */
+/** 带进度的媒体下载 */
 + (void)downloadMediaWithProgress:(NSURL *)url
                         mediaType:(MediaType)mediaType
                             audio:(NSURL *)audioURL
                          progress:(void (^)(float progress))progressBlock
                        completion:(void (^)(BOOL success, NSURL *fileURL))completion;
 
-/**
- * 下载实况照片
- * @param imageURL 图片URL
- * @param videoURL 视频URL
- * @param completion 完成回调
- */
+/** 下载实况照片 */
 + (void)downloadLivePhoto:(NSURL *)imageURL videoURL:(NSURL *)videoURL completion:(void (^)(void))completion;
 
-/**
- * 批量下载实况照片
- * @param livePhotos 实况照片数组
- */
+/** 批量下载实况照片 */
 + (void)downloadAllLivePhotos:(NSArray<NSDictionary *> *)livePhotos;
 
-/**
- * 带进度的批量实况照片下载
- * @param livePhotos 实况照片数组
- * @param progressBlock 进度回调
- * @param completion 完成回调
- */
+/** 带进度的批量实况照片下载 */
 + (void)downloadAllLivePhotosWithProgress:(NSArray<NSDictionary *> *)livePhotos
                                  progress:(void (^)(NSInteger current, NSInteger total))progressBlock
                                completion:(void (^)(NSInteger successCount, NSInteger totalCount))completion;
 
 /**
- * 保存评论区图片（支持普通图片和实况照片）
- * @param imageModels 评论图片模型数组（AWECommentImageModel）
- * @param currentIndex 当前图片索引（-1 表示保存全部）
- * @param completion 完成回调
+ * 保存评论区图片（支持普通图片和实况照片）。
+ * @param imageModels AWECommentImageModel 数组
+ * @param currentIndex 当前图片索引，-1 表示保存全部
  */
 + (void)saveCommentImages:(NSArray *)imageModels
              currentIndex:(NSInteger)currentIndex
                completion:(void (^)(NSInteger successCount, NSInteger livePhotoCount, NSInteger failedCount))completion;
 
 /**
- * 下载并分享评论区语音
+ * 下载并分享评论区语音。
  * @param audioContent 语音内容 JSON 字符串
- * @param userName 评论者用户名
  * @param createTime 评论创建时间（NSNumber，秒级时间戳）
  */
 + (void)downloadAndShareCommentAudio:(NSString *)audioContent
                             userName:(NSString *)userName
                           createTime:(NSNumber *)createTime;
-/**
- * 批量下载图片
- * @param imageURLs 图片URL数组
- */
+/** 批量下载图片 */
 + (void)downloadAllImages:(NSMutableArray *)imageURLs;
 
-/**
- * 带进度的批量图片下载
- * @param imageURLs 图片URL数组
- * @param progressBlock 进度回调
- * @param completion 完成回调
- */
+/** 带进度的批量图片下载 */
 + (void)downloadAllImagesWithProgress:(NSMutableArray *)imageURLs
                              progress:(void (^)(NSInteger current, NSInteger total))progressBlock
                            completion:(void (^)(NSInteger successCount, NSInteger totalCount))completion;
 
-/**
- * 取消所有下载任务
- */
+/** 取消所有下载任务 */
 + (void)cancelAllDownloads;
 
 #pragma mark - 视频处理方法
-/**
- * 解析分享链接并下载视频
- * @param shareLink 视频分享链接
- * @param apiKey API密钥
- */
+/** 解析分享链接并下载视频 */
 + (void)parseAndDownloadVideoWithShareLink:(NSString *)shareLink apiKey:(NSString *)apiKey;
 
-/**
- * 批量下载视频和图片资源
- * @param videos 视频资源数组
- * @param images 图片资源数组
- */
+/** 批量下载视频和图片资源 */
 + (void)batchDownloadResources:(NSArray *)videos images:(NSArray *)images;
 
 /**
- * 从多种媒体源创建视频
- * @param imageURLs 图片URL数组
- * @param livePhotos 实况照片数组（每项包含图片和视频URL）
- * @param bgmURL 背景音乐URL
- * @param progressBlock 进度回调
- * @param completion 完成回调
+ * 从多种媒体源创建视频。
+ * @param livePhotos 实况照片数组，每项包含图片和视频URL
  */
 + (void)createVideoFromMedia:(NSArray<NSString *> *)imageURLs
                   livePhotos:(NSArray<NSDictionary *> *)livePhotos

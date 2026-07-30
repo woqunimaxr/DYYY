@@ -1419,9 +1419,7 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
 
     for (NSURL *itemURL in [itemsToDelete reverseObjectEnumerator]) {
         NSError *removeError = nil;
-        if ([fileManager removeItemAtURL:itemURL error:&removeError]) {
-            // NSLog(@"[CacheClean] Successfully removed: %@", itemURL.lastPathComponent);
-        } else {
+        if (![fileManager removeItemAtURL:itemURL error:&removeError]) {
             NSLog(@"[CacheClean] Error removing %@: %@", itemURL.path, removeError);
         }
     }
@@ -2020,9 +2018,6 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     if (self == [DYYYUtils class]) {
         _gradientColorCache = [[NSCache alloc] init];
         _gradientColorCache.name = @"DYYYGradientColorCache";
-        // 可以自定义缓存限制，例如：
-        // _gradientColorCache.countLimit = 100; // 最大缓存对象数量
-        // _gradientColorCache.totalCostLimit = 10 * 1024 * 1024; // 最大缓存成本（例如10MB）
 
         _baseRainbowColors = @[
             [UIColor colorWithRed:1.0 green:0.0 blue:0.0 alpha:1.0],  // 红
@@ -2344,12 +2339,7 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
 
 #pragma mark - Private Helper Methods (私有辅助方法)
 
-/*
- * @brief 私有辅助方法：计算两个指定视图的最近公共父视图。
- * @param first 第一个视图。
- * @param second 第二个视图。
- * @return 两个视图的最近公共父视图，如果不存在则返回 nil。
- */
+/** 私有：计算两个视图的最近公共父视图，不存在返回 nil。 */
 + (__kindof UIView *)_nearestCommonSuperviewOfView:(UIView *)first andView:(UIView *)second {
     NSMutableSet *ancestors = [NSMutableSet set];
     UIView *view = first;
@@ -2370,11 +2360,8 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
 }
 
 /**
- * @brief 私有辅助方法：核心遍历引擎，使用 block 回调处理匹配的视图。
- * @param view 要遍历的根视图。
- * @param targetClass 要匹配的类。
- * @param block 找到匹配视图时执行的回调。返回 YES 可立即中止遍历。
- * @return 如果遍历被中止，则返回 YES。
+ * 私有：视图树遍历引擎，匹配 targetClass 时回调 block。
+ * block 返回 YES 立即中止遍历，本方法随之返回 YES。
  */
 + (BOOL)_traverseViewHierarchy:(UIView *)view forClass:(Class)targetClass usingBlock:(BOOL (^)(UIView *foundView))block {
     if (!view || !targetClass || !block) {
@@ -2396,11 +2383,7 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     return NO;
 }
 
-/**
- * @brief 私有辅助方法：解析单个十六进制颜色字符串。
- * @param hexString 十六进制颜色字符串，例如 "#FF0000", "FF0000", "#F00", "F00", "#AARRGGBB"
- * @return 解析出的 UIColor 对象。如果格式无效，返回 nil。
- */
+/** 私有：解析单个十六进制颜色（支持 #RGB / #RRGGBB / #AARRGGBB，# 可省略），无效返回 nil。 */
 + (UIColor *)_colorFromHexString:(NSString *)hexString {
     NSString *colorString = [[hexString stringByReplacingOccurrencesOfString:@"#" withString:@""] uppercaseString];
     CGFloat alpha = 1.0;
@@ -2437,10 +2420,7 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     return [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
 }
 
-/**
- * @brief 私有辅助方法：生成一个随机颜色。
- * @return 随机生成的 UIColor 对象。
- */
+/** 私有：生成一个随机颜色。 */
 + (UIColor *)_randomColor {
     return [UIColor colorWithRed:(CGFloat)arc4random_uniform(256) / 255.0 green:(CGFloat)arc4random_uniform(256) / 255.0 blue:(CGFloat)arc4random_uniform(256) / 255.0 alpha:1.0];
 }
@@ -2458,11 +2438,7 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     return [rotatedColors copy];
 }
 
-/**
- * @brief 私有辅助方法：解析预定义或逗号分隔的渐变颜色字符串。
- * @param hexString 颜色方案字符串，例如 "rainbow" 或 "red,blue,#00FF00"
- * @return 颜色数组，如果不是静态渐变方案，返回 nil。
- */
+/** 私有：解析预定义或逗号分隔的渐变方案（如 "rainbow"、"red,blue,#00FF00"），非静态渐变返回 nil。 */
 + (NSArray<UIColor *> *)_staticGradientColorsForHexString:(NSString *)hexString {
     NSString *trimmedHexString = [hexString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
     NSString *lowercaseHexString = [trimmedHexString lowercaseString];

@@ -10,7 +10,6 @@
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
 
-
 @interface DYYYManager () {
     AVAssetExportSession *session;
     AVURLAsset *asset;
@@ -1243,7 +1242,7 @@
         if (completion) completion(0, 0, 0);
         return;
     }
-    
+
     // 确定要保存的图片
     NSArray *imagesToSave = nil;
     if (currentIndex >= 0 && currentIndex < (NSInteger)imageModels.count) {
@@ -1251,16 +1250,16 @@
     } else {
         imagesToSave = imageModels;
     }
-    
+
     // 分离普通图片和实况照片
     NSMutableArray *normalImages = [NSMutableArray array];
     NSMutableArray *livePhotos = [NSMutableArray array];
-    
+
     for (id imageModel in imagesToSave) {
         @try {
             // 获取图片 URL - originUrl 和 mediumUrl 都是 AWEURLModel 类型
             NSString *imageUrlStr = nil;
-            
+
             // 首先尝试 originUrl
             AWEURLModel *originUrlModel = [imageModel valueForKey:@"originUrl"];
             if (originUrlModel) {
@@ -1269,7 +1268,7 @@
                     imageUrlStr = urlList.firstObject;
                 }
             }
-            
+
             // 如果 originUrl 没有获取到，尝试 mediumUrl
             if (!imageUrlStr) {
                 AWEURLModel *mediumUrlModel = [imageModel valueForKey:@"mediumUrl"];
@@ -1280,14 +1279,14 @@
                     }
                 }
             }
-            
+
             NSLog(@"[DYYY] 评论图片URL: %@", imageUrlStr);
-            
+
             if (!imageUrlStr || imageUrlStr.length == 0) {
                 NSLog(@"[DYYY] 无法获取图片URL，imageModel: %@", imageModel);
                 continue;
             }
-            
+
             // 检查是否是实况照片
             id livePhotoModel = [imageModel valueForKey:@"livePhotoModel"];
             if (livePhotoModel) {
@@ -1304,28 +1303,28 @@
                     }
                 }
             }
-            
+
             // 普通图片 - 存储字符串而不是 NSURL
             [normalImages addObject:imageUrlStr];
         } @catch (NSException *e) {
             NSLog(@"[DYYY] 解析评论图片失败: %@", e);
         }
     }
-    
+
     NSLog(@"[DYYY] 解析完成: 普通图片=%lu, 实况照片=%lu", (unsigned long)normalImages.count, (unsigned long)livePhotos.count);
-    
+
     // 如果都没有解析到有效URL，直接返回失败
     if (normalImages.count == 0 && livePhotos.count == 0) {
         if (completion) completion(0, 0, (NSInteger)imagesToSave.count);
         return;
     }
-    
+
     __block NSInteger successCount = 0;
     __block NSInteger livePhotoCount = 0;
     __block NSInteger failedCount = 0;
-    
+
     dispatch_group_t group = dispatch_group_create();
-    
+
     // 保存普通图片
     if (normalImages.count > 0) {
         dispatch_group_enter(group);
@@ -1337,7 +1336,7 @@
             dispatch_group_leave(group);
         }];
     }
-    
+
     // 保存实况照片
     if (livePhotos.count > 0) {
         dispatch_group_enter(group);
@@ -1350,7 +1349,7 @@
             dispatch_group_leave(group);
         }];
     }
-    
+
     dispatch_group_notify(group, dispatch_get_main_queue(), ^{
         if (completion) {
             completion(successCount, livePhotoCount, failedCount);
@@ -2793,8 +2792,7 @@
     [videoWriter startWriting];
     [videoWriter startSessionAtSourceTime:kCMTimeZero];
 
-    // 不再调整图片大小，只在需要时适配
-    // UIImage *resizedImage = [self resizeImage:image toSize:videoSize];
+    // 不再统一缩放图片，只在需要时适配
 
     // 创建上下文并绘制图像
     CVPixelBufferRef pixelBuffer = NULL;
@@ -2944,11 +2942,11 @@
         });
         return;
     }
-    
+
     NSData *jsonData = [audioContent dataUsingEncoding:NSUTF8StringEncoding];
     NSError *error = nil;
     NSDictionary *audioDict = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&error];
-    
+
     if (error || !audioDict) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [DYYYUtils showToast:@"语音数据解析失败"];
@@ -2956,7 +2954,7 @@
         NSLog(@"[DYYY] 解析语音 JSON 失败: %@", error);
         return;
     }
-    
+
     NSArray *videoList = audioDict[@"video_list"];
     if (!videoList || videoList.count == 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -2964,20 +2962,20 @@
         });
         return;
     }
-    
+
     NSDictionary *videoInfo = videoList.firstObject;
     NSString *audioURLString = videoInfo[@"main_url"];
     if (!audioURLString || audioURLString.length == 0) {
         audioURLString = videoInfo[@"backup_url"];
     }
-    
+
     if (!audioURLString || audioURLString.length == 0) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [DYYYUtils showToast:@"语音URL无效"];
         });
         return;
     }
-    
+
     NSURL *audioURL = [NSURL URLWithString:audioURLString];
     if (!audioURL) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -2985,14 +2983,14 @@
         });
         return;
     }
-    
+
     dispatch_async(dispatch_get_main_queue(), ^{
         [DYYYUtils showToast:@"正在下载语音..."];
     });
-    
+
     NSURLSessionConfiguration *config = [NSURLSessionConfiguration defaultSessionConfiguration];
     NSURLSession *session = [NSURLSession sessionWithConfiguration:config];
-    
+
     NSURLSessionDownloadTask *downloadTask = [session downloadTaskWithURL:audioURL completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
         if (error) {
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -3001,14 +2999,14 @@
             NSLog(@"[DYYY] 下载语音失败: %@", error);
             return;
         }
-        
+
         if (!location) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [DYYYUtils showToast:@"下载失败：无效的文件"];
             });
             return;
         }
-        
+
         NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
         formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
         NSTimeInterval timestamp = (createTime && [createTime doubleValue] > 0) ? [createTime doubleValue] : [[NSDate date] timeIntervalSince1970];
@@ -3016,19 +3014,19 @@
         NSString *timeString = [formatter stringFromDate:commentDate];
         timeString = [timeString stringByReplacingOccurrencesOfString:@":" withString:@"-"];
         timeString = [timeString stringByReplacingOccurrencesOfString:@" " withString:@"_"];
-        
+
         NSString *safeUserName = userName ?: @"未知用户";
         safeUserName = [safeUserName stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
         safeUserName = [safeUserName stringByReplacingOccurrencesOfString:@"\\" withString:@"_"];
-        
+
         NSString *fileName = [NSString stringWithFormat:@"%@_%@.m4a", safeUserName, timeString];
         NSString *tempDir = NSTemporaryDirectory();
         NSString *targetPath = [tempDir stringByAppendingPathComponent:fileName];
-        
+
         NSError *moveError = nil;
         [[NSFileManager defaultManager] removeItemAtPath:targetPath error:nil];
         [[NSFileManager defaultManager] moveItemAtPath:location.path toPath:targetPath error:&moveError];
-        
+
         if (moveError) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 [DYYYUtils showToast:@"文件保存失败"];
@@ -3036,37 +3034,37 @@
             NSLog(@"[DYYY] 移动文件失败: %@", moveError);
             return;
         }
-        
+
         NSURL *fileURL = [NSURL fileURLWithPath:targetPath];
-        
+
         dispatch_async(dispatch_get_main_queue(), ^{
             UIViewController *topVC = [DYYYUtils topView];
             if (!topVC) {
                 [DYYYUtils showToast:@"无法显示分享界面"];
                 return;
             }
-            
+
             UIActivityViewController *activityVC = [[UIActivityViewController alloc] initWithActivityItems:@[fileURL] applicationActivities:nil];
-            
+
             activityVC.completionWithItemsHandler = ^(UIActivityType activityType, BOOL completed, NSArray *returnedItems, NSError *activityError) {
                 [[NSFileManager defaultManager] removeItemAtPath:targetPath error:nil];
-                
+
                 if (completed) {
                     [DYYYUtils showToast:@"分享成功"];
                 } else if (activityError) {
                     [DYYYUtils showToast:@"分享失败"];
                 }
             };
-            
+
             if ([activityVC respondsToSelector:@selector(popoverPresentationController)]) {
                 activityVC.popoverPresentationController.sourceView = topVC.view;
                 activityVC.popoverPresentationController.sourceRect = CGRectMake(topVC.view.bounds.size.width / 2, topVC.view.bounds.size.height / 2, 0, 0);
             }
-            
+
             [topVC presentViewController:activityVC animated:YES completion:nil];
         });
     }];
-    
+
     [downloadTask resume];
 }
 

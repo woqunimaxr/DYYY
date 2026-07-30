@@ -107,14 +107,14 @@ jobs:
 
       - name: Clean packages dir
         run: rm -rf packages && mkdir -p packages
-        
+
       - name: Build Rootful
         run: |
           make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootful.deb"
           done
-             
+
       - name: Build Rootless
         run: |
           #make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
@@ -122,14 +122,14 @@ jobs:
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
           done
-          
+
       - name: Build Roothide
         run: |
           make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-roothide.deb"
           done
-          
+
       - name: Prepare package metadata
         id: package
         run: |

@@ -1,6 +1,5 @@
 #import "AWMSafeDispatchTimer.h"
 
-
 static const void *kAWMSafeDispatchTimerSpecificKey = &kAWMSafeDispatchTimerSpecificKey;
 
 @interface AWMSafeDispatchTimer ()

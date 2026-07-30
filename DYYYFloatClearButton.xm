@@ -50,7 +50,6 @@ static void DYYYPerformClearButtonMutation(dispatch_block_t block) {
     }
 }
 
-
 HideUIButton *hideButton = nil;
 BOOL isAppInTransition = NO;
 NSArray *targetClassNames;
@@ -464,22 +463,22 @@ void reloadClearButtonConfiguration(void) {
 
         self.originalAlpha = 1.0;
         self.alpha = 0.5;
-        
+
         [self loadLockState];
         [self loadIcons];
         [self setImage:self.showIcon forState:UIControlStateNormal];
-        
+
         UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
         [self addGestureRecognizer:panGesture];
-        
+
         [self addTarget:self action:@selector(handleTap) forControlEvents:UIControlEventTouchUpInside];
         [self addTarget:self action:@selector(handleTouchDown) forControlEvents:UIControlEventTouchDown];
         [self addTarget:self action:@selector(handleTouchUpInside) forControlEvents:UIControlEventTouchUpInside];
         [self addTarget:self action:@selector(handleTouchUpOutside) forControlEvents:UIControlEventTouchUpOutside];
-        
+
         UILongPressGestureRecognizer *longPressGesture = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
         [self addGestureRecognizer:longPressGesture];
-        
+
         [self startPeriodicCheck];
         [self resetFadeTimer];
 
@@ -570,7 +569,7 @@ void reloadClearButtonConfiguration(void) {
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         CGFloat centerXPercent = self.center.x / self.superview.bounds.size.width;
         CGFloat centerYPercent = self.center.y / self.superview.bounds.size.height;
-        
+
         [defaults setFloat:centerXPercent forKey:@"DYYYHideButtonCenterXPercent"];
         [defaults setFloat:centerYPercent forKey:@"DYYYHideButtonCenterYPercent"];
     }
@@ -580,11 +579,11 @@ void reloadClearButtonConfiguration(void) {
     if (!self.superview) {
         return;
     }
-    
+
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     float centerXPercent = [defaults floatForKey:@"DYYYHideButtonCenterXPercent"];
     float centerYPercent = [defaults floatForKey:@"DYYYHideButtonCenterYPercent"];
-    
+
     if (centerXPercent > 0 && centerYPercent > 0) {
         self.center = CGPointMake(centerXPercent * self.superview.bounds.size.width,
                                   centerYPercent * self.superview.bounds.size.height);

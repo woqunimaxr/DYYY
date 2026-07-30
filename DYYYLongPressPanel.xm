@@ -217,8 +217,7 @@ static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
                                       completion:^(BOOL success){
                                       }];
                   }
-              
-          
+
           AWELongPressPanelManager *panelManager = [%c(AWELongPressPanelManager) shareInstance];
           [panelManager dismissWithAnimation:YES completion:nil];
         };
@@ -981,8 +980,7 @@ static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
                                       completion:^(BOOL success){
                                       }];
                   }
-              
-          
+
           AWELongPressPanelManager *panelManager = [%c(AWELongPressPanelManager) shareInstance];
           [panelManager dismissWithAnimation:YES completion:nil];
         };

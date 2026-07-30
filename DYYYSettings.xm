@@ -2311,7 +2311,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"title" : @"直播真实人数",
             @"subTitle" : @"直播显示具体的在线人数",
             @"detail" : @"",
-            @"cellType" : @37, 
+            @"cellType" : @37,
             @"imageName" : @"ic_video_outlined_20"},
           @{@"identifier" : @"DYYYShowLiveDuration",
             @"title" : @"显示开播时长",
@@ -3780,7 +3780,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       [rootVC.navigationController pushViewController:(UIViewController *)subVC animated:YES];
     };
     [mainItems addObject:removeSettingItem];
-
 
     // 创建增强设置分类项
     AWESettingItemModel *enhanceSettingItem = [[%c(AWESettingItemModel) alloc] init];
