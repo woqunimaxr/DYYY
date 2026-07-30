@@ -17,8 +17,10 @@ ARCHS = arm64 arm64e
 # 根据参数选择打包方案
 ifeq ($(SCHEME),roothide)
     export THEOS_PACKAGE_SCHEME = roothide
+    export FINALPACKAGE = 1
 else ifeq ($(SCHEME),rootless)
     export THEOS_PACKAGE_SCHEME = rootless
+    export FINALPACKAGE = 1
 else
     unexport THEOS_PACKAGE_SCHEME
 endif

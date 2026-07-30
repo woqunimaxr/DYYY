@@ -485,6 +485,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface AWEPlayInteractionTimestampElement : UIView
 @property(nonatomic, strong) AWEAwemeModel *model;
+- (void)layoutElementView;
 @end
 
 @interface AWEFeedTableViewController : UIViewController
@@ -1033,6 +1034,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEPlayInteractionAuthorElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionStandardAuthorElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionDescriptionElement : NSObject
 - (void)layoutElementView;
 @end
 

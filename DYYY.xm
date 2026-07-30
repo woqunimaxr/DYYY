@@ -2391,6 +2391,80 @@ static void DYYYMigrateCombinedHDRModeIfNeeded(void) {
     });
 }
 
+static NSString *DYYYUserDefaultsStringValue(id value) {
+    if ([value isKindOfClass:[NSString class]]) {
+        return (NSString *)value;
+    }
+    if ([value isKindOfClass:[NSNumber class]]) {
+        return [(NSNumber *)value stringValue];
+    }
+    return nil;
+}
+
+static NSString *DYYYMigratedVerticalOffsetString(id value) {
+    NSString *stringValue = DYYYUserDefaultsStringValue(value);
+    if (stringValue.length == 0) {
+        return stringValue;
+    }
+
+    CGFloat offset = [stringValue floatValue];
+    if (offset == 0.0f) {
+        return stringValue;
+    }
+
+    return [NSString stringWithFormat:@"%g", -offset];
+}
+
+static void DYYYMigrateScaleAndSizeSettingsIfNeeded(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        if ([defaults boolForKey:@"DYYYScaleAndSizeSettingsMigratedV1"]) {
+            return;
+        }
+
+        NSString *nicknameScale = DYYYUserDefaultsStringValue([defaults objectForKey:@"DYYYNicknameScale"]);
+        if (nicknameScale.length > 0 && [defaults objectForKey:@"DYYYDescriptionScale"] == nil) {
+            [defaults setObject:nicknameScale forKey:@"DYYYDescriptionScale"];
+        }
+
+        id nicknameOffsetValue = [defaults objectForKey:@"DYYYNicknameVerticalOffset"];
+        if (nicknameOffsetValue != nil) {
+            NSString *migratedNicknameOffset = DYYYMigratedVerticalOffsetString(nicknameOffsetValue);
+            if (migratedNicknameOffset.length > 0) {
+                [defaults setObject:migratedNicknameOffset forKey:@"DYYYNicknameVerticalOffset"];
+            }
+        }
+
+        id descriptionOffsetValue = [defaults objectForKey:@"DYYYDescriptionVerticalOffset"];
+        if (descriptionOffsetValue != nil) {
+            NSString *migratedDescriptionOffset = DYYYMigratedVerticalOffsetString(descriptionOffsetValue);
+            if (migratedDescriptionOffset.length > 0) {
+                [defaults setObject:migratedDescriptionOffset forKey:@"DYYYDescriptionVerticalOffset"];
+            }
+        }
+
+        [defaults setBool:YES forKey:@"DYYYScaleAndSizeSettingsMigratedV1"];
+    });
+}
+
+static void DYYYMigrateScaleAndSizeSettingsV2IfNeeded(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        if ([defaults boolForKey:@"DYYYScaleAndSizeSettingsMigratedV2"]) {
+            return;
+        }
+
+        NSString *nicknameScale = DYYYUserDefaultsStringValue([defaults objectForKey:@"DYYYNicknameScale"]);
+        if (nicknameScale.length > 0 && [defaults objectForKey:@"DYYYIPLabelScale"] == nil) {
+            [defaults setObject:nicknameScale forKey:@"DYYYIPLabelScale"];
+        }
+
+        [defaults setBool:YES forKey:@"DYYYScaleAndSizeSettingsMigratedV2"];
+    });
+}
+
 static BOOL DYYYShouldDisableAllHDR(void) {
     return [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeDisable];
 }
@@ -4434,6 +4508,8 @@ static void DYYYRunDeferredFollowConfirm(void (^action)(void)) {
 static char kDYYYFeedLocationContainerManagedHiddenKey;
 static char kDYYYFeedLocationContainerOriginalHiddenKey;
 
+static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallbackClassName);
+
 %hook AWEFeedAnchorContainerView
 
 - (void)layoutSubviews {
@@ -4474,6 +4550,12 @@ static char kDYYYFeedLocationContainerOriginalHiddenKey;
         objc_setAssociatedObject(self, &kDYYYFeedLocationContainerManagedHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         objc_setAssociatedObject(self, &kDYYYFeedLocationContainerOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         self.hidden = originalHidden ? originalHidden.boolValue : NO;
+    }
+
+    // 定位/特效锚点未必是左侧栏的直接子项，这里补一次跟随昵称的缩放与 Y 轴
+    UIViewController *anchorViewController = [DYYYUtils firstAvailableViewControllerFromView:self];
+    if ([anchorViewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+        DYYYApplyPlayInteractionElementLayout(self, @"AWEPlayInteractionAnchorElement");
     }
 }
 
@@ -5068,6 +5150,418 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
 
 %end
 
+static CGFloat DYYYGetUserVerticalOffsetY(NSString *key) {
+    NSString *value = [[NSUserDefaults standardUserDefaults] objectForKey:key];
+    if (value.length == 0) {
+        return 0.0;
+    }
+    // 设置项约定：上移为正数，下移为负数；UIKit 坐标系中 Y 轴向下为正。
+    return -[value floatValue];
+}
+
+static CGFloat DYYYGetNicknameVerticalOffset(void) {
+    return DYYYGetUserVerticalOffsetY(@"DYYYNicknameVerticalOffset");
+}
+
+static CGFloat DYYYGetDescriptionVerticalOffset(void) {
+    return DYYYGetUserVerticalOffsetY(@"DYYYDescriptionVerticalOffset");
+}
+
+static BOOL DYYYStackViewContainsElementClassName(UIView *stackView, NSString *className) {
+    if (!stackView || className.length == 0) {
+        return NO;
+    }
+
+    for (UIView *sub in [stackView.subviews copy]) {
+        if ([sub respondsToSelector:@selector(elementClassName)]) {
+            NSString *elementClassName = [sub performSelector:@selector(elementClassName)];
+            if ([elementClassName isEqualToString:className]) {
+                return YES;
+            }
+        }
+    }
+    return NO;
+}
+
+static CGFloat DYYYScaleValueForKey(NSString *key) {
+    NSString *scaleValue = DYYYUserDefaultsStringValue([[NSUserDefaults standardUserDefaults] objectForKey:key]);
+    if (scaleValue.length == 0) {
+        return 1.0;
+    }
+    CGFloat scale = [scaleValue floatValue];
+    return scale > 0.0 ? scale : 1.0;
+}
+
+static BOOL DYYYIsLeftStackArrangedElementView(UIView *view) {
+    return view.superview != nil && [view.superview isKindOfClass:%c(AWEElementStackView)];
+}
+
+static UIView *DYYYRawElementViewFromElement(id element) {
+    if (!element) {
+        return nil;
+    }
+
+    UIView *elementView = nil;
+    @try {
+        id value = [element valueForKey:@"elementView"];
+        if ([value isKindOfClass:[UIView class]]) {
+            elementView = value;
+        }
+    } @catch (__unused NSException *exception) {
+        elementView = nil;
+    }
+
+    if (!elementView) {
+        @try {
+            id value = [element valueForKey:@"view"];
+            if ([value isKindOfClass:[UIView class]]) {
+                elementView = value;
+            }
+        } @catch (__unused NSException *exception) {
+            elementView = nil;
+        }
+    }
+
+    if (!elementView && [element isKindOfClass:[UIView class]]) {
+        elementView = (UIView *)element;
+    }
+    return elementView;
+}
+
+// transform 的写入必须脱离当前动画上下文，否则锚点展开等动画会把 1.0 -> scale 的变化插值出来，
+// 表现为特效临时由大变小、以及昵称/文案/属地跟着轻微膨胀一下
+static void DYYYSetViewTransformWithoutAnimation(UIView *view, CGAffineTransform transform) {
+    if (!view || CGAffineTransformEqualToTransform(view.transform, transform)) {
+        return;
+    }
+
+    [UIView performWithoutAnimation:^{
+      [CATransaction begin];
+      [CATransaction setDisableActions:YES];
+      view.transform = transform;
+      [CATransaction commit];
+    }];
+}
+
+// 绕左边缘缩放并叠加 Y 轴偏移：缩放前后左缘位置不变，三个元素之间保持左对齐一致
+static void DYYYApplyLeftAlignedScaleAndOffset(UIView *view, CGFloat scale, CGFloat verticalOffset) {
+    if (!view) {
+        return;
+    }
+
+    BOOL shouldScale = scale > 0.0 && fabs(scale - 1.0) > 0.0001;
+    if (!shouldScale) {
+        DYYYSetViewTransformWithoutAnimation(view, verticalOffset != 0.0 ? CGAffineTransformMakeTranslation(0, verticalOffset)
+                                                                        : CGAffineTransformIdentity);
+        return;
+    }
+
+    // 只用 bounds，避免读到带 transform 的 frame 形成反馈环
+    CGFloat width = CGRectGetWidth(view.bounds);
+    if (width <= 0.0) {
+        return;
+    }
+
+    // 默认绕中心缩放后左缘右移 w*(1-s)/2，反向平移保持左对齐；不再加 height 补偿以免高度波动导致上下抖
+    CGFloat leftTx = -width * (1.0 - scale) / 2.0;
+    DYYYSetViewTransformWithoutAnimation(view, CGAffineTransformMake(scale, 0.0, 0.0, scale, leftTx, verticalOffset));
+}
+
+static BOOL DYYYIsNicknameElementClassName(NSString *elementClassName) {
+    return [elementClassName isEqualToString:@"AWEPlayInteractionAuthorElement"] ||
+           [elementClassName isEqualToString:@"AWEPlayInteractionStandardAuthorElement"];
+}
+
+// 昵称上方的特效/地点等锚点元素，跟随昵称的缩放与 Y 轴。
+// 定位类元素的类名不一定带 Anchor（如 AWEPlayInteractionPOIBottomOuterElement），需一并识别。
+static BOOL DYYYIsAnchorElementClassName(NSString *elementClassName) {
+    if (elementClassName.length == 0) {
+        return NO;
+    }
+    if (![elementClassName hasPrefix:@"AWEPlayInteraction"]) {
+        return NO;
+    }
+    return [elementClassName containsString:@"Anchor"] || [elementClassName containsString:@"POI"] ||
+           [elementClassName containsString:@"TemplateAnchor"] || [elementClassName containsString:@"Sticker"];
+}
+
+static NSArray<NSString *> *DYYYAnchorContentClassNames(void) {
+    static NSArray<NSString *> *names = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      names = @[
+          @"AWEFeedAnchorContainerView", @"AWEPlayInteractionSearchAnchorView", @"AWEFeedTemplateAnchorView",
+          @"AWEFeedTemplateAnchorViewV2", @"AWEPOIEntryAnchorView", @"AWEPOITradeEntryAnchorView"
+      ];
+    });
+    return names;
+}
+
+static NSArray<UIView *> *DYYYAnchorContentViewsInContainer(UIView *container) {
+    if (!container) {
+        return @[];
+    }
+
+    NSMutableArray<UIView *> *anchorViews = [NSMutableArray array];
+    for (NSString *className in DYYYAnchorContentClassNames()) {
+        Class anchorClass = NSClassFromString(className);
+        if (!anchorClass) {
+            continue;
+        }
+        if ([container isKindOfClass:anchorClass]) {
+            [anchorViews addObject:container];
+        }
+        [anchorViews addObjectsFromArray:[DYYYUtils findAllSubviewsOfClass:anchorClass inContainer:container]];
+    }
+    return anchorViews;
+}
+
+// 锚点被隐藏时不跟随（隐藏视频锚点开关、隐藏定位导致容器 hidden、或整体不可见）
+static BOOL DYYYShouldSkipAnchorFollowLayout(UIView *target) {
+    if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+        return YES;
+    }
+    if (!target || target.hidden || target.alpha <= 0.01 || CGRectIsEmpty(target.bounds)) {
+        return YES;
+    }
+
+    NSArray<UIView *> *anchorViews = DYYYAnchorContentViewsInContainer(target);
+    if (anchorViews.count == 0) {
+        return NO;
+    }
+
+    for (UIView *anchorView in anchorViews) {
+        if (!anchorView.hidden && anchorView.alpha > 0.01 && !CGRectIsEmpty(anchorView.bounds)) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
+// Y 轴偏移会把内容移出祖先视图的可视区域，若祖先开启了 clipsToBounds 就会出现“文案消失/被遮挡”
+static void DYYYDisableClippingForElementLayout(UIView *view) {
+    Class stackClass = %c(AWEElementStackView);
+    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        if (ancestor.clipsToBounds) {
+            ancestor.clipsToBounds = NO;
+        }
+        if (stackClass && [ancestor isKindOfClass:stackClass]) {
+            break;
+        }
+    }
+}
+
+static NSString *DYYYReportedElementClassName(UIView *view) {
+    if (![view respondsToSelector:@selector(elementClassName)]) {
+        return nil;
+    }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    return [view performSelector:@selector(elementClassName)];
+#pragma clang diagnostic pop
+}
+
+// 变换目标优先取左侧栏“元素块”：既不会被内部 ScrollView 裁剪，也能整块左对齐
+static void DYYYResolveElementLayoutTargets(UIView *view, UIView **outArranged, UIView **outElementBlock) {
+    *outArranged = nil;
+    *outElementBlock = nil;
+    if (!view) {
+        return;
+    }
+
+    Class stackClass = %c(AWEElementStackView);
+    Class baseElementClass = %c(AWEBaseElementView);
+
+    for (UIView *ancestor = view; ancestor; ancestor = ancestor.superview) {
+        if (!*outElementBlock && baseElementClass && [ancestor isKindOfClass:baseElementClass]) {
+            *outElementBlock = ancestor;
+        }
+        if (stackClass && [ancestor.superview isKindOfClass:stackClass]) {
+            *outArranged = ancestor;
+            break;
+        }
+        if (stackClass && [ancestor isKindOfClass:stackClass]) {
+            break;
+        }
+    }
+
+    if (!*outElementBlock) {
+        *outElementBlock = *outArranged ?: view;
+    }
+}
+
+// 元素类名 -> 对应的缩放键与 Y 轴偏移；由“元素块自身类名”决定，保证三者互不抢同一容器
+static BOOL DYYYLayoutSettingsForElementClassName(NSString *elementClassName, NSString **outScaleKey, CGFloat *outVerticalOffset) {
+    if (elementClassName.length == 0) {
+        return NO;
+    }
+
+    if (DYYYIsNicknameElementClassName(elementClassName) || DYYYIsAnchorElementClassName(elementClassName)) {
+        *outScaleKey = @"DYYYNicknameScale";
+        *outVerticalOffset = DYYYGetNicknameVerticalOffset();
+        return YES;
+    }
+    if ([elementClassName isEqualToString:@"AWEPlayInteractionDescriptionElement"]) {
+        *outScaleKey = @"DYYYDescriptionScale";
+        *outVerticalOffset = DYYYGetDescriptionVerticalOffset();
+        return YES;
+    }
+    if ([elementClassName isEqualToString:@"AWEPlayInteractionTimestampElement"]) {
+        *outScaleKey = @"DYYYIPLabelScale";
+        *outVerticalOffset = DYYYGetUserVerticalOffsetY(@"DYYYIPLabelVerticalOffset");
+        return YES;
+    }
+    return NO;
+}
+
+static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallbackClassName) {
+    if (!view) {
+        return;
+    }
+
+    UIView *arranged = nil;
+    UIView *elementBlock = nil;
+    DYYYResolveElementLayoutTargets(view, &arranged, &elementBlock);
+
+    NSString *arrangedClassName = DYYYReportedElementClassName(arranged);
+
+    NSString *arrangedScaleKey = nil;
+    CGFloat arrangedOffset = 0.0;
+    BOOL arrangedMapped = DYYYLayoutSettingsForElementClassName(arrangedClassName, &arrangedScaleKey, &arrangedOffset);
+
+    // 定位/特效锚点的元素类名五花八门，凡是含锚点内容的块都并入昵称组
+    if (!arrangedMapped && arranged && DYYYAnchorContentViewsInContainer(arranged).count > 0) {
+        arrangedClassName = @"AWEPlayInteractionAnchorElement";
+        arrangedMapped = DYYYLayoutSettingsForElementClassName(arrangedClassName, &arrangedScaleKey, &arrangedOffset);
+    }
+
+    NSString *fallbackScaleKey = nil;
+    CGFloat fallbackOffset = 0.0;
+    BOOL fallbackMapped = DYYYLayoutSettingsForElementClassName(fallbackClassName, &fallbackScaleKey, &fallbackOffset);
+
+    UIView *target = nil;
+    NSString *scaleKey = nil;
+    NSString *chosenClassName = nil;
+    CGFloat verticalOffset = 0.0;
+
+    if (arrangedMapped && (!fallbackMapped || [arrangedScaleKey isEqualToString:fallbackScaleKey])) {
+        // 该 arranged 块就代表这个元素，整块变换最稳定
+        target = arranged;
+        scaleKey = arrangedScaleKey;
+        verticalOffset = arrangedOffset;
+        chosenClassName = arrangedClassName;
+    } else if (fallbackMapped) {
+        // arranged 块属于别的元素（如属地嵌在昵称块内），退回自身元素视图，避免互相覆盖
+        target = elementBlock;
+        scaleKey = fallbackScaleKey;
+        verticalOffset = fallbackOffset;
+        chosenClassName = fallbackClassName;
+    } else {
+        return;
+    }
+
+    if (!target) {
+        return;
+    }
+
+    if (DYYYIsAnchorElementClassName(chosenClassName) && DYYYShouldSkipAnchorFollowLayout(target)) {
+        DYYYSetViewTransformWithoutAnimation(target, CGAffineTransformIdentity);
+        return;
+    }
+
+    CGFloat scale = DYYYScaleValueForKey(scaleKey);
+    if (verticalOffset != 0.0 || fabs(scale - 1.0) > 0.0001) {
+        DYYYDisableClippingForElementLayout(target);
+    }
+
+    DYYYApplyLeftAlignedScaleAndOffset(target, scale, verticalOffset);
+}
+
+static void DYYYApplyNicknameLayoutToLabel(UIView *label) {
+    if (!label) {
+        return;
+    }
+    UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:label];
+    if (![viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+        return;
+    }
+    DYYYApplyPlayInteractionElementLayout(label, @"AWEPlayInteractionAuthorElement");
+}
+
+static NSString *DYYYLeftStackElementClassNameForSubview(UIView *sub) {
+    NSString *elementClassName = nil;
+    if ([sub respondsToSelector:@selector(elementClassName)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        elementClassName = [sub performSelector:@selector(elementClassName)];
+#pragma clang diagnostic pop
+    }
+
+    if (elementClassName.length > 0) {
+        return elementClassName;
+    }
+
+    Class userNameLabelClass = %c(AWEUserNameLabel);
+    if (userNameLabelClass && [DYYYUtils containsSubviewOfClass:userNameLabelClass inContainer:sub]) {
+        return @"AWEPlayInteractionAuthorElement";
+    }
+
+    if (DYYYAnchorContentViewsInContainer(sub).count > 0) {
+        return @"AWEPlayInteractionAnchorElement";
+    }
+    return nil;
+}
+
+// Stack 排版会读取子视图 frame，而 frame 受 transform 影响。布局前必须先恢复 Identity，
+// 否则昵称的位移会带动文案/属地，并因反复读取形成上下抖动。
+static void DYYYResetPlayInteractionLeftStackElementTransforms(UIView *stackView) {
+    if (!stackView) {
+        return;
+    }
+
+    Class baseElementClass = %c(AWEBaseElementView);
+    for (UIView *sub in [stackView.subviews copy]) {
+        DYYYSetViewTransformWithoutAnimation(sub, CGAffineTransformIdentity);
+
+        if (!baseElementClass) {
+            continue;
+        }
+        for (UIView *nested in [DYYYUtils findAllSubviewsOfClass:baseElementClass inContainer:sub]) {
+            DYYYSetViewTransformWithoutAnimation(nested, CGAffineTransformIdentity);
+        }
+    }
+}
+
+static void DYYYApplyPlayInteractionLeftStackElementTransforms(UIView *stackView) {
+    if (!stackView) {
+        return;
+    }
+
+    stackView.transform = CGAffineTransformIdentity;
+    for (UIView *sub in [stackView.subviews copy]) {
+        DYYYApplyPlayInteractionElementLayout(sub, DYYYLeftStackElementClassNameForSubview(sub));
+    }
+}
+
+static BOOL DYYYStackViewContainsScalableLeftElement(UIView *stackView) {
+    Class userNameLabelClass = %c(AWEUserNameLabel);
+    return DYYYStackViewContainsElementClassName(stackView, @"AWEPlayInteractionAuthorElement") ||
+           DYYYStackViewContainsElementClassName(stackView, @"AWEPlayInteractionStandardAuthorElement") ||
+           DYYYStackViewContainsElementClassName(stackView, @"AWEPlayInteractionDescriptionElement") ||
+           DYYYStackViewContainsElementClassName(stackView, @"AWEPlayInteractionTimestampElement") ||
+           DYYYAnchorContentViewsInContainer(stackView).count > 0 ||
+           (userNameLabelClass && [DYYYUtils containsSubviewOfClass:userNameLabelClass inContainer:stackView]);
+}
+
+static void DYYYApplyPlayInteractionElementLayoutFromElement(id element, NSString *fallbackClassName) {
+    UIView *elementView = DYYYRawElementViewFromElement(element);
+    if (!elementView) {
+        return;
+    }
+
+    DYYYApplyPlayInteractionElementLayout(elementView, fallbackClassName);
+}
+
 %hook AWEPlayInteractionTimestampElement
 
 - (id)timestampLabel {
@@ -5126,6 +5620,7 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
 
     if (cityCode.length == 0 && regionCode.length == 0) {
         updateLabelWithLocation(label, @"未知地区");
+        DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionTimestampElement");
         return label;
     }
 
@@ -5134,21 +5629,11 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
     NSString *cachedLocation = [locationCache objectForKey:cacheKey];
     if (cachedLocation) {
         updateLabelWithLocation(label, cachedLocation);
-
-        NSString *ipScaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-        if (ipScaleValue.length > 0) {
-            UIFont *originalFont = label.font;
-            CGFloat offset = DYYYGetFloat(@"DYYYIPLabelVerticalOffset");
-            if (offset > 0) {
-                label.transform = CGAffineTransformMakeTranslation(0, -offset);
-            } else {
-                label.transform = CGAffineTransformMakeTranslation(0, -3);
-            }
-            label.font = originalFont;
-        }
+        DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionTimestampElement");
         return label;
     }
 
+    __weak __typeof(self) weakSelf = self;
     NSString *displayLocation = nil;
 
     if (cityCode.length > 0) {
@@ -5215,6 +5700,7 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
                             updateLabelWithLocation(label, fallbackCountry);
                         }
                     }
+                    DYYYApplyPlayInteractionElementLayoutFromElement(weakSelf, @"AWEPlayInteractionTimestampElement");
                 });
             }];
 
@@ -5229,24 +5715,19 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
     if (!displayLocation) {
         displayLocation = @"未知地区";
         updateLabelWithLocation(label, displayLocation);
+        DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionTimestampElement");
         return label;
     }
 
     [locationCache setObject:displayLocation forKey:cacheKey];
     updateLabelWithLocation(label, displayLocation);
-
-    NSString *ipScaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-    if (ipScaleValue.length > 0) {
-        UIFont *originalFont = label.font;
-        CGFloat offset = DYYYGetFloat(@"DYYYIPLabelVerticalOffset");
-        if (offset > 0) {
-            label.transform = CGAffineTransformMakeTranslation(0, -offset);
-        } else {
-            label.transform = CGAffineTransformMakeTranslation(0, -3);
-        }
-        label.font = originalFont;
-    }
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionTimestampElement");
     return label;
+}
+
+- (void)layoutElementView {
+    %orig;
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionTimestampElement");
 }
 
 + (BOOL)shouldActiveWithData:(id)arg1 context:(id)arg2 {
@@ -5314,26 +5795,6 @@ static void DYYYApplyFeedVideoCollectButtonSettingsWithRetry(AWEFeedVideoButton 
 
 - (void)layoutSubviews {
     %orig;
-
-    self.transform = CGAffineTransformIdentity;
-
-    NSString *descriptionOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDescriptionVerticalOffset"];
-    CGFloat verticalOffset = 0;
-    if (descriptionOffsetValue.length > 0) {
-        verticalOffset = [descriptionOffsetValue floatValue];
-    }
-
-    UIView *parentView = self.superview;
-    UIView *grandParentView = nil;
-
-    if (parentView) {
-        grandParentView = parentView.superview;
-    }
-
-    if (grandParentView && verticalOffset != 0) {
-        CGAffineTransform translationTransform = CGAffineTransformMakeTranslation(0, verticalOffset);
-        grandParentView.transform = translationTransform;
-    }
 }
 
 %end
@@ -5413,101 +5874,15 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 - (void)layoutSubviews {
     %orig;
-
-    self.transform = CGAffineTransformIdentity;
-
-    NSString *descriptionOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYDescriptionVerticalOffset"];
-    CGFloat verticalOffset = 0;
-    if (descriptionOffsetValue.length > 0) {
-        verticalOffset = [descriptionOffsetValue floatValue];
-    }
-
-    UIView *parentView = self.superview;
-    UIView *grandParentView = nil;
-
-    if (parentView) {
-        grandParentView = parentView.superview;
-    }
-
-    if (grandParentView && verticalOffset != 0) {
-        CGAffineTransform translationTransform = CGAffineTransformMakeTranslation(0, verticalOffset);
-        grandParentView.transform = translationTransform;
-    }
 }
 
 %end
-
-static CGFloat DYYYGetNicknameVerticalOffset(void) {
-    NSString *verticalOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameVerticalOffset"];
-    if (verticalOffsetValue.length == 0) {
-        return 0.0;
-    }
-    return [verticalOffsetValue floatValue];
-}
-
-static UIView *DYYYNicknameOffsetContainerForLabel(UIView *label) {
-    UIView *parentView = label.superview;
-    if (!parentView) {
-        return nil;
-    }
-
-    UIView *grandParentView = parentView.superview;
-    if (!grandParentView) {
-        return nil;
-    }
-
-    Class baseElementClass = %c(AWEBaseElementView);
-    if (baseElementClass && [grandParentView.superview isKindOfClass:baseElementClass]) {
-        return grandParentView;
-    }
-
-    for (UIView *ancestor = grandParentView; ancestor; ancestor = ancestor.superview) {
-        if (baseElementClass && [ancestor isKindOfClass:baseElementClass]) {
-            return ancestor;
-        }
-        if ([ancestor isKindOfClass:%c(AWEElementStackView)]) {
-            break;
-        }
-    }
-
-    return grandParentView;
-}
-
-static void DYYYApplyNicknameVerticalOffsetToLabel(UIView *label) {
-    if (!label) {
-        return;
-    }
-
-    CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
-    label.transform = CGAffineTransformIdentity;
-
-    UIView *targetView = DYYYNicknameOffsetContainerForLabel(label);
-    if (!targetView) {
-        return;
-    }
-
-    if (verticalOffset == 0) {
-        targetView.transform = CGAffineTransformIdentity;
-        return;
-    }
-
-    Class baseElementClass = %c(AWEBaseElementView);
-    BOOL usesLegacyXFix = baseElementClass &&
-        ([targetView.superview isKindOfClass:baseElementClass] || [targetView isKindOfClass:baseElementClass]);
-    if (usesLegacyXFix) {
-        CGRect scaledFrame = targetView.frame;
-        CGFloat translationX = -scaledFrame.origin.x;
-        targetView.transform = CGAffineTransformMakeTranslation(translationX, verticalOffset);
-    } else {
-        targetView.transform = CGAffineTransformMakeTranslation(0, verticalOffset);
-    }
-}
 
 %hook AWEUserNameLabel
 
 - (void)layoutSubviews {
     %orig;
-    DYYYApplyNicknameVerticalOffsetToLabel(self);
+    DYYYApplyNicknameLayoutToLabel(self);
 }
 
 %end
@@ -5518,8 +5893,11 @@ static void DYYYApplyNicknameVerticalOffsetToLabel(UIView *label) {
     %orig;
 
     if ([self respondsToSelector:@selector(authorLabel)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
         UIView *authorLabel = [self performSelector:@selector(authorLabel)];
-        DYYYApplyNicknameVerticalOffsetToLabel(authorLabel);
+#pragma clang diagnostic pop
+        DYYYApplyNicknameLayoutToLabel(authorLabel);
     }
 }
 
@@ -5529,13 +5907,25 @@ static void DYYYApplyNicknameVerticalOffsetToLabel(UIView *label) {
 
 - (void)layoutElementView {
     %orig;
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionAuthorElement");
+}
 
-    if ([self respondsToSelector:@selector(authorLabel)]) {
-        UIView *authorLabel = [self performSelector:@selector(authorLabel)];
-        if (authorLabel && ![authorLabel isKindOfClass:%c(AWEUserNameLabel)]) {
-            DYYYApplyNicknameVerticalOffsetToLabel(authorLabel);
-        }
-    }
+%end
+
+%hook AWEPlayInteractionStandardAuthorElement
+
+- (void)layoutElementView {
+    %orig;
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionStandardAuthorElement");
+}
+
+%end
+
+%hook AWEPlayInteractionDescriptionElement
+
+- (void)layoutElementView {
+    %orig;
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionDescriptionElement");
 }
 
 %end
@@ -15046,6 +15436,9 @@ static void DYYYRemoveKeyboardObserver(void) {
 }
 
 - (void)layoutSubviews {
+    // 先清掉子元素上的 transform，让原始排版基于未变换的 frame 计算
+    DYYYResetPlayInteractionLeftStackElementTransforms(self);
+
     %orig;
 
     UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
@@ -15074,20 +15467,7 @@ static void DYYYRemoveKeyboardObserver(void) {
             }
         }
 
-        BOOL isLeftStack = ([label isEqualToString:@"left"] || hasAnchor);
-        if (!isLeftStack) {
-            NSArray *subviews = [self.subviews copy];
-            for (NSInteger i = (NSInteger)subviews.count - 1; i >= 0; i--) {
-                UIView *sub = subviews[i];
-                if ([sub respondsToSelector:@selector(elementClassName)]) {
-                    NSString *elementClassName = [sub performSelector:@selector(elementClassName)];
-                    if ([elementClassName isEqualToString:@"AWEPlayInteractionDescriptionElement"]) {
-                        isLeftStack = YES;
-                        break;
-                    }
-                }
-            }
-        }
+        BOOL hasScalableLeftElement = DYYYStackViewContainsScalableLeftElement(self);
 
         // 右侧元素的处理逻辑
         if (isRightStack) {
@@ -15110,56 +15490,15 @@ static void DYYYRemoveKeyboardObserver(void) {
                 }
             }
         }
-        // 左侧元素的处理逻辑
-        else if (isLeftStack) {
-            NSString *scaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-            CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
-            CGFloat scale = scaleValue.length > 0 ? [scaleValue floatValue] : 1.0;
-            self.transform = CGAffineTransformIdentity;
-            if (scale > 0 && scale != 1.0) {
-                NSArray *subviews = [self.subviews copy];
-                CGFloat ty = 0;
-                for (UIView *view in subviews) {
-                    CGFloat viewHeight = view.frame.size.height;
-                    ty += (viewHeight - viewHeight * scale) / 2;
-                }
-                CGFloat frameWidth = self.frame.size.width;
-                CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
-                CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
-                newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale + verticalOffset);
-                self.transform = newTransform;
-            }
+        // 左侧昵称/文案元素按子元素分别缩放
+        else if (hasScalableLeftElement) {
+            DYYYApplyPlayInteractionLeftStackElementTransforms(self);
         }
     }
 
 }
 
 - (NSArray<__kindof UIView *> *)arrangedSubviews {
-
-    UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
-
-        if ([self.accessibilityLabel isEqualToString:@"left"] || [DYYYUtils containsSubviewOfClass:NSClassFromString(@"AWEFeedAnchorContainerView") inContainer:self]) {
-            NSString *scaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-            CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
-            CGFloat scale = scaleValue.length > 0 ? [scaleValue floatValue] : 1.0;
-            self.transform = CGAffineTransformIdentity;
-            if (scale > 0 && scale != 1.0) {
-                NSArray *subviews = [self.subviews copy];
-                CGFloat ty = 0;
-                for (UIView *view in subviews) {
-                    CGFloat viewHeight = view.frame.size.height;
-                    ty += (viewHeight - viewHeight * scale) / 2;
-                }
-                CGFloat frameWidth = self.frame.size.width;
-                CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
-                CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
-                newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale + verticalOffset);
-                self.transform = newTransform;
-            }
-        }
-    }
-
     NSArray *originalSubviews = %orig;
     return originalSubviews;
 }
@@ -15993,6 +16332,8 @@ static void findTargetViewInView(UIView *view) {
     }];
 
     DYYYMigrateCombinedHDRModeIfNeeded();
+    DYYYMigrateScaleAndSizeSettingsIfNeeded();
+    DYYYMigrateScaleAndSizeSettingsV2IfNeeded();
 
     %init(DYYYLoginBypassCore);
 

@@ -505,10 +505,11 @@ static NSSet<NSString *> *DYYYInlineTextInputIdentifiers(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
       identifiers = [NSSet setWithArray:@[
-          @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYCommentContent", @"DYYYDescriptionVerticalOffset",
-          @"DYYYElementScale", @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYFriendsTitle", @"DYYYGeonamesUsername",
-          @"DYYYGlobalTransparency", @"DYYYIPLabelVerticalOffset", @"DYYYIndexTitle", @"DYYYInterfaceDownload", @"DYYYMsgTitle",
-          @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius", @"DYYYRemoteConfigURL", @"DYYYSelfTitle",
+          @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYCommentContent", @"DYYYDescriptionScale",
+          @"DYYYDescriptionVerticalOffset", @"DYYYElementScale", @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYFriendsTitle",
+          @"DYYYGeonamesUsername", @"DYYYGlobalTransparency", @"DYYYIPLabelScale", @"DYYYIPLabelVerticalOffset", @"DYYYIndexTitle", @"DYYYInterfaceDownload",
+          @"DYYYMsgTitle", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius", @"DYYYRemoteConfigURL",
+          @"DYYYSelfTitle",
           @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
           @"DYYYVideoBGColor", @"DYYYDanmuColor", @"DYYYLabelColor", @"DYYYProgressLabelColor",
           @"DYYYEnableFloatClearButtonSize"
@@ -529,12 +530,25 @@ static NSString *DYYYInlineTextInputPlaceholder(NSString *identifier) {
     return placeholders[identifier] ?: @"不填则默认";
 }
 
+static NSSet<NSString *> *DYYYScaleSectionIdentifiers(void) {
+    static NSSet<NSString *> *identifiers = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      identifiers = [NSSet setWithArray:@[
+          @"DYYYElementScale", @"DYYYNicknameScale", @"DYYYDescriptionScale", @"DYYYIPLabelScale", @"DYYYNicknameVerticalOffset",
+          @"DYYYDescriptionVerticalOffset", @"DYYYIPLabelVerticalOffset", @"DYYYTabBarHeight"
+      ]];
+    });
+    return identifiers;
+}
+
 static UIKeyboardType DYYYInlineTextInputKeyboardType(NSString *identifier) {
+    if ([DYYYScaleSectionIdentifiers() containsObject:identifier]) {
+        return UIKeyboardTypeDefault;
+    }
     NSSet<NSString *> *decimalIdentifiers = [NSSet setWithArray:@[
-        @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYDescriptionVerticalOffset", @"DYYYElementScale",
-        @"DYYYGlobalTransparency", @"DYYYIPLabelVerticalOffset", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset",
-        @"DYYYNotificationCornerRadius", @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition",
-        @"DYYYTopBarTransparent", @"DYYYEnableFloatClearButtonSize"
+        @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYGlobalTransparency", @"DYYYNotificationCornerRadius",
+        @"DYYYSheetBlurTransparent", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent", @"DYYYEnableFloatClearButtonSize"
     ]];
     if ([identifier isEqualToString:@"DYYYFilterLowLikes"] || [identifier isEqualToString:@"DYYYFilterTimeLimit"]) {
         return UIKeyboardTypeNumberPad;
@@ -561,11 +575,10 @@ static NSString *DYYYInlineTextInputCurrentValue(NSString *identifier) {
 
 static CGFloat DYYYInlineTextInputPreferredWidth(NSString *identifier, CGFloat contentWidth) {
     NSSet<NSString *> *compactIdentifiers = [NSSet setWithArray:@[
-        @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYDescriptionVerticalOffset", @"DYYYElementScale",
-        @"DYYYEnableFloatClearButtonSize", @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYGlobalTransparency",
-        @"DYYYIPLabelVerticalOffset", @"DYYYNicknameScale",
-        @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius", @"DYYYSheetBlurTransparent",
-        @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent"
+        @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYDescriptionScale", @"DYYYDescriptionVerticalOffset",
+        @"DYYYElementScale", @"DYYYEnableFloatClearButtonSize", @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYGlobalTransparency",
+        @"DYYYIPLabelScale", @"DYYYIPLabelVerticalOffset", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius",
+        @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent"
     ]];
     NSSet<NSString *> *longIdentifiers = [NSSet setWithArray:@[
         @"DYYYCommentContent", @"DYYYInterfaceDownload", @"DYYYRemoteConfigURL"
@@ -2689,23 +2702,33 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"cellType" : @26,
             @"imageName" : @"ic_zoomin_outlined_20"},
           @{@"identifier" : @"DYYYNicknameScale",
-            @"title" : @"昵称文案缩放",
+            @"title" : @"昵称缩放控制",
+            @"detail" : @"不填默认",
+            @"cellType" : @26,
+            @"imageName" : @"ic_zoomin_outlined_20"},
+          @{@"identifier" : @"DYYYDescriptionScale",
+            @"title" : @"文案缩放控制",
+            @"detail" : @"不填默认",
+            @"cellType" : @26,
+            @"imageName" : @"ic_zoomin_outlined_20"},
+          @{@"identifier" : @"DYYYIPLabelScale",
+            @"title" : @"属地缩放控制",
             @"detail" : @"不填默认",
             @"cellType" : @26,
             @"imageName" : @"ic_zoomin_outlined_20"},
           @{@"identifier" : @"DYYYNicknameVerticalOffset",
-            @"title" : @"昵称下移距离",
-            @"detail" : @"不填默认",
+            @"title" : @"昵称Y轴距离",
+            @"detail" : @"上移为正下移为负",
             @"cellType" : @26,
             @"imageName" : @"ic_pensketch_outlined_20"},
           @{@"identifier" : @"DYYYDescriptionVerticalOffset",
-            @"title" : @"文案下移距离",
-            @"detail" : @"不填默认",
+            @"title" : @"文案Y轴距离",
+            @"detail" : @"上移为正下移为负",
             @"cellType" : @26,
             @"imageName" : @"ic_pensketch_outlined_20"},
           @{@"identifier" : @"DYYYIPLabelVerticalOffset",
-            @"title" : @"属地上移距离",
-            @"detail" : @"默认为 3",
+            @"title" : @"属地Y轴距离",
+            @"detail" : @"上移为正下移为负",
             @"cellType" : @26,
             @"imageName" : @"ic_pensketch_outlined_20"},
           @{@"identifier" : @"DYYYTabBarHeight",
