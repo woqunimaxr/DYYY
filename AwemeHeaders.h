@@ -119,6 +119,11 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)didFinishLoginWithUid:(NSString *)userID;
 @end
 
+@interface TTAccountMulticast : NSObject
++ (instancetype)sharedInstance;
+- (void)broadcastLoginSuccess:(id)user platform:(NSInteger)platform reason:(id)reason;
+@end
+
 @interface AWEAnimatedImageVideoInfo : NSObject
 @end
 

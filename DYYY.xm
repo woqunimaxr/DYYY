@@ -53,8 +53,7 @@ static char kDYYYGlobalTransparencyBaseAlphaKey;
 static NSInteger dyyyGlobalTransparencyMutationDepth = 0;
 
 static BOOL DYYYLoginBypassEnabled(void) {
-    id storedValue = [[NSUserDefaults standardUserDefaults] objectForKey:kDYYYEnableLoginBypassKey];
-    return storedValue == nil ? YES : [storedValue boolValue];
+    return [DYYYLoginBypassManager isLoginBypassEnabled];
 }
 
 static BOOL DYYYShouldBlockVersionUpdateWorkflow(void) {
@@ -308,6 +307,19 @@ static NSURL *DYYYLoginBypassURLByReplacingBundleIdentifier(NSURL *url) {
 - (void)didFinishLoginWithUid:(NSString *)userID {
     %orig(userID);
     [DYYYLoginBypassManager handleOfficialLoginCompletionWithUserID:userID];
+}
+
+%end
+
+%end
+
+%group DYYYLoginBypassAccountMulticast
+
+%hook TTAccountMulticast
+
+- (void)broadcastLoginSuccess:(id)user platform:(NSInteger)platform reason:(id)reason {
+    %orig(user, platform, reason);
+    [DYYYLoginBypassManager handleOfficialLoginCompletionWithUserID:user];
 }
 
 %end
@@ -16340,6 +16352,11 @@ static void findTargetViewInView(UIView *view) {
     Class loginListenerClass = objc_getClass("AWEUserServiceListener");
     if (loginListenerClass && class_getInstanceMethod(loginListenerClass, @selector(didFinishLoginWithUid:))) {
         %init(DYYYLoginBypassAccountLifecycle);
+    }
+    Class accountMulticastClass = objc_getClass("TTAccountMulticast");
+    if (accountMulticastClass &&
+        class_getInstanceMethod(accountMulticastClass, @selector(broadcastLoginSuccess:platform:reason:))) {
+        %init(DYYYLoginBypassAccountMulticast);
     }
     if (objc_getClass("AWEVersionUpdateManager")) {
         %init(DYYYLoginBypassVersionUpdateManager);
