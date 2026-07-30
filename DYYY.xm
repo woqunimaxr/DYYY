@@ -1821,13 +1821,13 @@ static BOOL DYYYShouldSkipPrivacyRecordTaskStart(id task) {
 static BOOL dyyyClearingFeedNowPlayingSystemInfo = NO;
 static CFTimeInterval dyyyLastFeedNowPlayingSystemClearTime = 0.0;
 
-static void DYYYClearFeedNowPlayingSystemInfoThrottled(void) {
-    if (!DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo") || dyyyClearingFeedNowPlayingSystemInfo) {
+static void DYYYClearFeedNowPlayingSystemInfo(BOOL ignoreThrottle) {
+    if (dyyyClearingFeedNowPlayingSystemInfo) {
         return;
     }
 
     CFTimeInterval currentTime = CFAbsoluteTimeGetCurrent();
-    if (currentTime - dyyyLastFeedNowPlayingSystemClearTime < 0.25) {
+    if (!ignoreThrottle && currentTime - dyyyLastFeedNowPlayingSystemClearTime < 0.25) {
         return;
     }
     dyyyLastFeedNowPlayingSystemClearTime = currentTime;
@@ -1858,8 +1858,74 @@ static void DYYYClearFeedNowPlayingSystemInfoThrottled(void) {
     }
 }
 
+static void DYYYClearFeedNowPlayingSystemInfoThrottled(void) {
+    if (!DYYYGetBool(DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY)) {
+        return;
+    }
+
+    DYYYClearFeedNowPlayingSystemInfo(NO);
+}
+
+static id DYYYSharedInstanceForClass(Class cls) {
+    if (!cls) {
+        return nil;
+    }
+
+    for (NSString *selectorName in @[ @"sharedManager", @"sharedInstance", @"defaultCenter", @"shared", @"defaultManager" ]) {
+        SEL selector = NSSelectorFromString(selectorName);
+        if ([cls respondsToSelector:selector]) {
+            id instance = ((id (*)(Class, SEL))objc_msgSend)(cls, selector);
+            if (instance) {
+                return instance;
+            }
+        }
+    }
+
+    return nil;
+}
+
+static void DYYYRefreshFeedNowPlayingInfoFromDouyin(void) {
+    for (NSString *className in @[ @"AWEFeedBackgroundPlayManager", @"AWENowPlayingInfoCenter", @"AWEAwemeBackgroundPlayModule" ]) {
+        id instance = DYYYSharedInstanceForClass(NSClassFromString(className));
+        if (!instance) {
+            continue;
+        }
+
+        SEL forceRefreshSelector = @selector(refreshNowPlayingInfoIsForce:);
+        if ([instance respondsToSelector:forceRefreshSelector]) {
+            ((void (*)(id, SEL, BOOL))objc_msgSend)(instance, forceRefreshSelector, YES);
+        }
+
+        SEL refreshSelector = @selector(refreshNowPlayingInfo);
+        if ([instance respondsToSelector:refreshSelector]) {
+            ((void (*)(id, SEL))objc_msgSend)(instance, refreshSelector);
+        }
+
+        SEL refreshIfNeededSelector = @selector(refreshNowPlayingInfoIfNeeded);
+        if ([instance respondsToSelector:refreshIfNeededSelector]) {
+            ((void (*)(id, SEL))objc_msgSend)(instance, refreshIfNeededSelector);
+        }
+
+        SEL updatePlaybackSelector = @selector(updateNowPlayingInfoPlayback);
+        if ([instance respondsToSelector:updatePlaybackSelector]) {
+            ((void (*)(id, SEL))objc_msgSend)(instance, updatePlaybackSelector);
+        }
+    }
+}
+
+void DYYYApplyFeedNowPlayingSettingChange(BOOL disableNowPlayingInfo) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (disableNowPlayingInfo) {
+            DYYYClearFeedNowPlayingSystemInfo(YES);
+            return;
+        }
+
+        DYYYRefreshFeedNowPlayingInfoFromDouyin();
+    });
+}
+
 static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
-    return DYYYGetBool(@"DYYYDisableFeedNowPlayingInfo") && !dyyyClearingFeedNowPlayingSystemInfo;
+    return DYYYGetBool(DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY) && !dyyyClearingFeedNowPlayingSystemInfo;
 }
 
 %hook AWEAwemeBackgroundPlayModule
@@ -15742,7 +15808,7 @@ static void findTargetViewInView(UIView *view) {
     [DYYYLoginBypassManager configureInitialStateIfNeeded];
 
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
-        @"DYYYDisableFeedNowPlayingInfo" : @YES,
+        DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY : @NO,
         @"DYYYSpeedSettings" : @"1.0,1.25,1.5,2.0",
         @"DYYYSpeedButtonSize" : @32.0,
         kDYYYEnableLoginBypassKey : @YES

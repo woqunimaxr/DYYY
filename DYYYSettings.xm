@@ -2376,6 +2376,16 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
               };
           }
 
+          if ([item.identifier isEqualToString:kDYYYFeedNowPlayingSettingIdentifier]) {
+              void (^originalSwitchChangedBlock)(void) = item.switchChangedBlock;
+              item.switchChangedBlock = ^{
+                if (originalSwitchChangedBlock) {
+                    originalSwitchChangedBlock();
+                }
+                DYYYApplyFeedNowPlayingSettingChange([DYYYSettingsHelper getUserDefaults:kDYYYFeedNowPlayingSettingIdentifier]);
+              };
+          }
+
           [miscellaneousItems addObject:item];
       }
       // 【过滤与屏蔽】分类

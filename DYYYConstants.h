@@ -21,4 +21,14 @@
 #define DYYYGeonamesErrorDomain @"com.dyyy.geonames.api.error"
 #define DYYYGeonamesStatusUserInfoKey @"com.dyyy.geonames.api.status"
 
+#define DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY @"DYYYDisableFeedNowPlayingInfo"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+void DYYYApplyFeedNowPlayingSettingChange(BOOL disableNowPlayingInfo);
+#ifdef __cplusplus
+}
+#endif
+
 #endif
