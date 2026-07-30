@@ -1032,6 +1032,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEUserNameLabel : UIView
 @end
 
+@interface AWEPlayInteractionAuthorElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionStandardAuthorNamePlugin : NSObject
+- (void)authorElement_didLayout;
+@end
+
 @interface AWEPlayInteractionDescriptionLabel : UILabel
 @end
 // 关注直播

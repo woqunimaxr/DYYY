@@ -5437,34 +5437,104 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 
 %end
 
+static CGFloat DYYYGetNicknameVerticalOffset(void) {
+    NSString *verticalOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameVerticalOffset"];
+    if (verticalOffsetValue.length == 0) {
+        return 0.0;
+    }
+    return [verticalOffsetValue floatValue];
+}
+
+static UIView *DYYYNicknameOffsetContainerForLabel(UIView *label) {
+    UIView *parentView = label.superview;
+    if (!parentView) {
+        return nil;
+    }
+
+    UIView *grandParentView = parentView.superview;
+    if (!grandParentView) {
+        return nil;
+    }
+
+    Class baseElementClass = %c(AWEBaseElementView);
+    if (baseElementClass && [grandParentView.superview isKindOfClass:baseElementClass]) {
+        return grandParentView;
+    }
+
+    for (UIView *ancestor = grandParentView; ancestor; ancestor = ancestor.superview) {
+        if (baseElementClass && [ancestor isKindOfClass:baseElementClass]) {
+            return ancestor;
+        }
+        if ([ancestor isKindOfClass:%c(AWEElementStackView)]) {
+            break;
+        }
+    }
+
+    return grandParentView;
+}
+
+static void DYYYApplyNicknameVerticalOffsetToLabel(UIView *label) {
+    if (!label) {
+        return;
+    }
+
+    CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
+    label.transform = CGAffineTransformIdentity;
+
+    UIView *targetView = DYYYNicknameOffsetContainerForLabel(label);
+    if (!targetView) {
+        return;
+    }
+
+    if (verticalOffset == 0) {
+        targetView.transform = CGAffineTransformIdentity;
+        return;
+    }
+
+    Class baseElementClass = %c(AWEBaseElementView);
+    BOOL usesLegacyXFix = baseElementClass &&
+        ([targetView.superview isKindOfClass:baseElementClass] || [targetView isKindOfClass:baseElementClass]);
+    if (usesLegacyXFix) {
+        CGRect scaledFrame = targetView.frame;
+        CGFloat translationX = -scaledFrame.origin.x;
+        targetView.transform = CGAffineTransformMakeTranslation(translationX, verticalOffset);
+    } else {
+        targetView.transform = CGAffineTransformMakeTranslation(0, verticalOffset);
+    }
+}
+
 %hook AWEUserNameLabel
 
 - (void)layoutSubviews {
     %orig;
+    DYYYApplyNicknameVerticalOffsetToLabel(self);
+}
 
-    self.transform = CGAffineTransformIdentity;
+%end
 
-    // 添加垂直偏移支持
-    NSString *verticalOffsetValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameVerticalOffset"];
-    CGFloat verticalOffset = 0;
-    if (verticalOffsetValue.length > 0) {
-        verticalOffset = [verticalOffsetValue floatValue];
+%hook AWEPlayInteractionStandardAuthorNamePlugin
+
+- (void)authorElement_didLayout {
+    %orig;
+
+    if ([self respondsToSelector:@selector(authorLabel)]) {
+        UIView *authorLabel = [self performSelector:@selector(authorLabel)];
+        DYYYApplyNicknameVerticalOffsetToLabel(authorLabel);
     }
+}
 
-    UIView *parentView = self.superview;
-    UIView *grandParentView = nil;
+%end
 
-    if (parentView) {
-        grandParentView = parentView.superview;
-    }
+%hook AWEPlayInteractionAuthorElement
 
-    // 检查祖父视图是否为 AWEBaseElementView 类型
-    if (grandParentView && [grandParentView.superview isKindOfClass:%c(AWEBaseElementView)]) {
-        CGRect scaledFrame = grandParentView.frame;
-        CGFloat translationX = -scaledFrame.origin.x;
+- (void)layoutElementView {
+    %orig;
 
-        CGAffineTransform translationTransform = CGAffineTransformMakeTranslation(translationX, verticalOffset);
-        grandParentView.transform = translationTransform;
+    if ([self respondsToSelector:@selector(authorLabel)]) {
+        UIView *authorLabel = [self performSelector:@selector(authorLabel)];
+        if (authorLabel && ![authorLabel isKindOfClass:%c(AWEUserNameLabel)]) {
+            DYYYApplyNicknameVerticalOffsetToLabel(authorLabel);
+        }
     }
 }
 
@@ -15043,22 +15113,21 @@ static void DYYYRemoveKeyboardObserver(void) {
         // 左侧元素的处理逻辑
         else if (isLeftStack) {
             NSString *scaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-            if (scaleValue.length > 0) {
-                CGFloat scale = [scaleValue floatValue];
-                self.transform = CGAffineTransformIdentity;
-                if (scale > 0 && scale != 1.0) {
-                    NSArray *subviews = [self.subviews copy];
-                    CGFloat ty = 0;
-                    for (UIView *view in subviews) {
-                        CGFloat viewHeight = view.frame.size.height;
-                        ty += (viewHeight - viewHeight * scale) / 2;
-                    }
-                    CGFloat frameWidth = self.frame.size.width;
-                    CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
-                    CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
-                    newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale);
-                    self.transform = newTransform;
+            CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
+            CGFloat scale = scaleValue.length > 0 ? [scaleValue floatValue] : 1.0;
+            self.transform = CGAffineTransformIdentity;
+            if (scale > 0 && scale != 1.0) {
+                NSArray *subviews = [self.subviews copy];
+                CGFloat ty = 0;
+                for (UIView *view in subviews) {
+                    CGFloat viewHeight = view.frame.size.height;
+                    ty += (viewHeight - viewHeight * scale) / 2;
                 }
+                CGFloat frameWidth = self.frame.size.width;
+                CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
+                CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
+                newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale + verticalOffset);
+                self.transform = newTransform;
             }
         }
     }
@@ -15072,22 +15141,21 @@ static void DYYYRemoveKeyboardObserver(void) {
 
         if ([self.accessibilityLabel isEqualToString:@"left"] || [DYYYUtils containsSubviewOfClass:NSClassFromString(@"AWEFeedAnchorContainerView") inContainer:self]) {
             NSString *scaleValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYNicknameScale"];
-            if (scaleValue.length > 0) {
-                CGFloat scale = [scaleValue floatValue];
-                self.transform = CGAffineTransformIdentity;
-                if (scale > 0 && scale != 1.0) {
-                    NSArray *subviews = [self.subviews copy];
-                    CGFloat ty = 0;
-                    for (UIView *view in subviews) {
-                        CGFloat viewHeight = view.frame.size.height;
-                        ty += (viewHeight - viewHeight * scale) / 2;
-                    }
-                    CGFloat frameWidth = self.frame.size.width;
-                    CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
-                    CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
-                    newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale);
-                    self.transform = newTransform;
+            CGFloat verticalOffset = DYYYGetNicknameVerticalOffset();
+            CGFloat scale = scaleValue.length > 0 ? [scaleValue floatValue] : 1.0;
+            self.transform = CGAffineTransformIdentity;
+            if (scale > 0 && scale != 1.0) {
+                NSArray *subviews = [self.subviews copy];
+                CGFloat ty = 0;
+                for (UIView *view in subviews) {
+                    CGFloat viewHeight = view.frame.size.height;
+                    ty += (viewHeight - viewHeight * scale) / 2;
                 }
+                CGFloat frameWidth = self.frame.size.width;
+                CGFloat left_tx = (frameWidth - frameWidth * scale) / 2 - frameWidth * (1 - scale);
+                CGAffineTransform newTransform = CGAffineTransformMakeScale(scale, scale);
+                newTransform = CGAffineTransformTranslate(newTransform, left_tx / scale, ty / scale + verticalOffset);
+                self.transform = newTransform;
             }
         }
     }
