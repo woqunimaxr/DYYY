@@ -22,6 +22,7 @@
 #import "AwemeHeaders.h"
 #import "CityManager.h"
 #import "DYYYBottomAlertView.h"
+#import "DYYYGlassConfirmView.h"
 #import "DYYYManager.h"
 
 #import "AWMSafeDispatchTimer.h"
@@ -4378,6 +4379,209 @@ static void DYYYRunDeferredFollowConfirm(void (^action)(void)) {
     }
 }
 
+%end
+
+static BOOL DYYYIsFollowRelationToastText(NSString *text) {
+    if (![text isKindOfClass:[NSString class]] || text.length == 0) {
+        return NO;
+    }
+    return [text containsString:@"已取消关注"] || [text containsString:@"关注成功"] || [text isEqualToString:@"已关注"] ||
+           [text containsString:@"取消关注成功"];
+}
+
+// 统一到视频页「已取消关注」高度：安全区顶部 + 76pt（对齐用户参考图1）
+static const CGFloat kDYYYFollowToastTopOffset = 76.0;
+
+static UIWindow *DYYYToastReferenceWindow(void) {
+    UIWindow *window = [DYYYUtils getActiveWindow];
+    if (!window) {
+        window = UIApplication.sharedApplication.windows.firstObject;
+    }
+    return window;
+}
+
+static CGPoint DYYYTopToastCenterPointInView(UIView *view) {
+    UIWindow *window = DYYYToastReferenceWindow();
+    if (!window) {
+        return CGPointMake(UIScreen.mainScreen.bounds.size.width / 2.0, kDYYYFollowToastTopOffset);
+    }
+
+    CGFloat safeTop = 0.0;
+    if (@available(iOS 11.0, *)) {
+        safeTop = window.safeAreaInsets.top;
+    }
+    CGPoint windowPoint = CGPointMake(CGRectGetMidX(window.bounds), safeTop + kDYYYFollowToastTopOffset);
+
+    if (view && view != window) {
+        return [view convertPoint:windowPoint fromView:window];
+    }
+    return windowPoint;
+}
+
+%hook DUXToast
++ (void)showText:(NSString *)text {
+    if (DYYYIsFollowRelationToastText(text) && [self respondsToSelector:@selector(showText:withCenterPoint:)]) {
+        [self showText:text withCenterPoint:DYYYTopToastCenterPointInView(nil)];
+        return;
+    }
+    %orig;
+}
+
++ (void)showText:(NSString *)text withCenterPoint:(CGPoint)centerPoint {
+    if (DYYYIsFollowRelationToastText(text)) {
+        centerPoint = DYYYTopToastCenterPointInView(nil);
+    }
+    %orig(text, centerPoint);
+}
+
++ (void)showText:(NSString *)text onView:(UIView *)view {
+    if (DYYYIsFollowRelationToastText(text) && [self respondsToSelector:@selector(showText:onView:withCenterPoint:)]) {
+        [self showText:text onView:view withCenterPoint:DYYYTopToastCenterPointInView(view)];
+        return;
+    }
+    %orig;
+}
+
++ (void)showText:(NSString *)text onView:(UIView *)view withCenterPoint:(CGPoint)centerPoint {
+    if (DYYYIsFollowRelationToastText(text)) {
+        centerPoint = DYYYTopToastCenterPointInView(view);
+    }
+    %orig(text, view, centerPoint);
+}
+
+- (void)show {
+    NSString *text = nil;
+    if ([self respondsToSelector:@selector(text)]) {
+        text = [(id)self text];
+    }
+    if (DYYYIsFollowRelationToastText(text) && [self respondsToSelector:@selector(showWithCenterPoint:)]) {
+        [(id)self showWithCenterPoint:DYYYTopToastCenterPointInView(nil)];
+        return;
+    }
+    %orig;
+}
+
+- (void)showOnView:(UIView *)view {
+    NSString *text = nil;
+    if ([self respondsToSelector:@selector(text)]) {
+        text = [(id)self text];
+    }
+    if (DYYYIsFollowRelationToastText(text) && [self respondsToSelector:@selector(showOnView:withCenterPoint:)]) {
+        [(id)self showOnView:view withCenterPoint:DYYYTopToastCenterPointInView(view)];
+        return;
+    }
+    %orig;
+}
+
+- (void)showWithCenterPoint:(CGPoint)centerPoint {
+    NSString *text = nil;
+    if ([self respondsToSelector:@selector(text)]) {
+        text = [(id)self text];
+    }
+    if (DYYYIsFollowRelationToastText(text)) {
+        centerPoint = DYYYTopToastCenterPointInView(nil);
+    }
+    %orig(centerPoint);
+}
+
+- (void)showOnView:(UIView *)view withCenterPoint:(CGPoint)centerPoint {
+    NSString *text = nil;
+    if ([self respondsToSelector:@selector(text)]) {
+        text = [(id)self text];
+    }
+    if (DYYYIsFollowRelationToastText(text)) {
+        centerPoint = DYYYTopToastCenterPointInView(view);
+    }
+    %orig(view, centerPoint);
+}
+%end
+
+static BOOL DYYYProfileFollowConfirmIsShowing = NO;
+
+static id DYYYUserModelFromProfileHeaderContext(id headerContext) {
+    if (!headerContext) {
+        return nil;
+    }
+    if ([headerContext respondsToSelector:@selector(userModel)]) {
+        return [headerContext userModel];
+    }
+    return nil;
+}
+
+static void DYYYShowProfileFollowGlassConfirm(id user, void (^confirmAction)(void)) {
+    if (!confirmAction || DYYYProfileFollowConfirmIsShowing) {
+        return;
+    }
+
+    NSString *nickname = @"";
+    NSString *signature = @"";
+    if (user) {
+        if ([user respondsToSelector:@selector(nickname)]) {
+            nickname = [user valueForKey:@"nickname"] ?: @"";
+        }
+        if ([user respondsToSelector:@selector(signature)]) {
+            signature = [user valueForKey:@"signature"] ?: @"";
+        }
+    }
+
+    NSString *title = nickname.length > 0 ? nickname : @"关注确认";
+    NSString *message = signature.length > 0 ? signature : @"确定要关注该用户吗？";
+
+    DYYYProfileFollowConfirmIsShowing = YES;
+    [DYYYGlassConfirmView showWithTitle:title
+                                message:message
+                       cancelButtonText:@"取消"
+                      confirmButtonText:@"确定"
+                            cancelAction:^{
+                              DYYYProfileFollowConfirmIsShowing = NO;
+                            }
+                           confirmAction:^{
+                              DYYYProfileFollowConfirmIsShowing = NO;
+                              DYYYRunDeferredFollowConfirm(confirmAction);
+                            }];
+}
+
+%hook AWEProfileFollowAreaFollowComponent
+- (void)handleFollowEventWithHeaderContext:(id)headerContext
+                               enterMethod:(id)enterMethod
+                             fromTopButton:(BOOL)fromTopButton
+                                completion:(id)completion {
+    if (DYYYGetBool(@"DYYYFollowTips")) {
+        id user = DYYYUserModelFromProfileHeaderContext(headerContext);
+        DYYYShowProfileFollowGlassConfirm(user, ^{
+          %orig(headerContext, enterMethod, fromTopButton, completion);
+        });
+        return;
+    }
+
+    %orig;
+}
+%end
+
+%hook AWEProfileHeaderFollowAreaCell
+- (void)p_follow:(id)sender {
+    if (DYYYGetBool(@"DYYYFollowTips")) {
+        id user = DYYYUserModelFromProfileHeaderContext(self.context);
+        DYYYShowProfileFollowGlassConfirm(user, ^{
+          %orig(sender);
+        });
+        return;
+    }
+
+    %orig;
+}
+
+- (void)followUser {
+    if (DYYYGetBool(@"DYYYFollowTips")) {
+        id user = DYYYUserModelFromProfileHeaderContext(self.context);
+        DYYYShowProfileFollowGlassConfirm(user, ^{
+          %orig;
+        });
+        return;
+    }
+
+    %orig;
+}
 %end
 
 %hook AWEFeedTopBarContainer

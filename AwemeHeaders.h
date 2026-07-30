@@ -68,7 +68,16 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface DUXToast : NSObject
+@property(nonatomic, copy) NSString *text;
+@property(nonatomic, assign) CGPoint centerPoint;
 + (void)showText:(NSString *)text;
++ (void)showText:(NSString *)text withCenterPoint:(CGPoint)centerPoint;
++ (void)showText:(NSString *)text onView:(UIView *)view;
++ (void)showText:(NSString *)text onView:(UIView *)view withCenterPoint:(CGPoint)centerPoint;
+- (void)show;
+- (void)showOnView:(UIView *)view;
+- (void)showWithCenterPoint:(CGPoint)centerPoint;
+- (void)showOnView:(UIView *)view withCenterPoint:(CGPoint)centerPoint;
 @end
 
 @interface AWEURLModel : NSObject
@@ -854,6 +863,24 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEUserProfileUGCTaskCardStyleListCollectionViewCell : UICollectionViewCell
+@end
+
+@interface AWEProfileHeaderContext : NSObject
+@property(nonatomic, strong) AWEUserModel *userModel;
+@end
+
+@interface AWEProfileFollowAreaFollowComponent : NSObject
++ (long long)effectiveFollowStatusWithHeaderContext:(AWEProfileHeaderContext *)headerContext;
+- (void)handleFollowEventWithHeaderContext:(AWEProfileHeaderContext *)headerContext
+                               enterMethod:(id)enterMethod
+                             fromTopButton:(BOOL)fromTopButton
+                                completion:(id)completion;
+@end
+
+@interface AWEProfileHeaderFollowAreaCell : UICollectionViewController
+@property(nonatomic, strong) AWEProfileHeaderContext *context;
+- (void)p_follow:(id)sender;
+- (void)followUser;
 @end
 
 @interface AWEProfileUserDetailComponent : NSObject
