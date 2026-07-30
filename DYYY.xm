@@ -2199,11 +2199,22 @@ static NSArray *DYYYFilteredSDRBitrateModels(NSArray *models);
 static NSArray *DYYYFilteredSDRRawBitrateData(NSArray *rawData);
 static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
 
+// 读取单个码率档位的比特率；档位类型不符或字段缺失时返回 -1，排序时会被沉到末尾。
+static NSInteger DYYYBitrateForBitrateModel(id model) {
+    Class bitrateModelClass = %c(AWEVideoBSModel);
+    if (!bitrateModelClass || ![model isKindOfClass:bitrateModelClass]) {
+        return -1;
+    }
+
+    id bitrateValue = [model bitrate];
+    return bitrateValue ? [bitrateValue integerValue] : -1;
+}
+
 // 默认视频流最高画质
 %hook AWEVideoModel
 
 - (AWEURLModel *)playURL {
-    if (!DYYYGetBool(@"DYYYEnableVideoHighestQuality")) {
+    if (!DYYYGetBoolCached(@"DYYYEnableVideoHighestQuality")) {
         return %orig;
     }
 
@@ -2218,18 +2229,8 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
     NSInteger highestBitrate = 0;
 
     for (id model in bitrateModels) {
-        NSInteger bitrate = 0;
-        BOOL validModel = NO;
-
-        if ([model isKindOfClass:NSClassFromString(@"AWEVideoBSModel")]) {
-            id bitrateValue = [model bitrate];
-            if (bitrateValue) {
-                bitrate = [bitrateValue integerValue];
-                validModel = YES;
-            }
-        }
-
-        if (validModel && bitrate > highestBitrate) {
+        NSInteger bitrate = DYYYBitrateForBitrateModel(model);
+        if (bitrate >= 0 && bitrate > highestBitrate) {
             highestBitrate = bitrate;
             highestBitrateModel = model;
         }
@@ -2256,44 +2257,26 @@ static void DYYYStripHDRHintsFromBitrateModels(NSArray *models);
         originalModels = filteredModels;
     }
 
-    if (!DYYYGetBool(@"DYYYEnableVideoHighestQuality")) {
+    if (!DYYYGetBoolCached(@"DYYYEnableVideoHighestQuality")) {
         return originalModels;
     }
 
-    if (originalModels.count == 0) {
+    if (originalModels.count < 2) {
         return originalModels;
     }
 
-    // 查找比特率最高的模型
-    id highestBitrateModel = nil;
-    NSInteger highestBitrate = 0;
-
-    for (id model in originalModels) {
-
-        NSInteger bitrate = 0;
-        BOOL validModel = NO;
-
-        if ([model isKindOfClass:NSClassFromString(@"AWEVideoBSModel")]) {
-            id bitrateValue = [model bitrate];
-            if (bitrateValue) {
-                bitrate = [bitrateValue integerValue];
-                validModel = YES;
-            }
-        }
-
-        if (validModel) {
-            if (bitrate > highestBitrate) {
-                highestBitrate = bitrate;
-                highestBitrateModel = model;
-            }
-        }
-    }
-
-    if (highestBitrateModel) {
-        return @[ highestBitrateModel ];
-    }
-
-    return originalModels;
+    // 按比特率降序排列，最高画质档位置于首位。
+    // 这里刻意保留完整档位表而不裁剪成单档：只留最高码率会让播放器在带宽下滑时无档可退，
+    // 只能停在原地反复重缓冲，表现为播放中途卡住。保留低码率档后仍可自适应降级。
+    return [originalModels sortedArrayWithOptions:NSSortStable
+                                  usingComparator:^NSComparisonResult(id lhs, id rhs) {
+                                    NSInteger leftBitrate = DYYYBitrateForBitrateModel(lhs);
+                                    NSInteger rightBitrate = DYYYBitrateForBitrateModel(rhs);
+                                    if (leftBitrate == rightBitrate) {
+                                        return NSOrderedSame;
+                                    }
+                                    return leftBitrate > rightBitrate ? NSOrderedAscending : NSOrderedDescending;
+                                  }];
 }
 
 - (void)setBitrateModels:(NSArray *)bitrateModels {
@@ -2477,12 +2460,30 @@ static void DYYYMigrateScaleAndSizeSettingsV2IfNeeded(void) {
     });
 }
 
+// HDR 模式判定被 AVPlayerLayer、CALayer、UIImageView 等极高频钩子反复调用，
+// 每次读取字符串偏好并比较的开销在滚动时不可忽略，这里按设置代际号缓存结果。
 static BOOL DYYYShouldDisableAllHDR(void) {
-    return [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeDisable];
+    static uint32_t cachedGeneration = UINT32_MAX;
+    static BOOL cachedValue = NO;
+
+    uint32_t generation = gDYYYSettingsGeneration;
+    if (cachedGeneration != generation) {
+        cachedValue = [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeDisable];
+        cachedGeneration = generation;
+    }
+    return cachedValue;
 }
 
 static BOOL DYYYShouldFilterGlobalHDR(void) {
-    return [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeFilter];
+    static uint32_t cachedGeneration = UINT32_MAX;
+    static BOOL cachedValue = NO;
+
+    uint32_t generation = gDYYYSettingsGeneration;
+    if (cachedGeneration != generation) {
+        cachedValue = [[[NSUserDefaults standardUserDefaults] stringForKey:kDYYYHDRModeKey] isEqualToString:kDYYYHDRModeFilter];
+        cachedGeneration = generation;
+    }
+    return cachedValue;
 }
 
 static id DYYYKVCValueIfPossible(id object, NSString *key) {
@@ -4688,7 +4689,7 @@ static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallba
 %end
 
 static BOOL DYYYFeedVideoCollectButtonHideEnabled(void) {
-    return DYYYGetBool(@"DYYYHideCollectButton");
+    return DYYYGetBoolCached(@"DYYYHideCollectButton");
 }
 
 static NSString *DYYYObjectStringForSelector(id object, SEL selector) {
@@ -4767,8 +4768,10 @@ static void DYYYMarkFeedVideoCollectButtonLayerHidden(CALayer *layer) {
     }
 }
 
+// CALayer 的各个 setter 属于渲染最热路径，而关联对象查询需要经过 runtime 全局表。
+// 先判定开关（命中缓存后近乎零开销），关闭时直接短路，避免无谓的关联对象查找。
 static BOOL DYYYShouldForceHideFeedVideoCollectButtonLayer(CALayer *layer) {
-    return layer && objc_getAssociatedObject(layer, &kDYYYFeedVideoCollectButtonHiddenLayerKey) && DYYYFeedVideoCollectButtonHideEnabled();
+    return layer && DYYYFeedVideoCollectButtonHideEnabled() && objc_getAssociatedObject(layer, &kDYYYFeedVideoCollectButtonHiddenLayerKey);
 }
 
 static BOOL DYYYShouldClearFeedVideoCollectButtonLayer(CALayer *layer) {
@@ -4780,13 +4783,13 @@ static void DYYYPrepareFeedVideoCollectButtonSublayer(CALayer *parentLayer, CALa
         return;
     }
 
-    if (objc_getAssociatedObject(parentLayer, &kDYYYFeedVideoCollectButtonHiddenLayerKey) && DYYYFeedVideoCollectButtonHideEnabled()) {
+    if (DYYYFeedVideoCollectButtonHideEnabled() && objc_getAssociatedObject(parentLayer, &kDYYYFeedVideoCollectButtonHiddenLayerKey)) {
         DYYYMarkFeedVideoCollectButtonLayerHidden(sublayer);
     }
 }
 
 static BOOL DYYYShouldForceHideFeedVideoCollectButtonView(UIView *view) {
-    return view && objc_getAssociatedObject(view, &kDYYYFeedVideoCollectButtonHiddenViewKey) && DYYYFeedVideoCollectButtonHideEnabled();
+    return view && DYYYFeedVideoCollectButtonHideEnabled() && objc_getAssociatedObject(view, &kDYYYFeedVideoCollectButtonHiddenViewKey);
 }
 
 static void DYYYClearFeedVideoCollectImageView(UIImageView *imageView) {
@@ -7673,19 +7676,20 @@ static char kDYYYAvatarActionChromeLayerKey;
 static char kDYYYAvatarSurroundingHiddenViewKey;
 
 static BOOL DYYYAvatarFollowOptionsEnabled(void) {
-    return DYYYGetBool(@"DYYYHideLOTAnimationView") || DYYYGetBool(@"DYYYHideFollowPromptView");
+    return DYYYGetBoolCached(@"DYYYHideLOTAnimationView") || DYYYGetBoolCached(@"DYYYHideFollowPromptView");
 }
 
+// 与收藏按钮同理：开关关闭时不再进入 runtime 关联对象表查询。
 static BOOL DYYYShouldForceHideAvatarActionLayer(CALayer *layer) {
-    return layer && objc_getAssociatedObject(layer, &kDYYYAvatarActionHiddenLayerKey) && DYYYAvatarFollowOptionsEnabled();
+    return layer && DYYYAvatarFollowOptionsEnabled() && objc_getAssociatedObject(layer, &kDYYYAvatarActionHiddenLayerKey);
 }
 
 static BOOL DYYYShouldClearAvatarActionLayer(CALayer *layer) {
-    if (!layer || (!objc_getAssociatedObject(layer, &kDYYYAvatarActionChromeLayerKey) &&
-                   !objc_getAssociatedObject(layer, &kDYYYAvatarActionHiddenLayerKey))) {
+    if (!layer || !DYYYAvatarFollowOptionsEnabled()) {
         return NO;
     }
-    return DYYYAvatarFollowOptionsEnabled();
+    return objc_getAssociatedObject(layer, &kDYYYAvatarActionChromeLayerKey) != nil ||
+           objc_getAssociatedObject(layer, &kDYYYAvatarActionHiddenLayerKey) != nil;
 }
 
 static void DYYYMarkAvatarActionLayerHidden(CALayer *layer) {
@@ -7746,20 +7750,22 @@ static void DYYYMarkAvatarActionViewHidden(UIView *view) {
 }
 
 static BOOL DYYYShouldForceAvatarActionViewHidden(UIView *view) {
-    if (!view) {
+    // 两个开关全关时结果必然为 NO，提前返回可省掉后面的关联对象查询。
+    if (!view || !DYYYAvatarFollowOptionsEnabled()) {
         return NO;
     }
 
     BOOL hideVisual = objc_getAssociatedObject(view, &kDYYYAvatarActionHiddenViewKey) != nil;
-    BOOL removeView = objc_getAssociatedObject(view, &kDYYYAvatarActionRemovedViewKey) != nil;
-    if (!hideVisual && !removeView) {
-        return NO;
+    if (hideVisual) {
+        return YES;
     }
-    return (hideVisual && DYYYAvatarFollowOptionsEnabled()) || (removeView && DYYYGetBool(@"DYYYHideFollowPromptView"));
+
+    BOOL removeView = objc_getAssociatedObject(view, &kDYYYAvatarActionRemovedViewKey) != nil;
+    return removeView && DYYYGetBoolCached(@"DYYYHideFollowPromptView");
 }
 
 static BOOL DYYYShouldClearAvatarActionViewChrome(UIView *view) {
-    return view && objc_getAssociatedObject(view, &kDYYYAvatarActionChromeViewKey) && DYYYGetBool(@"DYYYHideLOTAnimationView");
+    return view && DYYYGetBoolCached(@"DYYYHideLOTAnimationView") && objc_getAssociatedObject(view, &kDYYYAvatarActionChromeViewKey);
 }
 
 static void DYYYHideAvatarVisualForSelector(id object, SEL selector) {
@@ -7780,7 +7786,7 @@ static void DYYYMarkAvatarSurroundingViewHidden(UIView *view) {
 }
 
 static BOOL DYYYShouldForceAvatarSurroundingViewHidden(UIView *view) {
-    return view && objc_getAssociatedObject(view, &kDYYYAvatarSurroundingHiddenViewKey) && DYYYGetBool(@"DYYYHideAvatarButton");
+    return view && DYYYGetBoolCached(@"DYYYHideAvatarButton") && objc_getAssociatedObject(view, &kDYYYAvatarSurroundingHiddenViewKey);
 }
 
 static void DYYYHideAvatarSurroundingVisualForSelector(id object, SEL selector) {
@@ -10395,7 +10401,7 @@ static NSHashTable *processedParentViews = nil;
 - (void)layoutSubviews {
     %orig;
 
-    BOOL hideRightLabel = DYYYGetBool(@"DYYYHideRightLabel");
+    BOOL hideRightLabel = DYYYGetBoolCached(@"DYYYHideRightLabel");
     if (!hideRightLabel)
         return;
 
@@ -14584,7 +14590,7 @@ static Class tabBarButtonClass = nil;
         return;
     }
 
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+    if (DYYYGetBoolCached(@"DYYYEnableFullScreen")) {
         UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
         if ([vc isKindOfClass:%c(AWEAwemeDetailTableViewController)] ||
             [vc isKindOfClass:%c(AWEAwemeDetailCellViewController)]) {
@@ -14599,23 +14605,30 @@ static Class tabBarButtonClass = nil;
 - (void)layoutSubviews {
     %orig;
 
-    if (DYYYGetBool(@"DYYYEnableFullScreen")) {
+    BOOL enableFS = DYYYGetBoolCached(@"DYYYEnableFullScreen");
+    BOOL enableBlur = DYYYGetBoolCached(@"DYYYEnableCommentBlur");
+
+    // 全局 -layoutSubviews 会覆盖到界面上的每一个视图，两项开关都关闭时不必回溯响应链。
+    if (!enableFS && !enableBlur) {
+        return;
+    }
+
+    // 同一次布局里最多只回溯一次响应链，下面两段判定共用结果。
+    UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
+
+    if (enableFS) {
         if (self.frame.size.height == originalTabBarHeight && originalTabBarHeight > 0) {
-            UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-            if ([vc isKindOfClass:NSClassFromString(@"AWEMixVideoPanelDetailTableViewController")] || [vc isKindOfClass:NSClassFromString(@"AWECommentInputViewController")] ||
-                [vc isKindOfClass:NSClassFromString(@"AWEAwemeDetailTableViewController")]) {
+            if ([vc isKindOfClass:%c(AWEMixVideoPanelDetailTableViewController)] || [vc isKindOfClass:%c(AWECommentInputViewController)] ||
+                [vc isKindOfClass:%c(AWEAwemeDetailTableViewController)]) {
                 self.backgroundColor = [UIColor clearColor];
             }
         }
     }
 
-    if (DYYYGetBool(@"DYYYEnableFullScreen") || DYYYGetBool(@"DYYYEnableCommentBlur")) {
-        UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-        if ([vc isKindOfClass:%c(AWEPlayInteractionViewController)]) {
-            for (UIView *subview in self.subviews) {
-                if ([subview isKindOfClass:[UIView class]] && subview.backgroundColor && CGColorEqualToColor(subview.backgroundColor.CGColor, [UIColor blackColor].CGColor)) {
-                    subview.hidden = YES;
-                }
+    if ([vc isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+        for (UIView *subview in self.subviews) {
+            if ([subview isKindOfClass:[UIView class]] && subview.backgroundColor && CGColorEqualToColor(subview.backgroundColor.CGColor, [UIColor blackColor].CGColor)) {
+                subview.hidden = YES;
             }
         }
     }
@@ -14629,16 +14642,21 @@ static Class tabBarButtonClass = nil;
         return;
     }
 
-    BOOL enableBlur = DYYYGetBool(@"DYYYEnableCommentBlur");
-    BOOL enableFS = DYYYGetBool(@"DYYYEnableFullScreen");
+    BOOL enableBlur = DYYYGetBoolCached(@"DYYYEnableCommentBlur");
+    BOOL enableFS = DYYYGetBoolCached(@"DYYYEnableFullScreen");
+
+    // -setFrame: 在滚动时每帧会被调用上千次，而下面的响应链回溯与类查找只有
+    // 毛玻璃或全屏开启时才会用到。两者都关闭时直接放行，行为与未 Hook 时一致。
+    if (!enableBlur && !enableFS) {
+        %orig(frame);
+        return;
+    }
 
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
-    Class DetailVCClass = NSClassFromString(@"AWEMixVideoPanelDetailTableViewController");
-    Class PlayVCClass1 = NSClassFromString(@"AWEAwemePlayVideoViewController");
-    Class PlayVCClass2 = NSClassFromString(@"AWEDPlayerFeedPlayerViewController");
-    Class PlayVCClass3 = NSClassFromString(@"AWEDPlayerViewController_Merge");
+    Class PlayVCClass1 = %c(AWEAwemePlayVideoViewController);
+    Class PlayVCClass2 = %c(AWEDPlayerFeedPlayerViewController);
+    Class PlayVCClass3 = %c(AWEDPlayerViewController_Merge);
 
-    BOOL isDetailVC = (DetailVCClass && [vc isKindOfClass:DetailVCClass]);
     BOOL isPlayVC = ((PlayVCClass1 && [vc isKindOfClass:PlayVCClass1]) ||
                      (PlayVCClass2 && [vc isKindOfClass:PlayVCClass2]) ||
                      (PlayVCClass3 && [vc isKindOfClass:PlayVCClass3]));
@@ -16077,7 +16095,7 @@ static void DYYYRemoveKeyboardObserver(void) {
     }
 
     DYYYApplySDRDynamicRangeToImageView(self);
-    if (DYYYGetBool(@"DYYYHideCommentDiscover")) {
+    if (DYYYGetBoolCached(@"DYYYHideCommentDiscover")) {
         if (!self.accessibilityLabel) {
             UIView *parentView = self.superview;
 

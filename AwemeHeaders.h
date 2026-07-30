@@ -18,6 +18,26 @@ FOUNDATION_EXPORT void DYYYNSLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2)
 #define DYYYGetString(key) [[NSUserDefaults standardUserDefaults] stringForKey:key]
 #define DYYY_IGNORE_GLOBAL_ALPHA_TAG 114514
 
+// 设置项代际号：每当 NSUserDefaults 发生变更即自增，由 DYYYUtils 统一维护并广播。
+FOUNDATION_EXPORT uint32_t gDYYYSettingsGeneration;
+
+// 热路径设置读取。
+// -layoutSubviews / -setFrame: 一类钩子在滚动时每帧会被调用上千次，逐次查询
+// NSUserDefaults 会带来可观的键哈希与加锁开销。此宏让每个调用点各自缓存上次读到的值，
+// 仅在代际号变化时回源，读取结果与 DYYYGetBool 完全一致。
+// 仅适用于取值频繁且允许在同一 runloop 内复用结果的场景，普通调用继续用 DYYYGetBool。
+#define DYYYGetBoolCached(key)                                                                                                                                 \
+    ({                                                                                                                                                         \
+        static uint32_t _dyyyCachedGeneration = UINT32_MAX;                                                                                                    \
+        static BOOL _dyyyCachedValue = NO;                                                                                                                     \
+        uint32_t _dyyyGeneration = gDYYYSettingsGeneration;                                                                                                    \
+        if (_dyyyCachedGeneration != _dyyyGeneration) {                                                                                                        \
+            _dyyyCachedValue = DYYYGetBool(key);                                                                                                               \
+            _dyyyCachedGeneration = _dyyyGeneration;                                                                                                           \
+        }                                                                                                                                                      \
+        _dyyyCachedValue;                                                                                                                                      \
+    })
+
 typedef NS_ENUM(NSInteger, MediaType) { MediaTypeVideo, MediaTypeImage, MediaTypeAudio, MediaTypeHeic };
 
 // 调节模式&全局状态

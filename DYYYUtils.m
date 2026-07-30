@@ -110,11 +110,15 @@ void DYYYNSLog(NSString *format, ...) {
     });
     os_log_with_type(dyyyLogger, OS_LOG_TYPE_DEFAULT, "%{public}@", message);
 
+    // fflush 是同步系统调用，热路径上打日志会直接阻塞调用线程；
+    // 发布包只保留 os_log 与异步落盘，调试包仍输出到 stderr 便于终端观察。
+#if defined(DEBUG) && DEBUG
     const char *stderrMessage = message.UTF8String;
     if (stderrMessage) {
         fprintf(stderr, "%s\n", stderrMessage);
         fflush(stderr);
     }
+#endif
 
     static dispatch_queue_t logQueue = nil;
     static dispatch_once_t queueOnceToken;
@@ -431,6 +435,24 @@ static BOOL DYYYUtilsWriteStaticImageToGIF(UIImage *image, NSURL *gifURL) {
 @implementation DYYYUtils
 
 static const void *kCurrentIPRequestCityCodeKey = &kCurrentIPRequestCityCodeKey;
+
+#pragma mark - Settings Generation (设置项代际号)
+
+// 供 DYYYGetBoolCached 等热路径缓存判断是否需要回源查询 NSUserDefaults。
+uint32_t gDYYYSettingsGeneration = 0;
+
++ (void)load {
+    // 设置项变更后让所有热路径缓存失效；进入前台时再兜底刷新一次，
+    // 避免后台被其他进程改写偏好导致缓存滞留。
+    // 通知可能在任意线程投递，这里用宽松序原子自增，保证不会丢失失效信号；
+    // 读取侧仍是普通读，不给热路径引入内存屏障。
+    void (^invalidate)(NSNotification *) = ^(__unused NSNotification *note) {
+      __atomic_fetch_add(&gDYYYSettingsGeneration, 1, __ATOMIC_RELAXED);
+    };
+
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification object:nil queue:nil usingBlock:invalidate];
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:invalidate];
+}
 
 #pragma mark - Public Model Filtering Utilities (公共模型过滤工具)
 
