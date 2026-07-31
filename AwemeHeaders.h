@@ -1097,6 +1097,46 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)layoutElementView;
 @end
 
+@interface AWEPlayInteractionDanmakuElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionChapterElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionRecommendToFeedCardLabelElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionTagsElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionTagsElementV2 : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionMultiQueueLabelElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionEffectDetailLeftElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionECommerceEntryElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionDarenCardLeftElement : NSObject
+- (void)layoutElementView;
+@end
+
+@interface AWEPlayInteractionGoodsCardElement : NSObject
+- (void)layoutElementView;
+@end
+
 @interface AWEPlayInteractionStandardAuthorNamePlugin : NSObject
 - (void)authorElement_didLayout;
 @end
