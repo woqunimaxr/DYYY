@@ -31,6 +31,7 @@
 #import "DYYYFloatSpeedButton.h"
 #import "DYYYLivePreStreamLayoutCoordinator.h"
 #import "DYYYLoginBypassManager.h"
+#import "DYYYHideMusicButtonHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
@@ -7317,7 +7318,8 @@ static NSString *DYYYAdjustedNativeLongPressSpeedHint(NSString *text) {
                           ? lockedSpeed
                           : DYYYConfiguredLongPressPlaybackSpeed();
     } else if ([text containsString:@"恢复"]) {
-        targetSpeed = DYYYUnlockedNormalPlaybackSpeed();
+        // 与官方下滑取消一致：恢复目标是默认倍速，而不是快捷倍速按钮的非 1x 会话值。
+        targetSpeed = DYYYConfiguredDefaultPlaybackSpeed();
     }
     if (!isfinite(targetSpeed) || targetSpeed <= 0.0) {
         return text;
@@ -7472,13 +7474,27 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
         %orig(point, gesture);
 
         NSString *lockedAwemeID = speedManager.isLockedSpeedAwemeID;
-        double synchronizedSpeed = lockedAwemeID.length > 0
-                                       ? DYYYConfiguredLongPressPlaybackSpeed()
-                                       : DYYYUnlockedNormalPlaybackSpeed();
-        if (isfinite(synchronizedSpeed) &&
-            synchronizedSpeed > 0.0 &&
-            [speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
-            [speedManager setCurrentSpeed:synchronizedSpeed];
+        double synchronizedSpeed = 0.0;
+        if (lockedAwemeID.length > 0) {
+            // 官方上滑锁定：同步到配置的长按倍速。
+            synchronizedSpeed = DYYYConfiguredLongPressPlaybackSpeed();
+        } else {
+            // 官方下滑松手取消：必须真正回到默认倍速。
+            // 若此时仍把快捷倍速非 1x 当作“解锁后的正常倍速”，取消会被立刻写回，表现为无法解除。
+            if (isFloatSpeedButtonEnabled) {
+                setCurrentSpeedIndex(0);
+                updateSpeedButtonUI();
+            }
+            synchronizedSpeed = DYYYConfiguredDefaultPlaybackSpeed();
+        }
+        if (isfinite(synchronizedSpeed) && synchronizedSpeed > 0.0) {
+            if ([speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
+                [speedManager setCurrentSpeed:synchronizedSpeed];
+            }
+            if (lockedAwemeID.length == 0) {
+                DYYYApplyPlaybackSpeedThroughInteractionController(dyyyActivePlaybackInteractionController,
+                                                                   synchronizedSpeed);
+            }
         }
     } @finally {
         dyyyNativeLockCompletionActive = previousCompletionState;
@@ -7522,7 +7538,8 @@ static void DYYYEndLongPressVerticalAdjustment(id owner) {
                 speed = configuredSpeed;
             }
         } else if (fabs(speed - 1.0) <= DBL_EPSILON) {
-            speed = DYYYUnlockedNormalPlaybackSpeed();
+            // 官方取消路径传入 1.0 时，只能回到默认倍速，不能回写快捷倍速按钮的非 1x 值。
+            speed = DYYYConfiguredDefaultPlaybackSpeed();
         }
     }
 
@@ -8961,22 +8978,6 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
 }
 %end
 
-// 隐藏右下音乐和取消静音按钮
-%hook AFDCancelMuteAwemeView
-- (void)layoutSubviews {
-    %orig;
-
-    UIView *superview = self.superview;
-
-    if ([superview isKindOfClass:NSClassFromString(@"AWEBaseElementView")]) {
-        if (DYYYGetBool(@"DYYYHideCancelMute")) {
-            self.hidden = YES;
-            return;
-        }
-    }
-}
-%end
-
 // 隐藏弹幕按钮
 %hook AWEPlayDanmakuInputContainView
 
@@ -9776,35 +9777,6 @@ static void DYYYHideDouYinSelectAppGuideViews(id owner) {
     }
 }
 
-%end
-
-%hook AWEMusicCoverButton
-
-- (void)layoutSubviews {
-    %orig;
-    NSString *accessibilityLabel = self.accessibilityLabel;
-    if ([accessibilityLabel isEqualToString:@"音乐详情"]) {
-        if (DYYYGetBool(@"DYYYHideMusicButton")) {
-            UIView *parent = self.superview;
-            if (parent) {
-                [parent removeFromSuperview];
-            }
-            return;
-        }
-    }
-}
-
-%end
-
-%hook AWEPlayInteractionListenFeedView
-- (void)layoutSubviews {
-    %orig;
-
-    if (DYYYGetBool(@"DYYYHideMusicButton")) {
-        [self removeFromSuperview];
-        return;
-    }
-}
 %end
 
 %hook AWEPlayInteractionFollowPromptView
@@ -17091,6 +17063,7 @@ static void findTargetViewInView(UIView *view) {
             %init(EnableStickerSaveMenu);
         }
         DYYYStartMiniProgramRewardBypassInstaller();
+        DYYYStartHideMusicButtonHooks();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");

@@ -428,6 +428,15 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEMusicCoverButton : UIButton
 @end
 
+@interface AWEPlayInteractionMusicView : UIView
+@end
+
+@interface AWEPlayInteractionStyleOneMusicView : UIView
+@end
+
+@interface AWEPlayInteractionStyleTwoMusicView : UIView
+@end
+
 @interface AWEAwemePlayVideoViewController : UIViewController
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSKeyValueChangeKey, id> *)change context:(void *)context;
 - (void)setVideoControllerPlaybackRate:(double)arg0;
@@ -821,6 +830,9 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AFDCancelMuteAwemeView : UIView
 @property(nonatomic, strong, readonly) UIView *superview;
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
+@end
+
+@interface AWELiveCancelMuteAwemeView : UIView
 @end
 
 @interface AWEPlayDanmakuInputContainView : UIView
