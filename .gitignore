@@ -7,6 +7,8 @@ headers
 .vscode/
 build/
 output/
+.ipa_extract*/
+.deb_extract*/
 LatestBuild
 DYYY.mm
 DYYYSettings.mm

@@ -14,15 +14,18 @@ ARCHS = arm64 arm64e
 #export THEOS=/Users/huami/theos
 #export THEOS_PACKAGE_SCHEME=roothide
 
-# 根据参数选择打包方案
+# 本地默认 rootless；SCHEME=rootful / SCHEME=roothide 可切换
+SCHEME ?= rootless
 ifeq ($(SCHEME),roothide)
     export THEOS_PACKAGE_SCHEME = roothide
     export FINALPACKAGE = 1
+else ifeq ($(SCHEME),rootful)
+    unexport THEOS_PACKAGE_SCHEME
 else ifeq ($(SCHEME),rootless)
     export THEOS_PACKAGE_SCHEME = rootless
     export FINALPACKAGE = 1
 else
-    unexport THEOS_PACKAGE_SCHEME
+    $(error Unknown SCHEME=$(SCHEME); use rootless, rootful, or roothide)
 endif
 
 # 在GitHub Actions中运行时的特殊配置

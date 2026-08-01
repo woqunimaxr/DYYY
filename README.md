@@ -190,10 +190,12 @@ make clean package
 make package INSTALL=1
 ```
 
-- 切换不同包方案（示例 rootless）：
+- 默认打包为 rootless；切换其他方案：
 
 ```bash
-make package SCHEME=rootless
+make package                 # 默认 rootless
+make package SCHEME=rootful
+make package SCHEME=roothide
 ```
 
 - CI/无人值守：

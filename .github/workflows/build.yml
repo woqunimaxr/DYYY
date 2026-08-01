@@ -110,22 +110,21 @@ jobs:
 
       - name: Build Rootful
         run: |
-          make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          make package SCHEME=rootful FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootful.deb"
           done
 
       - name: Build Rootless
         run: |
-          #make package FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
-          make package THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          make package SCHEME=rootless FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-rootless.deb"
           done
 
       - name: Build Roothide
         run: |
-          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
+          make package SCHEME=roothide FINALPACKAGE=1 -j$(sysctl -n hw.ncpu)
           for f in packages/*.deb; do
             [ -f "$f" ] && [[ "$f" != *"-root"*".deb" ]] && mv "$f" "${f%.deb}-roothide.deb"
           done
