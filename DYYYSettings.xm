@@ -30,8 +30,7 @@
 @class DYYYIconOptionsDialogView;
 static void showIconOptionsDialog(NSString *title, UIImage *previewImage, NSString *saveFilename, void (^onClear)(void), void (^onSelect)(void));
 
-#import "DYYYBackupPickerDelegate.h"
-#import "DYYYImagePickerDelegate.h"
+#import "DYYYPickerDelegates.h"
 
 #ifdef __cplusplus
 extern "C" {

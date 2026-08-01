@@ -1,7 +1,7 @@
 #import "DYYYSettingsHelper.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
-#import "DYYYImagePickerDelegate.h"
+#import "DYYYPickerDelegates.h"
 #import "DYYYUtils.h"
 
 #import "DYYYAboutDialogView.h"

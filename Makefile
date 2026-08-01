@@ -41,9 +41,42 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = DYYY
 
-DYYY_FILES = DYYY.xm DYYYFloatClearButton.xm DYYYFloatSpeedButton.m DYYYSettings.xm DYYYABTestHook.xm DYYYLongPressPanel.xm DYYYSettingsHelper.m DYYYImagePickerDelegate.m DYYYBackupPickerDelegate.m DYYYBackupManager.m DYYYSettingViewController.m DYYYKeyboardAvoidanceCoordinator.m DYYYLivePreStreamLayoutCoordinator.m DYYYBottomAlertView.m DYYYCustomInputView.m DYYYOptionsSelectionView.m DYYYIconOptionsDialogView.m DYYYAboutDialogView.m DYYYGlassConfirmView.m DYYYKeywordListView.m DYYYFilterSettingsView.m DYYYConfirmCloseView.m DYYYToast.m DYYYManager.m DYYYUtils.m DYYYLoginBypassManager.m DYYYPrivacyRecordUploadGuard.m CityManager.m AWMSafeDispatchTimer.m
-DYYY_FILES += DYYYMiniProgramRewardBypass.m DYYYHideMusicButtonHooks.m
-DYYY_CFLAGS = -fobjc-arc -w
+DYYY_FILES = DYYY.xm \
+	DYYYFloatClearButton.xm \
+	DYYYSettings.xm \
+	DYYYABTestHook.xm \
+	DYYYLongPressPanel.xm \
+	Sources/Features/DYYYFloatSpeedButton.m \
+	Sources/Settings/DYYYSettingsHelper.m \
+	Sources/Settings/DYYYPickerDelegates.m \
+	Sources/Media/DYYYBackupManager.m \
+	Sources/Settings/DYYYSettingViewController.m \
+	Sources/UI/DYYYKeyboardAvoidanceCoordinator.m \
+	Sources/Features/DYYYLivePreStreamLayoutCoordinator.m \
+	Sources/UI/DYYYBottomAlertView.m \
+	Sources/UI/DYYYCustomInputView.m \
+	Sources/UI/DYYYOptionsSelectionView.m \
+	Sources/UI/DYYYIconOptionsDialogView.m \
+	Sources/UI/DYYYAboutDialogView.m \
+	Sources/UI/DYYYGlassConfirmView.m \
+	Sources/UI/DYYYKeywordListView.m \
+	Sources/UI/DYYYFilterSettingsView.m \
+	Sources/UI/DYYYConfirmCloseView.m \
+	Sources/UI/DYYYToast.m \
+	Sources/Media/DYYYManager.m \
+	Sources/Core/DYYYUtils.m \
+	Sources/Features/DYYYLoginBypassManager.m \
+	Sources/Features/DYYYPrivacyRecordUploadGuard.m \
+	Sources/Core/CityManager.m \
+	Sources/Core/AWMSafeDispatchTimer.m \
+	Sources/Features/DYYYMiniProgramRewardBypass.m \
+	Sources/Features/DYYYHideMusicButtonHooks.m
+DYYY_CFLAGS = -fobjc-arc -w \
+	-I$(THEOS_PROJECT_DIR)/Sources/Core \
+	-I$(THEOS_PROJECT_DIR)/Sources/Settings \
+	-I$(THEOS_PROJECT_DIR)/Sources/UI \
+	-I$(THEOS_PROJECT_DIR)/Sources/Media \
+	-I$(THEOS_PROJECT_DIR)/Sources/Features
 DYYY_LDFLAGS = -weak_framework AVFAudio -lcompression
 DYYY_FRAMEWORKS = UIKit Foundation AVFoundation CoreAudio UniformTypeIdentifiers
 CXXFLAGS += -std=c++11
