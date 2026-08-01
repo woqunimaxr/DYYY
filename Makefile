@@ -71,7 +71,8 @@ DYYY_FILES = DYYY.xm \
 	Sources/Core/AWMSafeDispatchTimer.m \
 	Sources/Features/DYYYMiniProgramRewardBypass.m \
 	Sources/Features/DYYYHideMusicButtonHooks.m \
-	Sources/Features/DYYYHideMessageAndMinePageHooks.m
+	Sources/Features/DYYYHideMessageAndMinePageHooks.m \
+	Sources/Features/DYYYHideKeyboardAIHooks.m
 DYYY_CFLAGS = -fobjc-arc -w \
 	-I$(THEOS_PROJECT_DIR)/Sources/Core \
 	-I$(THEOS_PROJECT_DIR)/Sources/Settings \
