@@ -18,7 +18,6 @@ on:
       - 'DYYY.plist'
       - 'control'
       - 'Makefile'
-      - 'Resources/**'
       - 'layout/**'
   workflow_dispatch:
     inputs:
