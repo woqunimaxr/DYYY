@@ -32,6 +32,7 @@
 #import "DYYYLivePreStreamLayoutCoordinator.h"
 #import "DYYYLoginBypassManager.h"
 #import "DYYYHideMusicButtonHooks.h"
+#import "DYYYHideMessageAndMinePageHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
@@ -17064,6 +17065,7 @@ static void findTargetViewInView(UIView *view) {
         }
         DYYYStartMiniProgramRewardBypassInstaller();
         DYYYStartHideMusicButtonHooks();
+        DYYYStartHideMessageAndMinePageHooks();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");

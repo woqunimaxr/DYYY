@@ -797,6 +797,24 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, strong, readonly) UIView *superview;
 @end
 
+@interface AWEIMMessageTabNavBarResourceSlotComponent : NSObject
+- (BOOL)canShowInNaviBar;
+@end
+
+@interface AWEIMMessageTabNavBarResourceSlotComponentV2 : NSObject
+- (BOOL)canShowInNaviBar;
+@end
+
+@interface AWEProfileAvatarStoryPublishController : NSObject
+- (BOOL)canShow;
+- (void)updateUIWithContainerView:(UIView *)containerView anchorView:(UIView *)anchorView;
+@end
+
+@interface AWEProfileHeaderGenericOperationComponent : NSObject
+- (id)buildVirtualView:(id)data;
+- (void)updateComponentData:(id)data;
+@end
+
 @interface AWEECommerceEntryView : UIView
 @property(nonatomic, strong, readonly) UIView *superview;
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
