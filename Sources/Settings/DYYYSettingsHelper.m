@@ -65,7 +65,6 @@
 	              @"DYYYMessageEnableCustomAudioDuration" : @[ @"DYYYMessageCustomAudioSeconds" ],
 	              @"DYYYMessageShowTimeLabel" : @[ @"DYYYMessageTimeLabelColor" ],
 	              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoHideSpeedButton", @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
-              @"DYYYAutoHideSpeedButton" : @[ @"DYYYAutoHideSpeedButtonTime" ],
               @"DYYYEnableFloatClearButton" : @[
                   @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYRemoveTimeProgress", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar",
                   @"DYYYHideSpeed", @"DYYYHideClearButtonOnTap", @"DYYYHideChapter", @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"
@@ -78,6 +77,7 @@
           // 一些设置项依赖于多个其他设置项的复杂条件
           @"conditionalDependencies" : @{
               @"DYYYCommentBlurTransparent" : @{@"condition" : @"OR", @"settings" : @[ @"DYYYEnableCommentBlur", @"DYYYEnableNotificationTransparency" ]},
+              @"DYYYAutoHideSpeedButtonTime" : @{@"condition" : @"AND", @"settings" : @[ @"DYYYEnableFloatSpeedButton", @"DYYYAutoHideSpeedButton" ]},
           },
 
           // ===== 冲突配置 =====

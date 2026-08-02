@@ -17,6 +17,7 @@ BOOL dyyyInteractionViewVisible = NO;
 
 static const CGFloat kDYYYSpeedButtonEdgeInset = 10.0;
 static const CGFloat kDYYYSpeedButtonDefaultYPercent = 0.7;
+static const CGFloat kDYYYSpeedButtonPressedScale = 0.75;
 
 typedef NS_ENUM(NSInteger, DYYYSpeedButtonEdge) {
     DYYYSpeedButtonEdgeLeft = 0,
@@ -209,6 +210,8 @@ void updateSpeedButtonVisibility() {
 @property (nonatomic, assign) DYYYSpeedButtonEdge dyyyActiveDragEdge;
 - (void)dyyy_cancelAutoHideTimer;
 - (void)dyyy_applyEdgeHiddenState;
+- (void)dyyy_playTapFeedback;
+- (void)dyyy_restoreTapTransform;
 @end
 
 @implementation FloatingSpeedButton
@@ -274,8 +277,57 @@ void updateSpeedButtonVisibility() {
     return NO;
 }
 
+- (void)dyyy_playTapFeedback {
+    if (UIAccessibilityIsReduceMotionEnabled()) {
+        [UIView performWithoutAnimation:^{
+          self.transform = CGAffineTransformIdentity;
+        }];
+        return;
+    }
+
+    UIViewAnimationOptions options = UIViewAnimationOptionBeginFromCurrentState |
+                                     UIViewAnimationOptionAllowUserInteraction |
+                                     UIViewAnimationOptionCurveEaseOut;
+    [UIView animateKeyframesWithDuration:0.24
+                                   delay:0.0
+                                 options:options
+                              animations:^{
+                                // 每段各占一半：压缩到 0.75x 后直接复原，不再包含上弹阶段。
+                                [UIView addKeyframeWithRelativeStartTime:0.0
+                                                        relativeDuration:0.5
+                                                              animations:^{
+                                                                self.transform = CGAffineTransformMakeScale(kDYYYSpeedButtonPressedScale,
+                                                                                                             kDYYYSpeedButtonPressedScale);
+                                                              }];
+                                [UIView addKeyframeWithRelativeStartTime:0.5
+                                                        relativeDuration:0.5
+                                                              animations:^{
+                                                                self.transform = CGAffineTransformIdentity;
+                                                              }];
+                              }
+                              completion:nil];
+}
+
+- (void)dyyy_restoreTapTransform {
+    if (UIAccessibilityIsReduceMotionEnabled()) {
+        self.transform = CGAffineTransformIdentity;
+        return;
+    }
+    [UIView animateWithDuration:0.10
+                          delay:0.0
+                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                     animations:^{
+                       self.transform = CGAffineTransformIdentity;
+                     }
+                     completion:nil];
+}
+
 - (void)handleTouchDown:(UIButton *)sender {
     self.isResponding = YES;
+    // 倍速切换不应继承上一次点击遗留的 transform；该按钮本身没有需要保留的缩放状态。
+    [UIView performWithoutAnimation:^{
+      self.transform = CGAffineTransformIdentity;
+    }];
     if (self.isEdgeHidden) {
         if (self.dyyyEdgeHiddenByClearMode) {
             if (!DYYYShouldKeepSpeedButtonAtEdgeForClearMode()) {
@@ -301,23 +353,8 @@ void updateSpeedButtonVisibility() {
         return;
     }
 
+    [self dyyy_playTapFeedback];
     [self resetFadeTimer];
-
-    [UIView animateWithDuration:0.08
-                          delay:0.0
-                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-                     animations:^{
-                       self.transform = CGAffineTransformMakeScale(1.15, 1.15);
-                     }
-                     completion:^(__unused BOOL finished) {
-                       [UIView animateWithDuration:0.08
-                                             delay:0.0
-                                           options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
-                                        animations:^{
-                                          self.transform = CGAffineTransformIdentity;
-                                        }
-                                        completion:nil];
-                     }];
 
     if (self.interactionController) {
         @try {
@@ -332,6 +369,7 @@ void updateSpeedButtonVisibility() {
 
 - (void)handleTouchUpOutside:(UIButton *)sender {
     self.justToggledLock = NO;
+    [self dyyy_restoreTapTransform];
     [self resetFadeTimer];
 }
 
@@ -339,6 +377,7 @@ void updateSpeedButtonVisibility() {
     self.isResponding = YES;
 
     if (gesture.state == UIGestureRecognizerStateBegan) {
+        [self dyyy_restoreTapTransform];
         if (self.isEdgeHidden) {
             if (self.dyyyEdgeHiddenByClearMode) {
                 if (DYYYShouldKeepSpeedButtonAtEdgeForClearMode()) {
@@ -772,6 +811,7 @@ static const CGFloat kDYYYSpeedButtonEdgeSwitchHysteresis = 12.0;
     [self resetFadeTimer];
 
     if (pan.state == UIGestureRecognizerStateBegan) {
+        [self dyyy_restoreTapTransform];
         self.dyyyActiveDragEdge = [self dyyyEdgeForCenter:self.center];
         self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:self.center];
     } else if (pan.state == UIGestureRecognizerStateChanged) {

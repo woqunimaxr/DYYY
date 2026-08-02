@@ -1189,9 +1189,8 @@ static BOOL DYYYApplyImageAlbumPlaybackSpeed(AWEPlayInteractionViewController *i
             } else {
                 [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlaySpeed:speed];
             }
-            if ([albumTarget respondsToSelector:@selector(setAlbumFastPlay:forcePlay:)]) {
-                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlay:YES forcePlay:YES];
-            }
+            // 只更新图集播放速率。强制进入宿主的 fast-play 状态会触发其长按快进转场，
+            // 表现为内容被拉伸、停顿后再回弹，和悬浮按钮的单击语义不一致。
             applied = YES;
         } @catch (NSException *exception) {
             NSLog(@"[DYYY][Speed] rich content album speed apply failed on %@: %@",
