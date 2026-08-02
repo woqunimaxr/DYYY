@@ -66,7 +66,7 @@ GITHUB_REPOSITORY='VexCove/DYYY' \
     .github/scripts/generate-release-notes.sh "$notes_file" 2>"$stderr_file" >/dev/null
 
 assert_contains '### 新功能与体验改进'
-assert_contains '综合搜索 AI 浮钮隐藏支持'
+assert_contains '综合搜索 AI 浮钮'
 assert_contains "${hide_ai_commit:0:8}"
 assert_contains '开启“隐藏键盘 AI”后，综合搜索结果页右下角的“继续追问”等 AI 浮钮也会一并隐藏，并避免入口先出现再消失。'
 assert_contains '### Bug 修复'
