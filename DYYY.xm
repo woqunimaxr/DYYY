@@ -33,7 +33,6 @@
 #import "DYYYLoginBypassManager.h"
 #import "DYYYHideMusicButtonHooks.h"
 #import "DYYYHideMessageAndMinePageHooks.h"
-#import "DYYYHideKeyboardAIHooks.h"
 #import "DYYYHideCommentAIAnalysisHooks.h"
 #import "DYYYHideTemplateCollectionHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
@@ -16070,6 +16069,7 @@ static char kDYYYFeedTableFullScreenAppliedKey;
 static id dyyyWindowKeyObserverToken = nil;
 static id dyyyDidBecomeActiveToken = nil;
 static id dyyyWillResignActiveToken = nil;
+static id dyyyKeyboardWillShowToken = nil;
 static void *DYYYGlobalTransparencyContext = &DYYYGlobalTransparencyContext;
 
 static void DYYYRemoveAppLifecycleObservers(void) {
@@ -16085,6 +16085,13 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     if (dyyyWillResignActiveToken) {
         [center removeObserver:dyyyWillResignActiveToken];
         dyyyWillResignActiveToken = nil;
+    }
+}
+
+static void DYYYRemoveKeyboardObserver(void) {
+    if (dyyyKeyboardWillShowToken) {
+        [[NSNotificationCenter defaultCenter] removeObserver:dyyyKeyboardWillShowToken];
+        dyyyKeyboardWillShowToken = nil;
     }
 }
 
@@ -16129,13 +16136,13 @@ static void DYYYRemoveAppLifecycleObservers(void) {
 
 - (void)applicationWillTerminate:(UIApplication *)application {
     DYYYRemoveAppLifecycleObservers();
-    DYYYStopHideKeyboardAIHooks();
+    DYYYRemoveKeyboardObserver();
     %orig;
 }
 
 - (void)dealloc {
     DYYYRemoveAppLifecycleObservers();
-    DYYYStopHideKeyboardAIHooks();
+    DYYYRemoveKeyboardObserver();
     @try {
         [[NSUserDefaults standardUserDefaults] removeObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey context:DYYYGlobalTransparencyContext];
     } @catch (NSException *exception) {
@@ -17085,6 +17092,41 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
 %end
 
+// 隐藏键盘 AI
+static __weak UIView *cachedHideView = nil;
+static void hideParentViewsSubviews(UIView *view) {
+    if (!view)
+        return;
+    UIView *parentView = [view superview];
+    if (!parentView)
+        return;
+    UIView *grandParentView = [parentView superview];
+    if (!grandParentView)
+        return;
+    UIView *greatGrandParentView = [grandParentView superview];
+    if (!greatGrandParentView)
+        return;
+    cachedHideView = greatGrandParentView;
+    for (UIView *subview in greatGrandParentView.subviews) {
+        subview.hidden = YES;
+    }
+}
+
+// 递归查找目标视图
+static void findTargetViewInView(UIView *view) {
+    if (cachedHideView)
+        return;
+    if ([view isKindOfClass:NSClassFromString(@"AWESearchKeyboardVoiceSearchEntranceView")]) {
+        hideParentViewsSubviews(view);
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        findTargetViewInView(subview);
+        if (cachedHideView)
+            break;
+    }
+}
+
 %ctor {
     [DYYYLoginBypassManager configureInitialStateIfNeeded];
 
@@ -17178,7 +17220,6 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         DYYYStartMiniProgramRewardBypassInstaller();
         DYYYStartHideMusicButtonHooks();
         DYYYStartHideMessageAndMinePageHooks();
-        DYYYStartHideKeyboardAIHooks();
         DYYYStartHideCommentAIAnalysisHooks();
         DYYYStartHideTemplateCollectionHooks();
 
@@ -17237,5 +17278,26 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         if (tipsVCClass) {
             %init(CommentBottomTipsVCGroup, AWECommentPanelListSwiftImpl_CommentBottomTipsContainerViewController = tipsVCClass);
         }
+
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        DYYYRemoveKeyboardObserver();
+        dyyyKeyboardWillShowToken = [center addObserverForName:UIKeyboardWillShowNotification
+                                                        object:nil
+                                                         queue:[NSOperationQueue mainQueue]
+                                                    usingBlock:^(NSNotification *notification) {
+                                                      if (DYYYGetBool(@"DYYYHideKeyboardAI")) {
+                                                          if (cachedHideView) {
+                                                              for (UIView *subview in cachedHideView.subviews) {
+                                                                  subview.hidden = YES;
+                                                              }
+                                                          } else {
+                                                              for (UIWindow *window in [UIApplication sharedApplication].windows) {
+                                                                  findTargetViewInView(window);
+                                                                  if (cachedHideView)
+                                                                      break;
+                                                              }
+                                                          }
+                                                      }
+                                                    }];
     }
 }
