@@ -38,24 +38,40 @@ assert_contains() {
     fi
 }
 
-# Sources/<Domain> 是 DYYY 的真实构建输入；发布脚本自身不应触发业务 Release。
-assert_build_relevant 2419be8
-assert_build_relevant 7b0befb
-assert_not_build_relevant f12c157
+find_commit_touching() {
+    local pattern=$1
+    shift
 
-RELEASE_PREVIOUS_TAG='DYYY_2.3-0#18' \
-RELEASE_HEAD_SHA=7b0befb \
+    git log --all -G "$pattern" --format='%H' -- "$@" | head -n 1
+}
+
+# Sources/<Domain> 是 DYYY 的真实构建输入；发布脚本自身不应触发业务 Release。
+hide_ai_commit=$(find_commit_touching 'AWEGeneralSearchAIBallButton' DYYY.xm Sources)
+image_speed_commit=$(find_commit_touching 'DYYYApplySpeedToVisibleAFDSlidesViews' DYYY.xm)
+release_automation_commit=$(git log --all --format='%H' --grep='发布日志生成' | head -n 1)
+
+if [[ -z "$hide_ai_commit" || -z "$image_speed_commit" || -z "$release_automation_commit" ]]; then
+    printf 'unable to locate release-note regression fixtures in Git history\n' >&2
+    exit 1
+fi
+
+assert_build_relevant "$hide_ai_commit"
+assert_build_relevant "$image_speed_commit"
+assert_not_build_relevant "$release_automation_commit"
+
+RELEASE_PREVIOUS_TAG="${hide_ai_commit}^" \
+RELEASE_HEAD_SHA="$image_speed_commit" \
 RELEASE_TITLE='DYYY_2.3-0#19' \
 GITHUB_REPOSITORY='VexCove/DYYY' \
     .github/scripts/generate-release-notes.sh "$notes_file" 2>"$stderr_file" >/dev/null
 
 assert_contains '### 新功能与体验改进'
 assert_contains '综合搜索 AI 浮钮隐藏支持'
-assert_contains '2419be88'
+assert_contains "${hide_ai_commit:0:8}"
 assert_contains '开启“隐藏键盘 AI”后，综合搜索结果页右下角的“继续追问”等 AI 浮钮也会一并隐藏，并避免入口先出现再消失。'
 assert_contains '### Bug 修复'
 assert_contains '图文播放倍率状态'
-assert_contains '7b0befb7'
+assert_contains "${image_speed_commit:0:8}"
 assert_contains '修复图文场景可能沿用上一个视频倍率状态的问题；切换倍率或恢复 1.0 倍速时，现在会正确作用于当前图文内容，并避免误触发长按快进转场。'
 
 if grep -Eq 'Release note fallback|^warning:' "$stderr_file"; then
