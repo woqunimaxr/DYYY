@@ -32,8 +32,6 @@ static NSString *const kDYYYECModuleServiceClassName = @"AWEECModuleService";
 static NSString *const kDYYYCommentPanelTabBasicParamsClassName = @"AWECommentPanelTabBasicParams";
 static NSString *const kDYYYCommentContainerInnerViewControllerClassName =
     @"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewController";
-static NSString *const kDYYYCommentContainerInnerViewHolderClassName =
-    @"AWECommentPanelContainerSwiftImpl.CommentContainerInnerViewHolder";
 
 typedef BOOL (*DYYYBoolSceneIMP)(id, SEL, id);
 typedef BOOL (*DYYYBoolAwemeIMP)(id, SEL, id);
@@ -45,8 +43,6 @@ typedef id (*DYYYArrayTypesIMP)(id, SEL, id);
 typedef id (*DYYYIdContextIMP)(id, SEL, id);
 typedef id (*DYYYViewControllerForTypeIMP)(id, SEL, unsigned long long);
 typedef void (*DYYYVoidConfigSegmentedControlIMP)(id, SEL, id);
-typedef void (*DYYYVoidSegmentedItemsIMP)(id, SEL, id, id);
-typedef void (*DYYYVoidLayoutIMP)(id, SEL);
 typedef void (*DYYYSetNeedsUpdateIMP)(id, SEL, BOOL, id);
 typedef void (*DYYYSetTitleIMP)(id, SEL, id);
 typedef double (*DYYYDoubleNoArgIMP)(id, SEL);
@@ -68,9 +64,6 @@ static DYYYVoidConfigSegmentedControlIMP gOrigCommentTabManagerConfigSegmentedCo
 static DYYYIdContextIMP gOrigCommentPanelTabBasicParamsInit = NULL;
 static DYYYBoolNoArgIMP gOrigCommentPanelTabBasicParamsNoTabScene = NULL;
 static DYYYDoubleNoArgIMP gOrigCommentContainerHeightForSegmentedControl = NULL;
-static DYYYVoidSegmentedItemsIMP gOrigCommentContainerUpdateSegmentedControl = NULL;
-static DYYYVoidLayoutIMP gOrigCommentContainerViewDidLayoutSubviews = NULL;
-static DYYYVoidLayoutIMP gOrigCommentContainerInnerViewHolderSetup = NULL;
 static DYYYSetTitleIMP gOrigCommentTabModelSetTitle = NULL;
 static DYYYSetTitleIMP gOrigCommentContainerTabModelSetTitle = NULL;
 static DYYYBoolAwemeIMP gOrigShouldShowRateTabInCommentWithAweme = NULL;
@@ -259,44 +252,6 @@ static void DYYYHideCommentPanelSegmentedControlView(UIView *segmentedControl) {
     segmentedControl.hidden = YES;
     segmentedControl.alpha = 0.0;
     segmentedControl.userInteractionEnabled = NO;
-    CGRect frame = segmentedControl.frame;
-    if (frame.size.height > 0.01) {
-        frame.size.height = 0.0;
-        segmentedControl.frame = frame;
-    }
-}
-
-static void DYYYApplyCommentContainerCountOnlyHeaderIfNeeded(id holder) {
-    if (!holder || !DYYYHideCommentViewsEnabled()) {
-        return;
-    }
-
-    @try {
-        NSNumber *countLabelCenterY = [holder valueForKey:@"closeButtonCenterYOnlyCountLabelValue"];
-        if ([countLabelCenterY isKindOfClass:[NSNumber class]]) {
-            [holder setValue:countLabelCenterY forKey:@"closeButtonCenterY"];
-        }
-
-        id countLabel = nil;
-        if ([holder respondsToSelector:@selector(commentCountLabel)]) {
-            countLabel = ((id (*)(id, SEL))objc_msgSend)(holder, @selector(commentCountLabel));
-        }
-        if (!countLabel) {
-            countLabel = [holder valueForKey:@"commentCountLabel"];
-        }
-        if ([countLabel isKindOfClass:[UIView class]]) {
-            UIView *labelView = (UIView *)countLabel;
-            labelView.hidden = NO;
-            labelView.alpha = 1.0;
-        }
-
-        id line = [holder valueForKey:@"line"];
-        if ([line isKindOfClass:[UIView class]]) {
-            ((UIView *)line).hidden = YES;
-            ((UIView *)line).alpha = 0.0;
-        }
-    } @catch (__unused NSException *exception) {
-    }
 }
 
 static NSArray *DYYYFilterExtraCommentTabTypes(NSArray *types) {
@@ -707,37 +662,6 @@ static double DYYYCommentContainerHeightForSegmentedControl(id self, SEL _cmd) {
     return 0.0;
 }
 
-static void DYYYCommentContainerUpdateSegmentedControl(id self, SEL _cmd, id segmentedControl, id itemsArray) {
-    if (gOrigCommentContainerUpdateSegmentedControl) {
-        gOrigCommentContainerUpdateSegmentedControl(self, _cmd, segmentedControl, itemsArray);
-    }
-    if (DYYYHideCommentViewsEnabled()) {
-        DYYYHideCommentPanelSegmentedControlView((UIView *)segmentedControl);
-    }
-}
-
-static void DYYYCommentContainerViewDidLayoutSubviews(id self, SEL _cmd) {
-    if (gOrigCommentContainerViewDidLayoutSubviews) {
-        gOrigCommentContainerViewDidLayoutSubviews(self, _cmd);
-    }
-    if (!DYYYHideCommentViewsEnabled()) {
-        return;
-    }
-
-    @try {
-        id segmentedControl = [self valueForKey:@"iesSegmentedControl"];
-        DYYYHideCommentPanelSegmentedControlView((UIView *)segmentedControl);
-    } @catch (__unused NSException *exception) {
-    }
-}
-
-static void DYYYCommentContainerInnerViewHolderSetup(id self, SEL _cmd) {
-    if (gOrigCommentContainerInnerViewHolderSetup) {
-        gOrigCommentContainerInnerViewHolderSetup(self, _cmd);
-    }
-    DYYYApplyCommentContainerCountOnlyHeaderIfNeeded(self);
-}
-
 static BOOL DYYYInstallCommentPanelTabBasicParamsHooks(void) {
     Class cls = NSClassFromString(kDYYYCommentPanelTabBasicParamsClassName);
     if (!cls) {
@@ -771,31 +695,6 @@ static BOOL DYYYInstallCommentContainerInnerHooks(void) {
                                           @selector(heightForSegmentedControl),
                                           (IMP)DYYYCommentContainerHeightForSegmentedControl,
                                           (IMP *)&gOrigCommentContainerHeightForSegmentedControl,
-                                          NO,
-                                          NO);
-        installed |= DYYYInstallClassHook(viewControllerClass,
-                                          @selector(updateSegmentedControl:itemsArray:),
-                                          (IMP)DYYYCommentContainerUpdateSegmentedControl,
-                                          (IMP *)&gOrigCommentContainerUpdateSegmentedControl,
-                                          NO,
-                                          NO);
-        installed |= DYYYInstallClassHook(viewControllerClass,
-                                          @selector(viewDidLayoutSubviews),
-                                          (IMP)DYYYCommentContainerViewDidLayoutSubviews,
-                                          (IMP *)&gOrigCommentContainerViewDidLayoutSubviews,
-                                          NO,
-                                          NO);
-    }
-
-    Class viewHolderClass = NSClassFromString(kDYYYCommentContainerInnerViewHolderClassName);
-    if (!viewHolderClass) {
-        viewHolderClass = objc_getClass("_TtC33AWECommentPanelContainerSwiftImpl31CommentContainerInnerViewHolder");
-    }
-    if (viewHolderClass) {
-        installed |= DYYYInstallClassHook(viewHolderClass,
-                                          @selector(setupViewHolder),
-                                          (IMP)DYYYCommentContainerInnerViewHolderSetup,
-                                          (IMP *)&gOrigCommentContainerInnerViewHolderSetup,
                                           NO,
                                           NO);
     }
@@ -891,10 +790,6 @@ static BOOL DYYYInstallCommentTabModelHooks(void) {
     }
 
     return installed;
-}
-
-void DYYYStopHideCommentAIAnalysisHooks(void) {
-    // 当前实现无通知观察者；保留接口供 AppDelegate 对称调用。
 }
 
 void DYYYStartHideCommentAIAnalysisHooks(void) {

@@ -7,7 +7,4 @@ NS_ASSUME_NONNULL_BEGIN
 /// 开启 `DYYYHideCommentViews` 后生效。
 FOUNDATION_EXPORT void DYYYStartHideCommentAIAnalysisHooks(void);
 
-/// 预留停止接口（当前无通知观察者）。
-FOUNDATION_EXPORT void DYYYStopHideCommentAIAnalysisHooks(void);
-
 NS_ASSUME_NONNULL_END

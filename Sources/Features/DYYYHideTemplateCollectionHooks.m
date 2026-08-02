@@ -9,6 +9,7 @@
 
 static NSString *const kDYYYHideTemplateVideoKey = @"DYYYHideTemplateVideo";
 static NSString *const kDYYYHideTemplatePlayletKey = @"DYYYHideTemplatePlaylet";
+static NSString *const kDYYYHideCommentViewsKey = @"DYYYHideCommentViews";
 static NSString *const kDYYYShowPlayletModuleServiceClassName = @"AWEShowPlayletModuleService";
 static NSString *const kDYYYCommentVCHeaderBarManagerClassName = @"AWECommentVCHederBarManager";
 static NSString *const kDYYYCommentContainerInnerViewHolderClassName =
@@ -53,6 +54,10 @@ static BOOL DYYYHideTemplatePlayletEnabled(void) {
 
 static BOOL DYYYHideTemplateCollectionCommentHeaderEnabled(void) {
     return DYYYHideTemplateVideoEnabled() || DYYYHideTemplatePlayletEnabled();
+}
+
+static BOOL DYYYHideCommentViewsEnabled(void) {
+    return DYYYGetBool(kDYYYHideCommentViewsKey);
 }
 
 static Class DYYYResolveSwiftClass(NSString *moduleClassName, NSString *mangledClassName) {
@@ -187,6 +192,39 @@ static void DYYYApplyTemplateCollectionCountOnlyHeaderLayout(id holder) {
         if ([closeBar isKindOfClass:[UIView class]]) {
             ((UIView *)closeBar).hidden = NO;
             ((UIView *)closeBar).alpha = 1.0;
+        }
+
+        id line = [holder valueForKey:@"line"];
+        if ([line isKindOfClass:[UIView class]]) {
+            ((UIView *)line).hidden = YES;
+            ((UIView *)line).alpha = 0.0;
+        }
+    } @catch (__unused NSException *exception) {
+    }
+}
+
+static void DYYYApplyHiddenCommentViewsCountOnlyHeaderLayout(id holder) {
+    if (!holder || !DYYYHideCommentViewsEnabled()) {
+        return;
+    }
+
+    @try {
+        NSNumber *countLabelCenterY = [holder valueForKey:@"closeButtonCenterYOnlyCountLabelValue"];
+        if ([countLabelCenterY isKindOfClass:[NSNumber class]]) {
+            [holder setValue:countLabelCenterY forKey:@"closeButtonCenterY"];
+        }
+
+        id countLabel = nil;
+        if ([holder respondsToSelector:@selector(commentCountLabel)]) {
+            countLabel = ((id (*)(id, SEL))objc_msgSend)(holder, @selector(commentCountLabel));
+        }
+        if (!countLabel) {
+            countLabel = [holder valueForKey:@"commentCountLabel"];
+        }
+        if ([countLabel isKindOfClass:[UIView class]]) {
+            UIView *labelView = (UIView *)countLabel;
+            labelView.hidden = NO;
+            labelView.alpha = 1.0;
         }
 
         id line = [holder valueForKey:@"line"];
@@ -465,10 +503,7 @@ static void DYYYCommentContainerInnerViewHolderSetup(id self, SEL _cmd) {
     if (gOrigCommentContainerInnerViewHolderSetup) {
         gOrigCommentContainerInnerViewHolderSetup(self, _cmd);
     }
-    if (!DYYYHideTemplateCollectionCommentHeaderEnabled()) {
-        return;
-    }
-
+    DYYYApplyHiddenCommentViewsCountOnlyHeaderLayout(self);
     DYYYApplyTemplateCollectionCountOnlyHeaderLayout(self);
 }
 

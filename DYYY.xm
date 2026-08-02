@@ -15974,14 +15974,12 @@ static void DYYYRemoveAppLifecycleObservers(void) {
 - (void)applicationWillTerminate:(UIApplication *)application {
     DYYYRemoveAppLifecycleObservers();
     DYYYStopHideKeyboardAIHooks();
-    DYYYStopHideCommentAIAnalysisHooks();
     %orig;
 }
 
 - (void)dealloc {
     DYYYRemoveAppLifecycleObservers();
     DYYYStopHideKeyboardAIHooks();
-    DYYYStopHideCommentAIAnalysisHooks();
     @try {
         [[NSUserDefaults standardUserDefaults] removeObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey context:DYYYGlobalTransparencyContext];
     } @catch (NSException *exception) {
