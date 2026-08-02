@@ -35,6 +35,7 @@
 #import "DYYYHideMessageAndMinePageHooks.h"
 #import "DYYYHideKeyboardAIHooks.h"
 #import "DYYYHideCommentAIAnalysisHooks.h"
+#import "DYYYHideTemplateCollectionHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
@@ -9043,15 +9044,15 @@ static void DYYYApplyCommentSearchAnchorVisibility(UIView *view) {
 static char kDYYYCommentHeaderVerifiedCollapseModelKey;
 
 static BOOL DYYYIsCommentHeaderLeafViewHiddenBySetting(UIView *view) {
-    if (!view) {
+    if (!view || !DYYYGetBool(@"DYYYHideCommentViews")) {
         return NO;
     }
 
     NSString *className = NSStringFromClass([view class]);
-    static NSArray<NSString *> *hiddenViewClassSuffixes = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      hiddenViewClassSuffixes = @[
+    static NSArray<NSString *> *commentViewsHiddenSuffixes = nil;
+    static dispatch_once_t commentViewsOnceToken;
+    dispatch_once(&commentViewsOnceToken, ^{
+      commentViewsHiddenSuffixes = @[
           @"AWECommentSearchAnchorView",
           @"AWEPOIEntryAnchorView",
           @"AWECommentGuideLunaAnchorView",
@@ -9061,7 +9062,7 @@ static BOOL DYYYIsCommentHeaderLeafViewHiddenBySetting(UIView *view) {
       ];
     });
 
-    for (NSString *suffix in hiddenViewClassSuffixes) {
+    for (NSString *suffix in commentViewsHiddenSuffixes) {
         if ([className hasSuffix:suffix]) {
             return YES;
         }
@@ -9070,7 +9071,7 @@ static BOOL DYYYIsCommentHeaderLeafViewHiddenBySetting(UIView *view) {
 }
 
 static BOOL DYYYCommentHeaderViewTreeContainsHiddenLeaf(UIView *view, NSUInteger depth) {
-    if (!view || depth > 4) {
+    if (!view || depth > 6) {
         return NO;
     }
     if (DYYYIsCommentHeaderLeafViewHiddenBySetting(view)) {
@@ -9102,6 +9103,28 @@ static BOOL DYYYCommentHeaderCellContainsOnlyHiddenLeaf(UIView *cell) {
     return DYYYCommentHeaderViewTreeContainsHiddenLeaf(contentContainer.subviews.firstObject, 0);
 }
 
+static BOOL DYYYCommentHeaderCellShouldCollapseForHide(UIView *cell, id model) {
+    if (!DYYYGetBool(@"DYYYHideCommentViews") || !cell) {
+        return NO;
+    }
+
+    if (DYYYCommentHeaderCellContainsOnlyHiddenLeaf(cell)) {
+        return YES;
+    }
+
+    UIView *contentContainer = cell;
+    if ([cell isKindOfClass:[UICollectionViewCell class]]) {
+        contentContainer = ((UICollectionViewCell *)cell).contentView;
+    }
+    if (contentContainer.subviews.count == 1) {
+        UIView *only = contentContainer.subviews.firstObject;
+        if (only.hidden || only.alpha < 0.01 || CGRectGetHeight(only.bounds) < 0.5) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 static void DYYYSetCommentHeaderModelVerifiedCollapse(id model, BOOL shouldCollapse) {
     if (!model) {
         return;
@@ -9115,19 +9138,6 @@ static void DYYYSetCommentHeaderModelVerifiedCollapse(id model, BOOL shouldColla
 static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
     return DYYYGetBool(@"DYYYHideCommentViews") &&
            [objc_getAssociatedObject(model, &kDYYYCommentHeaderVerifiedCollapseModelKey) boolValue];
-}
-
-static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
-    id models = DYYYKVCValueIfPossible(controller, @"modelsArray");
-    if (![models isKindOfClass:[NSArray class]] || [(NSArray *)models count] == 0) {
-        return NO;
-    }
-    for (id model in (NSArray *)models) {
-        if (!DYYYShouldVerifiedCollapseCommentHeaderModel(model)) {
-            return NO;
-        }
-    }
-    return YES;
 }
 
 %group CommentSearchAnchorGroup
@@ -9167,15 +9177,51 @@ static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
 
 - (double)currentHeight {
     double originalHeight = %orig;
-    return DYYYAllCommentHeaderModelsAreVerifiedCollapsed(self) ? 0.0 : originalHeight;
+
+    id models = DYYYKVCValueIfPossible(self, @"modelsArray");
+    if (![models isKindOfClass:[NSArray class]] || [(NSArray *)models count] == 0) {
+        return originalHeight;
+    }
+
+    BOOL shouldRecalculate = NO;
+    for (id model in (NSArray *)models) {
+        if (DYYYShouldVerifiedCollapseCommentHeaderModel(model)) {
+            shouldRecalculate = YES;
+            break;
+        }
+    }
+    if (!shouldRecalculate) {
+        return originalHeight;
+    }
+
+    double totalHeight = 0.0;
+    CGSize collectionViewSize = CGSizeMake([UIScreen mainScreen].bounds.size.width, 0.0);
+    NSInteger index = 0;
+    SEL sizeSelector = @selector(sizeForItemAtIndex:model:collectionViewSize:);
+    for (id model in (NSArray *)models) {
+        CGSize itemSize = ((CGSize (*)(id, SEL, NSInteger, id, CGSize))objc_msgSend)(self,
+                                                                                       sizeSelector,
+                                                                                       index,
+                                                                                       model,
+                                                                                       collectionViewSize);
+        totalHeight += itemSize.height;
+        index++;
+    }
+    return totalHeight;
 }
 
 - (void)configCell:(id)cell index:(NSInteger)index model:(id)model {
     %orig(cell, index, model);
-    BOOL shouldCollapse = DYYYGetBool(@"DYYYHideCommentViews") &&
-                          [cell isKindOfClass:[UIView class]] &&
-                          DYYYCommentHeaderCellContainsOnlyHiddenLeaf((UIView *)cell);
+    BOOL shouldCollapse = [cell isKindOfClass:[UIView class]] &&
+                          DYYYCommentHeaderCellShouldCollapseForHide((UIView *)cell, model);
+    BOOL wasCollapsed = DYYYShouldVerifiedCollapseCommentHeaderModel(model);
     DYYYSetCommentHeaderModelVerifiedCollapse(model, shouldCollapse);
+    if (shouldCollapse && !wasCollapsed) {
+        id didUpdateHeight = DYYYKVCValueIfPossible(self, @"didUpdateHeight");
+        if (didUpdateHeight) {
+            ((void (^)(void))didUpdateHeight)();
+        }
+    }
 }
 
 %end
@@ -12868,7 +12914,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 	%orig;
 }
 
-// 屏蔽短剧信息（复用屏蔽合集开关，只对推荐页生效）
+// 屏蔽短剧信息（只对推荐页生效）
 - (id)playletInfoModel {
 	BOOL DYYYHideTemplatePlaylet = DYYYGetBool(@"DYYYHideTemplatePlaylet");
 	if (DYYYHideTemplatePlaylet && [self.referString isEqualToString:@"homepage_hot"]) {
@@ -17016,6 +17062,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         DYYYStartHideMessageAndMinePageHooks();
         DYYYStartHideKeyboardAIHooks();
         DYYYStartHideCommentAIAnalysisHooks();
+        DYYYStartHideTemplateCollectionHooks();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");
@@ -17033,7 +17080,16 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
             %init(CommentSearchAnchorGroup, AWECommentSearchAnchorView = commentSearchAnchorViewClass);
         }
 
-        Class commentHeaderSectionControllerClass = objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentPanelHeaderSectionController");
+        Class commentHeaderSectionControllerClass =
+            NSClassFromString(@"AWECommentPanelHeaderSwiftImpl.CommentPanelHeaderSectionController");
+        if (!commentHeaderSectionControllerClass) {
+            commentHeaderSectionControllerClass =
+                objc_getClass("_TtC30AWECommentPanelHeaderSwiftImpl40CommentPanelHeaderSectionController");
+        }
+        if (!commentHeaderSectionControllerClass) {
+            commentHeaderSectionControllerClass =
+                objc_getClass("AWECommentPanelHeaderSwiftImpl.CommentPanelHeaderSectionController");
+        }
         if (commentHeaderSectionControllerClass) {
             %init(CommentPanelHeaderVerifiedCollapseGroup,
                   AWECommentPanelHeaderSwiftImpl_CommentPanelHeaderSectionController = commentHeaderSectionControllerClass);
