@@ -325,6 +325,7 @@ polish_release_title() {
     local commit_type=$2
     local summary_title=$3
     local content
+    local target
 
     content=$(strip_commit_type_prefix "$subject")
 
@@ -332,6 +333,11 @@ polish_release_title() {
         feat)
             if [[ "$content" == 优化* && "$summary_title" != *改进 ]]; then
                 summary_title+="改进"
+            fi
+            if [[ "$summary_title" == 隐藏*入口 ]]; then
+                target=${summary_title#隐藏}
+                target=${target%入口}
+                summary_title="${target}隐藏支持"
             fi
             summary_title=$(printf '%s' "$summary_title" |
                 sed -E 's/^消息页与我的页三项隐藏开关$/消息页与我的页新增三项隐藏选项/')
@@ -742,6 +748,21 @@ derived_release_note_for_commit() {
     subject=$(git show -s --format=%s "$hash")
     content=$(strip_commit_type_prefix "$subject")
 
+    # 优先从实际差异识别用户可感知的结果，不依赖某一条固定提交标题。
+    if git show --format= --unified=0 "$hash" | grep -F 'AWEGeneralSearchAIBallButton' >/dev/null &&
+       git show --format= --unified=0 "$hash" | grep -F 'AWEGeneralSearchAIModeButton' >/dev/null &&
+       git show --format= --unified=0 "$hash" | grep -F 'DYYYHideKeyboardAI' >/dev/null; then
+        printf '开启“隐藏键盘 AI”后，综合搜索结果页右下角的“继续追问”等 AI 浮钮也会一并隐藏，并避免入口先出现再消失。'
+        return
+    fi
+
+    if git show --format= --unified=0 "$hash" | grep -F 'DYYYApplySpeedToVisibleAFDSlidesViews' >/dev/null &&
+       git show --format= --unified=0 "$hash" | grep -F 'allowCachedController' >/dev/null &&
+       git show --format= --unified=0 "$hash" | grep -F 'setAlbumFastPlay:useFastRate' >/dev/null; then
+        printf '修复图文场景可能沿用上一个视频倍率状态的问题；切换倍率或恢复 1.0 倍速时，现在会正确作用于当前图文内容，并避免误触发长按快进转场。'
+        return
+    fi
+
     case "$content" in
         优化悬浮倍速与清屏按钮交互)
             if git show --format= --unified=0 "$hash" | grep -F 'DYYYAutoHideSpeedButtonTime' >/dev/null &&
@@ -763,6 +784,78 @@ derived_release_note_for_commit() {
             fi
             ;;
     esac
+}
+
+release_note_is_suppressed() {
+    local hash=$1
+
+    git show -s --format=%b "$hash" |
+        awk '
+            /^(Release-Note|发布说明):[[:space:]]*(skip|none)[[:space:]]*$/ {
+                found = 1
+                exit
+            }
+            END { exit found ? 0 : 1 }
+        '
+}
+
+fallback_release_note_for_commit() {
+    local hash=$1
+    local commit_type=$2
+    local summary_title=$3
+    local subject
+    local content
+    local target
+
+    subject=$(git show -s --format=%s "$hash")
+    content=$(strip_commit_type_prefix "$subject")
+
+    case "$commit_type" in
+        feat)
+            case "$content" in
+                隐藏*)
+                    target=${content#隐藏}
+                    printf '开启对应隐藏选项后，%s将不再显示。' "$target"
+                    ;;
+                新增*|增加*|添加*|支持*|引入*|实现*)
+                    target=$(printf '%s' "$content" |
+                        sed -E 's/^(新增|增加|添加|支持|引入|实现)[[:space:]:：]*//')
+                    printf '现在可以使用%s。' "${target:-$summary_title}"
+                    ;;
+                *)
+                    printf '新增“%s”相关能力，可在对应使用场景中直接体验。' "$summary_title"
+                    ;;
+            esac
+            ;;
+        fix)
+            case "$content" in
+                修正*状态|修复*状态)
+                    target=$(printf '%s' "$content" |
+                        sed -E 's/^(修正|修复)[[:space:]:：]*//; s/状态$//')
+                    printf '修复%s状态未按预期更新的问题，相关操作现在会正确作用于当前内容。' "${target:-$summary_title}"
+                    ;;
+                *)
+                    printf '修复“%s”相关异常，受影响的操作现在会按预期工作。' "$summary_title"
+                    ;;
+            esac
+            ;;
+        perf)
+            printf '优化“%s”的使用表现，相关操作现在更加流畅稳定。' "$summary_title"
+            ;;
+    esac
+}
+
+warn_release_note_fallback() {
+    local hash=$1
+    local subject=$2
+    local short_hash=${hash:0:8}
+    local message="${short_hash} ${subject} 未提供 Release-Note，已使用通用用户说明；建议在重要提交正文中补充 Release-Note:。"
+
+    if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        printf '::warning title=Release note fallback::%s\n' "$message" >&2
+    else
+        printf 'warning: %s\n' "$message" >&2
+    fi
 }
 
 append_grouped_entries_for_type() {
@@ -799,8 +892,14 @@ append_grouped_entries_for_type() {
             hash_links+="[\`${short_hash}\`](${server_url}/${repository}/commit/${hash})"
 
             release_note=$(release_note_for_commit "$hash" "$commit_type")
-            if [[ -z "$release_note" ]]; then
+            if [[ -z "$release_note" ]] && ! release_note_is_suppressed "$hash"; then
                 release_note=$(derived_release_note_for_commit "$hash")
+            fi
+            if [[ -z "$release_note" ]] && ! release_note_is_suppressed "$hash"; then
+                release_note=$(fallback_release_note_for_commit "$hash" "$commit_type" "$title")
+                if [[ -n "$release_note" ]]; then
+                    warn_release_note_fallback "$hash" "$(git show -s --format=%s "$hash")"
+                fi
             fi
             if [[ -n "$release_note" ]] &&
                ! grep -Fxq "$release_note" "$notes_file"; then
@@ -918,7 +1017,7 @@ record_contributor_for_commit() {
     fi
 }
 
-previous_tag=$(latest_release_tag)
+previous_tag=${RELEASE_PREVIOUS_TAG:-$(latest_release_tag)}
 if [[ -n "$previous_tag" ]] &&
    ! ensure_release_tag_available "$previous_tag"; then
     previous_tag=""
