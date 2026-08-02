@@ -31,10 +31,8 @@ extern CGFloat speedButtonSize;
 
 extern NSArray *getSpeedOptions(void);
 
-extern FloatingSpeedButton *getSpeedButton(void);
 extern void showSpeedButton(void);
 extern void hideSpeedButton(void);
-extern void toggleSpeedButtonVisibility(void);
 extern NSArray *findViewControllersInHierarchy(UIViewController *rootViewController);
 extern float getCurrentSpeed(void);
 extern NSInteger getCurrentSpeedIndex(void);

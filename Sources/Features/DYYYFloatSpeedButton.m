@@ -132,8 +132,6 @@ void updateSpeedButtonUI() {
     }
 }
 
-FloatingSpeedButton *getSpeedButton(void) { return speedButton; }
-
 NSArray *findViewControllersInHierarchy(UIViewController *rootViewController) {
     if (!rootViewController) {
         return @[];

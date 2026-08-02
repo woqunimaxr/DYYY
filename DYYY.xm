@@ -1021,6 +1021,9 @@ static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromFastSpeedC
 }
 
 static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractionController(AWEPlayInteractionViewController *interactionController) {
+    if (dyyyActiveDPlayerSpeedController) {
+        return dyyyActiveDPlayerSpeedController;
+    }
     if (!interactionController || ![interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
         return nil;
     }
@@ -1057,36 +1060,200 @@ static BOOL DYYYSetPlaybackRateOnTarget(id target, double speed) {
     }
 }
 
+static BOOL DYYYIsImageAlbumAweme(AWEAwemeModel *model) {
+    return model && [model respondsToSelector:@selector(awemeType)] && model.awemeType == 68;
+}
+
+static BOOL DYYYInteractionUsesRichContent(AWEPlayInteractionViewController *interactionController) {
+    if (!interactionController) {
+        return NO;
+    }
+
+    AWEPlayInteractionContext *context = interactionController.context;
+    if (context.isInRichContentContainer || context.richContentContainer || interactionController.richContentContainer) {
+        return YES;
+    }
+
+    id videoDelegate = interactionController.videoDelegate ?: context.videoDelegate;
+    return [videoDelegate respondsToSelector:@selector(setAlbumFastPlaySpeed:)];
+}
+
+static BOOL DYYYShouldUseImageAlbumSpeedPath(AWEPlayInteractionViewController *interactionController) {
+    AWEAwemeModel *model = interactionController.model ?: dyyyCurrentSpeedAweme;
+    return DYYYIsImageAlbumAweme(model) || DYYYInteractionUsesRichContent(interactionController);
+}
+
+static void DYYYSyncNativeSpeedManagerCurrentSpeed(double speed) {
+    AFDSpeedManager *speedManager = dyyyActiveNativeSpeedManager;
+    if (!speedManager) {
+        Class managerClass = NSClassFromString(@"AFDSpeedManager");
+        if ([managerClass respondsToSelector:@selector(sharedInstance)]) {
+            speedManager = [(id)managerClass sharedInstance];
+        }
+    }
+    if ([speedManager respondsToSelector:@selector(setCurrentSpeed:)]) {
+        [speedManager setCurrentSpeed:speed];
+    }
+}
+
+static BOOL DYYYApplySpeedToAFDSlidesView(AFDSlidesView *slidesView, double speed) {
+    if (!slidesView || !isfinite(speed) || speed <= 0.0) {
+        return NO;
+    }
+
+    @try {
+        slidesView.needFastPlay = YES;
+        slidesView.fastPlaySpeed = speed;
+        if ([slidesView isPlaying]) {
+            [slidesView pauseTimer];
+            [slidesView setupAndPlayTimer];
+        } else {
+            [slidesView playTimer];
+        }
+        return YES;
+    } @catch (NSException *exception) {
+        NSLog(@"[DYYY][Speed] AFDSlidesView fastPlay apply failed: %@", exception.reason);
+        return NO;
+    }
+}
+
+static BOOL DYYYApplySpeedToAFDSlidesViewsInHierarchy(UIView *rootView, double speed) {
+    if (!rootView) {
+        return NO;
+    }
+
+    Class slidesViewClass = NSClassFromString(@"AFDSlidesView");
+    if (!slidesViewClass) {
+        return NO;
+    }
+
+    BOOL applied = NO;
+    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:rootView];
+    while (queue.count > 0) {
+        UIView *view = queue.firstObject;
+        [queue removeObjectAtIndex:0];
+        if ([view isKindOfClass:slidesViewClass] &&
+            DYYYApplySpeedToAFDSlidesView((AFDSlidesView *)view, speed)) {
+            applied = YES;
+        }
+        for (UIView *subview in view.subviews) {
+            [queue addObject:subview];
+        }
+    }
+    return applied;
+}
+
+static id DYYYRichContentAlbumSpeedTarget(AWEPlayInteractionViewController *interactionController) {
+    if (!interactionController) {
+        return nil;
+    }
+
+    AWEPlayInteractionContext *context = interactionController.context;
+    id target = interactionController.richContentContainer ?: context.richContentContainer;
+    if (!target) {
+        target = interactionController.videoDelegate ?: context.videoDelegate;
+    }
+    return [target respondsToSelector:@selector(setAlbumFastPlaySpeed:)] ? target : nil;
+}
+
+static BOOL DYYYApplyImageAlbumPlaybackSpeed(AWEPlayInteractionViewController *interactionController, double speed) {
+    if (!interactionController || !isfinite(speed) || speed <= 0.0 ||
+        !DYYYShouldUseImageAlbumSpeedPath(interactionController)) {
+        return NO;
+    }
+
+    BOOL applied = NO;
+    DYYYSyncNativeSpeedManagerCurrentSpeed(speed);
+
+    AWEDPlayerSpeedController *dplayerSpeedController =
+        DYYYNativeDPlayerSpeedControllerFromInteractionController(interactionController);
+    if (dplayerSpeedController && [dplayerSpeedController respondsToSelector:@selector(speedContainer)]) {
+        @try {
+            AWEDSpeedCoreContainer *coreContainer = [dplayerSpeedController speedContainer];
+            if (coreContainer.albumContainer) {
+                [coreContainer.albumContainer changeAlbumSpeed:speed];
+                applied = YES;
+            }
+            [coreContainer changeSpeed:speed];
+            applied = YES;
+        } @catch (NSException *exception) {
+            NSLog(@"[DYYY][Speed] native album speed apply failed: %@", exception.reason);
+        }
+    }
+
+    id albumTarget = DYYYRichContentAlbumSpeedTarget(interactionController);
+    if (albumTarget) {
+        @try {
+            if ([albumTarget respondsToSelector:@selector(setAlbumFastPlaySpeed:enterMethod:)]) {
+                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlaySpeed:speed
+                                                                                 enterMethod:@"speed_button"];
+            } else {
+                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlaySpeed:speed];
+            }
+            if ([albumTarget respondsToSelector:@selector(setAlbumFastPlay:forcePlay:)]) {
+                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlay:YES forcePlay:YES];
+            }
+            applied = YES;
+        } @catch (NSException *exception) {
+            NSLog(@"[DYYY][Speed] rich content album speed apply failed on %@: %@",
+                  NSStringFromClass([albumTarget class]),
+                  exception.reason);
+        }
+    }
+
+    if (DYYYApplySpeedToAFDSlidesViewsInHierarchy(interactionController.view, speed)) {
+        applied = YES;
+    }
+    if ([albumTarget isKindOfClass:UIViewController.class] &&
+        DYYYApplySpeedToAFDSlidesViewsInHierarchy([(UIViewController *)albumTarget view], speed)) {
+        applied = YES;
+    }
+
+    return applied;
+}
+
 static BOOL DYYYApplyPlaybackSpeedThroughInteractionController(AWEPlayInteractionViewController *interactionController, double speed) {
     if (!isfinite(speed) || speed <= 0.0) {
         return NO;
     }
 
     interactionController = DYYYResolvePlaybackInteractionController(interactionController, dyyyCurrentSpeedAweme, YES);
-    if (interactionController) {
-        Protocol *speedControllerProtocol = NSProtocolFromString(@"AWEFastSpeedControllerProtocol");
-        if (speedControllerProtocol && [interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
-            @try {
-                id speedController = [interactionController controllerByProtocol:speedControllerProtocol];
-                AWEDPlayerSpeedController *nativeDPlayerSpeedController =
-                    DYYYNativeDPlayerSpeedControllerFromFastSpeedController(speedController);
-                if (nativeDPlayerSpeedController) {
-                    if (DYYYNativeDPlayerLongPressIsActive(nativeDPlayerSpeedController)) {
-                        return NO;
-                    }
-                    return DYYYApplyPlaybackRateToNativeDPlayer(nativeDPlayerSpeedController, speed);
+    if (!interactionController) {
+        return DYYYSetPlaybackRateOnTarget(DYYYBestVisiblePlaybackRateTarget(nil), speed);
+    }
+
+    if (DYYYShouldUseImageAlbumSpeedPath(interactionController)) {
+        return DYYYApplyImageAlbumPlaybackSpeed(interactionController, speed);
+    }
+
+    Protocol *speedControllerProtocol = NSProtocolFromString(@"AWEFastSpeedControllerProtocol");
+    if (speedControllerProtocol && [interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
+        @try {
+            id speedController = [interactionController controllerByProtocol:speedControllerProtocol];
+            AWEDPlayerSpeedController *nativeDPlayerSpeedController =
+                DYYYNativeDPlayerSpeedControllerFromFastSpeedController(speedController);
+            if (nativeDPlayerSpeedController) {
+                if (DYYYNativeDPlayerLongPressIsActive(nativeDPlayerSpeedController)) {
+                    return NO;
                 }
-                if ([speedController respondsToSelector:@selector(playVideoViewController)] &&
-                    DYYYSetPlaybackRateOnTarget([(AWEPlayInteractionSpeedController *)speedController playVideoViewController], speed)) {
-                    return YES;
-                }
-            } @catch (NSException *exception) {
+                return DYYYApplyPlaybackRateToNativeDPlayer(nativeDPlayerSpeedController, speed);
             }
+            if ([speedController respondsToSelector:@selector(playVideoViewController)] &&
+                DYYYSetPlaybackRateOnTarget([(AWEPlayInteractionSpeedController *)speedController playVideoViewController], speed)) {
+                return YES;
+            }
+            if ([speedController respondsToSelector:@selector(changeSpeed:)] &&
+                !DYYYAnyNativeDPlayerLongPressIsActive()) {
+                [(AWEPlayInteractionSpeedController *)speedController changeSpeed:speed];
+                return YES;
+            }
+        } @catch (NSException *exception) {
+            NSLog(@"[DYYY][Speed] apply through speedController failed: %@", exception.reason);
         }
-        if ([interactionController respondsToSelector:@selector(videoDelegate)] &&
-            DYYYSetPlaybackRateOnTarget([interactionController videoDelegate], speed)) {
-            return YES;
-        }
+    }
+    if ([interactionController respondsToSelector:@selector(videoDelegate)] &&
+        DYYYSetPlaybackRateOnTarget([interactionController videoDelegate], speed)) {
+        return YES;
     }
     return DYYYSetPlaybackRateOnTarget(DYYYBestVisiblePlaybackRateTarget(nil), speed);
 }

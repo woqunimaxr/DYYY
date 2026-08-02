@@ -401,11 +401,35 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)setHideTimer:(id)timer;
 @end
 
+@protocol AFDRichContentAlbumContainerProtocol <NSObject>
+- (void)setAlbumFastPlaySpeed:(double)speed enterMethod:(NSString *)enterMethod;
+- (void)setAlbumFastPlaySpeed:(double)speed;
+- (void)setAlbumFastPlay:(BOOL)fastPlay forcePlay:(BOOL)forcePlay;
+- (void)setAlbumFastPlay:(BOOL)fastPlay;
+@end
+
+@interface AFDSlidesView : UIView
+@property(nonatomic, assign) double fastPlaySpeed;
+@property(nonatomic, assign) BOOL needFastPlay;
+@property(nonatomic, assign, getter=isPlaying) BOOL playing;
+- (void)setupAndPlayTimer;
+- (void)pauseTimer;
+- (void)playTimer;
+@end
+
+@interface AWEPlayInteractionContext : NSObject
+@property(nonatomic, weak) id richContentContainer;
+@property(nonatomic, assign) BOOL isInRichContentContainer;
+@property(nonatomic, weak) id videoDelegate;
+@end
+
 @interface AWEPlayInteractionViewController : UIViewController
 @property(nonatomic, strong) UIView *view;
 @property(nonatomic, strong) AWEAwemeModel *model;
 @property(nonatomic, strong) NSString *referString;
 @property(nonatomic, assign) BOOL isCommentVCShowing;
+@property(nonatomic, weak) id richContentContainer;
+@property(nonatomic, strong) AWEPlayInteractionContext *context;
 - (id)controllerByProtocol:(Protocol *)protocol;
 - (id)videoDelegate;
 - (void)performCommentAction;
@@ -1714,12 +1738,17 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)updateFastSpeedView:(double)speed;
 @end
 
+@interface AWEDSpeedAlbumContainer : NSObject
+- (void)changeAlbumSpeed:(double)speed;
+@end
+
 @interface AWEDSpeedCoreContainer : NSObject
 @property(nonatomic, assign) BOOL isInLongPressFastSpeed;
 @property(nonatomic, assign) double speedBeforeLongPress;
 @property(nonatomic, strong) id playerProvider;
 @property(nonatomic, strong) AFDSpeedManager *speedManager;
 @property(nonatomic, strong) AWEDSpeedPortraitContainer *portraitContainer;
+@property(nonatomic, strong) AWEDSpeedAlbumContainer *albumContainer;
 - (void)handleFastSpeed:(UILongPressGestureRecognizer *)gesture;
 - (void)changeSpeed:(double)speed;
 - (double)longPressFastSpeedValue;
