@@ -4,6 +4,7 @@
 
 #import <UIKit/UIKit.h>
 #import <mach-o/dyld.h>
+#import <objc/message.h>
 #import <objc/runtime.h>
 #import <stdatomic.h>
 #import <stdlib.h>
@@ -15,10 +16,15 @@ static const char *const kDYYYVoiceSearchManagerClassName = "AWEVoiceSearchManag
 static const char *const kDYYYNewVoiceEntranceClassName = "AWEVoiceSearchNewEntranceView";
 static const char *const kDYYYVoiceEntranceClassName = "AWEVoiceSearchEntranceView";
 static const char *const kDYYYAISearchElementClassName = "AWESearchKeyboardAISearchElement";
+static const char *const kDYYYGeneralSearchAIBallClassName = "AWEGeneralSearchAIBallButton";
+static const char *const kDYYYGeneralSearchAIModeButtonClassName = "AWEGeneralSearchAIModeButton";
+static const char *const kDYYYGeneralSearchAIModeManagerClassName = "AWEGeneralSearchAIModeManager";
 
 typedef void (*DYYYVoidIMP)(id, SEL);
 typedef void (*DYYYVoidObjectIMP)(id, SEL, id);
 typedef void (*DYYYVoidBoolIMP)(id, SEL, BOOL);
+typedef void (*DYYYVoidObjectBoolIMP)(id, SEL, id, BOOL);
+typedef void (*DYYYVoidObjectObjectIMP)(id, SEL, id, id);
 typedef id (*DYYYObjectGetterIMP)(id, SEL);
 
 static atomic_bool gDYYYNewVoiceEntranceHookLogged = false;
@@ -27,6 +33,10 @@ static atomic_bool gDYYYVoiceSearchManagerHookLogged = false;
 static atomic_bool gDYYYVoiceSearchCreatorFirstHitLogged = false;
 static atomic_bool gDYYYLegacyVoiceEntranceHookLogged = false;
 static atomic_bool gDYYYAISearchElementHookLogged = false;
+static atomic_bool gDYYYGeneralSearchAIBallHookLogged = false;
+static atomic_bool gDYYYGeneralSearchAIBallFirstHitLogged = false;
+static atomic_bool gDYYYGeneralSearchAIModeButtonHookLogged = false;
+static atomic_bool gDYYYGeneralSearchAIModeManagerHookLogged = false;
 
 static IMP gOrigNewVoiceEntranceSetHidden = NULL;
 static IMP gOrigNewVoiceEntranceLayout = NULL;
@@ -43,6 +53,26 @@ static IMP gOrigAISearchSetupUI = NULL;
 static IMP gOrigAISearchSetupNewUI = NULL;
 static IMP gOrigAISearchElementDidSetup = NULL;
 static IMP gOrigAISearchTabbarHidden = NULL;
+
+static IMP gOrigAIBallSetHidden = NULL;
+static IMP gOrigAIBallLayout = NULL;
+static IMP gOrigAIBallDidMoveToWindow = NULL;
+static IMP gOrigAIBallDidMoveToSuperview = NULL;
+static IMP gOrigAIBallUpdateWithConfig = NULL;
+
+static IMP gOrigAIModeButtonSetHidden = NULL;
+static IMP gOrigAIModeButtonLayout = NULL;
+static IMP gOrigAIModeButtonDidMoveToWindow = NULL;
+static IMP gOrigAIModeButtonDidMoveToSuperview = NULL;
+static IMP gOrigAIModeButtonUpdateWithConfig = NULL;
+
+static IMP gOrigAIModeManagerUpdateButton = NULL;
+static IMP gOrigAIModeManagerPrepareHidden = NULL;
+static IMP gOrigAIModeManagerSetAIBallButton = NULL;
+static IMP gOrigAIModeManagerSetAIModeButton = NULL;
+static IMP gOrigAIModeManagerFoldTipsToBall = NULL;
+static IMP gOrigAIModeManagerFoldTipsToMode = NULL;
+static IMP gOrigAIModeManagerContainerDidAppear = NULL;
 
 static BOOL DYYYHideKeyboardAIEnabled(void) {
     return DYYYGetBool(kDYYYHideKeyboardAIKey);
@@ -272,6 +302,185 @@ static void DYYYAISearchTabbarHidden(id self, SEL _cmd, BOOL hidden) {
     DYYYHideAISearchElementIfNeeded(self);
 }
 
+#pragma mark - 综合搜索结果页 AI / 继续追问浮钮
+
+static void DYYYLogGeneralSearchAIBallFirstHit(void) {
+    bool expected = false;
+    if (atomic_compare_exchange_strong(&gDYYYGeneralSearchAIBallFirstHitLogged, &expected, true)) {
+        NSLog(@"[DYYY][RuntimeHook][HideKeyboardAI] 已命中综合搜索 AI 浮钮并强制隐藏（跳过创建）");
+    }
+}
+
+static void DYYYForceHideGeneralSearchAIViewIfNeeded(id view, IMP setHiddenIMP) {
+    if (!DYYYHideKeyboardAIEnabled() || !view) {
+        return;
+    }
+    if (![view isKindOfClass:[UIView class]]) {
+        return;
+    }
+    UIView *uiView = (UIView *)view;
+    uiView.alpha = 0.0;
+    uiView.userInteractionEnabled = NO;
+    if (setHiddenIMP) {
+        ((DYYYVoidBoolIMP)setHiddenIMP)(view, @selector(setHidden:), YES);
+    } else {
+        uiView.hidden = YES;
+    }
+}
+
+static void DYYYAIBallSetHidden(id self, SEL _cmd, BOOL hidden) {
+    BOOL effectiveHidden = hidden || DYYYHideKeyboardAIEnabled();
+    if (DYYYHideKeyboardAIEnabled()) {
+        ((UIView *)self).alpha = 0.0;
+        ((UIView *)self).userInteractionEnabled = NO;
+        DYYYLogGeneralSearchAIBallFirstHit();
+    }
+    ((DYYYVoidBoolIMP)gOrigAIBallSetHidden)(self, _cmd, effectiveHidden);
+}
+
+static void DYYYAIBallLayout(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    ((DYYYVoidIMP)gOrigAIBallLayout)(self, _cmd);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+}
+
+static void DYYYAIBallDidMoveToWindow(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    ((DYYYVoidIMP)gOrigAIBallDidMoveToWindow)(self, _cmd);
+    if (((UIView *)self).window || DYYYHideKeyboardAIEnabled()) {
+        DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    }
+}
+
+static void DYYYAIBallDidMoveToSuperview(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    ((DYYYVoidIMP)gOrigAIBallDidMoveToSuperview)(self, _cmd);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    if (DYYYHideKeyboardAIEnabled()) {
+        DYYYLogGeneralSearchAIBallFirstHit();
+    }
+}
+
+static void DYYYAIBallUpdateWithConfig(id self, SEL _cmd, id config, BOOL animation) {
+    // 开启时禁止动画展开，避免「先出现再消失」的闪一下。
+    BOOL effectiveAnimation = DYYYHideKeyboardAIEnabled() ? NO : animation;
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    ((DYYYVoidObjectBoolIMP)gOrigAIBallUpdateWithConfig)(self, _cmd, config, effectiveAnimation);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIBallSetHidden);
+    if (DYYYHideKeyboardAIEnabled()) {
+        DYYYLogGeneralSearchAIBallFirstHit();
+    }
+}
+
+static void DYYYAIModeButtonSetHidden(id self, SEL _cmd, BOOL hidden) {
+    BOOL effectiveHidden = hidden || DYYYHideKeyboardAIEnabled();
+    if (DYYYHideKeyboardAIEnabled()) {
+        ((UIView *)self).alpha = 0.0;
+        ((UIView *)self).userInteractionEnabled = NO;
+    }
+    ((DYYYVoidBoolIMP)gOrigAIModeButtonSetHidden)(self, _cmd, effectiveHidden);
+}
+
+static void DYYYAIModeButtonLayout(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+    ((DYYYVoidIMP)gOrigAIModeButtonLayout)(self, _cmd);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+}
+
+static void DYYYAIModeButtonDidMoveToWindow(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+    ((DYYYVoidIMP)gOrigAIModeButtonDidMoveToWindow)(self, _cmd);
+    if (((UIView *)self).window || DYYYHideKeyboardAIEnabled()) {
+        DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+    }
+}
+
+static void DYYYAIModeButtonDidMoveToSuperview(id self, SEL _cmd) {
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+    ((DYYYVoidIMP)gOrigAIModeButtonDidMoveToSuperview)(self, _cmd);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+}
+
+static void DYYYAIModeButtonUpdateWithConfig(id self, SEL _cmd, id config, BOOL animation) {
+    BOOL effectiveAnimation = DYYYHideKeyboardAIEnabled() ? NO : animation;
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+    ((DYYYVoidObjectBoolIMP)gOrigAIModeButtonUpdateWithConfig)(self, _cmd, config, effectiveAnimation);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(self, gOrigAIModeButtonSetHidden);
+}
+
+static void DYYYAIModeManagerRemoveAIButtonIfNeeded(id manager) {
+    if (!DYYYHideKeyboardAIEnabled() || !manager) {
+        return;
+    }
+    SEL removeSelector = NSSelectorFromString(@"removeAIButton");
+    if (![manager respondsToSelector:removeSelector]) {
+        return;
+    }
+    ((void (*)(id, SEL))objc_msgSend)(manager, removeSelector);
+}
+
+static void DYYYAIModeManagerUpdateButton(id self, SEL _cmd, id model, id containerView) {
+    if (DYYYHideKeyboardAIEnabled()) {
+        // 跳过宿主创建/上屏浮钮，从源头消除闪一下；仍保留 model 供其它状态读取。
+        if (model) {
+            SEL setDefaultHidden = NSSelectorFromString(@"setDefaultHidden:");
+            if ([model respondsToSelector:setDefaultHidden]) {
+                ((void (*)(id, SEL, BOOL))objc_msgSend)(model, setDefaultHidden, YES);
+            }
+            SEL setModel = NSSelectorFromString(@"setAiButtonModel:");
+            if ([self respondsToSelector:setModel]) {
+                ((void (*)(id, SEL, id))objc_msgSend)(self, setModel, model);
+            }
+        }
+        DYYYAIModeManagerRemoveAIButtonIfNeeded(self);
+        DYYYLogGeneralSearchAIBallFirstHit();
+        return;
+    }
+    ((DYYYVoidObjectObjectIMP)gOrigAIModeManagerUpdateButton)(self, _cmd, model, containerView);
+}
+
+static void DYYYAIModeManagerPrepareHidden(id self, SEL _cmd, BOOL hidden) {
+    BOOL effectiveHidden = hidden || DYYYHideKeyboardAIEnabled();
+    ((DYYYVoidBoolIMP)gOrigAIModeManagerPrepareHidden)(self, _cmd, effectiveHidden);
+    if (DYYYHideKeyboardAIEnabled()) {
+        DYYYAIModeManagerRemoveAIButtonIfNeeded(self);
+    }
+}
+
+static void DYYYAIModeManagerSetAIBallButton(id self, SEL _cmd, id button) {
+    ((DYYYVoidObjectIMP)gOrigAIModeManagerSetAIBallButton)(self, _cmd, button);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(button, gOrigAIBallSetHidden);
+    if (DYYYHideKeyboardAIEnabled() && button) {
+        DYYYLogGeneralSearchAIBallFirstHit();
+    }
+}
+
+static void DYYYAIModeManagerSetAIModeButton(id self, SEL _cmd, id button) {
+    ((DYYYVoidObjectIMP)gOrigAIModeManagerSetAIModeButton)(self, _cmd, button);
+    DYYYForceHideGeneralSearchAIViewIfNeeded(button, gOrigAIModeButtonSetHidden);
+}
+
+static void DYYYAIModeManagerFoldTipsToBall(id self, SEL _cmd) {
+    if (DYYYHideKeyboardAIEnabled()) {
+        DYYYAIModeManagerRemoveAIButtonIfNeeded(self);
+        return;
+    }
+    ((DYYYVoidIMP)gOrigAIModeManagerFoldTipsToBall)(self, _cmd);
+}
+
+static void DYYYAIModeManagerFoldTipsToMode(id self, SEL _cmd) {
+    if (DYYYHideKeyboardAIEnabled()) {
+        DYYYAIModeManagerRemoveAIButtonIfNeeded(self);
+        return;
+    }
+    ((DYYYVoidIMP)gOrigAIModeManagerFoldTipsToMode)(self, _cmd);
+}
+
+static void DYYYAIModeManagerContainerDidAppear(id self, SEL _cmd) {
+    ((DYYYVoidIMP)gOrigAIModeManagerContainerDidAppear)(self, _cmd);
+    DYYYAIModeManagerRemoveAIButtonIfNeeded(self);
+}
+
 #pragma mark - 安装与框架延迟加载
 
 static void DYYYInstallNewVoiceEntranceHooks(void) {
@@ -402,11 +611,150 @@ static void DYYYInstallAISearchElementHooks(void) {
     }
 }
 
+static void DYYYInstallGeneralSearchAIBallHooks(void) {
+    Class targetClass = objc_lookUpClass(kDYYYGeneralSearchAIBallClassName);
+    if (!targetClass) {
+        return;
+    }
+
+    BOOL installed =
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(setHidden:),
+                                    "v20@0:8B16",
+                                    (IMP)DYYYAIBallSetHidden,
+                                    &gOrigAIBallSetHidden) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(layoutSubviews),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIBallLayout,
+                                    &gOrigAIBallLayout) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(didMoveToWindow),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIBallDidMoveToWindow,
+                                    &gOrigAIBallDidMoveToWindow) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(didMoveToSuperview),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIBallDidMoveToSuperview,
+                                    &gOrigAIBallDidMoveToSuperview);
+
+    BOOL updateInstalled = DYYYInstallExactInstanceHook(targetClass,
+                                                        NSSelectorFromString(@"updateWithConfig:animation:"),
+                                                        "v28@0:8@16B24",
+                                                        (IMP)DYYYAIBallUpdateWithConfig,
+                                                        &gOrigAIBallUpdateWithConfig);
+
+    if (installed || updateInstalled) {
+        bool expected = false;
+        if (atomic_compare_exchange_strong(&gDYYYGeneralSearchAIBallHookLogged, &expected, true)) {
+            NSLog(@"[DYYY][RuntimeHook][HideKeyboardAI] AWEGeneralSearchAIBallButton Hook 已安装");
+        }
+    }
+}
+
+static void DYYYInstallGeneralSearchAIModeButtonHooks(void) {
+    Class targetClass = objc_lookUpClass(kDYYYGeneralSearchAIModeButtonClassName);
+    if (!targetClass) {
+        return;
+    }
+
+    BOOL installed =
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(setHidden:),
+                                    "v20@0:8B16",
+                                    (IMP)DYYYAIModeButtonSetHidden,
+                                    &gOrigAIModeButtonSetHidden) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(layoutSubviews),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIModeButtonLayout,
+                                    &gOrigAIModeButtonLayout) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(didMoveToWindow),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIModeButtonDidMoveToWindow,
+                                    &gOrigAIModeButtonDidMoveToWindow) &&
+        DYYYInstallSubclassOverride(targetClass,
+                                    @selector(didMoveToSuperview),
+                                    "v16@0:8",
+                                    (IMP)DYYYAIModeButtonDidMoveToSuperview,
+                                    &gOrigAIModeButtonDidMoveToSuperview);
+
+    BOOL updateInstalled = DYYYInstallExactInstanceHook(targetClass,
+                                                        NSSelectorFromString(@"updateWithConfig:animation:"),
+                                                        "v28@0:8@16B24",
+                                                        (IMP)DYYYAIModeButtonUpdateWithConfig,
+                                                        &gOrigAIModeButtonUpdateWithConfig);
+
+    if (installed || updateInstalled) {
+        bool expected = false;
+        if (atomic_compare_exchange_strong(&gDYYYGeneralSearchAIModeButtonHookLogged, &expected, true)) {
+            NSLog(@"[DYYY][RuntimeHook][HideKeyboardAI] AWEGeneralSearchAIModeButton Hook 已安装");
+        }
+    }
+}
+
+static void DYYYInstallGeneralSearchAIModeManagerHooks(void) {
+    Class targetClass = objc_lookUpClass(kDYYYGeneralSearchAIModeManagerClassName);
+    if (!targetClass) {
+        return;
+    }
+
+    BOOL primaryInstalled =
+        DYYYInstallExactInstanceHook(targetClass,
+                                     NSSelectorFromString(@"updateAIModeButtonWith:containerView:"),
+                                     "v32@0:8@16@24",
+                                     (IMP)DYYYAIModeManagerUpdateButton,
+                                     &gOrigAIModeManagerUpdateButton) &&
+        DYYYInstallExactInstanceHook(targetClass,
+                                     NSSelectorFromString(@"prepareForNewRoundIsHidden:"),
+                                     "v20@0:8B16",
+                                     (IMP)DYYYAIModeManagerPrepareHidden,
+                                     &gOrigAIModeManagerPrepareHidden);
+
+    DYYYInstallExactInstanceHook(targetClass,
+                                 NSSelectorFromString(@"setAiBallButton:"),
+                                 "v24@0:8@16",
+                                 (IMP)DYYYAIModeManagerSetAIBallButton,
+                                 &gOrigAIModeManagerSetAIBallButton);
+    DYYYInstallExactInstanceHook(targetClass,
+                                 NSSelectorFromString(@"setAiModeButton:"),
+                                 "v24@0:8@16",
+                                 (IMP)DYYYAIModeManagerSetAIModeButton,
+                                 &gOrigAIModeManagerSetAIModeButton);
+    DYYYInstallExactInstanceHook(targetClass,
+                                 NSSelectorFromString(@"foldTipsToAIBallButton"),
+                                 "v16@0:8",
+                                 (IMP)DYYYAIModeManagerFoldTipsToBall,
+                                 &gOrigAIModeManagerFoldTipsToBall);
+    DYYYInstallExactInstanceHook(targetClass,
+                                 NSSelectorFromString(@"foldTipsToAIModeButton"),
+                                 "v16@0:8",
+                                 (IMP)DYYYAIModeManagerFoldTipsToMode,
+                                 &gOrigAIModeManagerFoldTipsToMode);
+    DYYYInstallExactInstanceHook(targetClass,
+                                 NSSelectorFromString(@"containerViewDidAppear"),
+                                 "v16@0:8",
+                                 (IMP)DYYYAIModeManagerContainerDidAppear,
+                                 &gOrigAIModeManagerContainerDidAppear);
+
+    if (primaryInstalled) {
+        bool expected = false;
+        if (atomic_compare_exchange_strong(&gDYYYGeneralSearchAIModeManagerHookLogged, &expected, true)) {
+            NSLog(@"[DYYY][RuntimeHook][HideKeyboardAI] AWEGeneralSearchAIModeManager Hook 已安装（跳过创建防闪）");
+        }
+    }
+}
+
 static void DYYYInstallSearchKeyboardHooks(void) {
     DYYYInstallNewVoiceEntranceHooks();
     DYYYInstallVoiceSearchManagerHooks();
     DYYYInstallLegacyVoiceEntranceHooks();
     DYYYInstallAISearchElementHooks();
+    DYYYInstallGeneralSearchAIBallHooks();
+    DYYYInstallGeneralSearchAIModeButtonHooks();
+    DYYYInstallGeneralSearchAIModeManagerHooks();
 }
 
 static BOOL DYYYIsSearchFrameworkImage(const struct mach_header *header) {
