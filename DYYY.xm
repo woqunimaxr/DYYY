@@ -921,7 +921,7 @@ static void DYYYEnsureFloatSpeedButton(AWEPlayInteractionViewController *preferr
 
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     CGFloat configuredSize = [defaults floatForKey:@"DYYYSpeedButtonSize"];
-    speedButtonSize = configuredSize > 0.0 ? configuredSize : 32.0;
+    speedButtonSize = configuredSize > 0.0 ? configuredSize : 35.0;
     showSpeedX = [defaults boolForKey:@"DYYYSpeedButtonShowX"];
 
     UIWindow *keyWindow = [DYYYUtils getActiveWindow];
@@ -931,8 +931,10 @@ static void DYYYEnsureFloatSpeedButton(AWEPlayInteractionViewController *preferr
 
     if (!speedButton) {
         CGRect windowBounds = keyWindow.bounds;
-        CGRect initialFrame = CGRectMake((CGRectGetWidth(windowBounds) - speedButtonSize) / 2.0,
-                                         (CGRectGetHeight(windowBounds) - speedButtonSize) / 2.0,
+        CGFloat initialY = CGRectGetHeight(windowBounds) * 0.7 - speedButtonSize / 2.0;
+        initialY = MAX(10.0, MIN(initialY, CGRectGetHeight(windowBounds) - speedButtonSize - 10.0));
+        CGRect initialFrame = CGRectMake(CGRectGetWidth(windowBounds) - speedButtonSize - 10.0,
+                                         initialY,
                                          speedButtonSize,
                                          speedButtonSize);
         speedButton = [[FloatingSpeedButton alloc] initWithFrame:initialFrame];
@@ -941,20 +943,18 @@ static void DYYYEnsureFloatSpeedButton(AWEPlayInteractionViewController *preferr
     } else {
         if (speedButton.interactionController != currentController) {
             speedButton.interactionController = currentController;
-            [speedButton resetButtonState];
         }
         if (fabs(CGRectGetWidth(speedButton.frame) - speedButtonSize) > 0.5) {
-            CGPoint center = speedButton.center;
             speedButton.frame = CGRectMake(0, 0, speedButtonSize, speedButtonSize);
-            speedButton.center = center;
             speedButton.layer.cornerRadius = speedButtonSize / 2.0;
+            [speedButton loadSavedPosition];
         }
     }
 
     if (![speedButton isDescendantOfView:keyWindow]) {
         [keyWindow addSubview:speedButton];
         [speedButton loadSavedPosition];
-        [speedButton resetFadeTimer];
+        [speedButton dyyy_schedulePresentationTimersIfNeeded];
     }
 
     [keyWindow bringSubviewToFront:speedButton];
@@ -15764,17 +15764,6 @@ static Class tabBarButtonClass = nil;
     }
     updateSpeedButtonUI();
 
-    [UIView animateWithDuration:0.1
-                     animations:^{
-                       sender.transform = CGAffineTransformMakeScale(1.1, 1.1);
-                     }
-                     completion:^(__unused BOOL finished) {
-                       [UIView animateWithDuration:0.1
-                                        animations:^{
-                                          sender.transform = CGAffineTransformIdentity;
-                                        }];
-                     }];
-
     if (!DYYYApplyPlaybackSpeedThroughInteractionController(self, newSpeed)) {
         [DYYYUtils showToast:@"无法找到视频控制器"];
     }
@@ -16253,19 +16242,6 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     attempts = 0;
     pureModeSet = NO;
 
-    // 倍速和清屏按钮的状态控制
-    BOOL hasFloatingButtons = (speedButton && isFloatSpeedButtonEnabled) || hideButton;
-    if (!isApplyingGlobal && hasFloatingButtons && !dyyyIsPerformingFloatClearOperation) {
-        const CGFloat threshold = 0.01f;
-        if (alpha <= threshold) {
-            dyyyCommentViewVisible = YES;
-        } else if (alpha >= (1.0f - threshold)) {
-            dyyyCommentViewVisible = NO;
-        }
-        updateSpeedButtonVisibility();
-        updateClearButtonVisibility();
-    }
-
     // 值守全局透明度
     CGFloat finalAlpha = alpha;
     if (!isApplyingGlobal && self.tag != DYYY_IGNORE_GLOBAL_ALPHA_TAG && gGlobalTransparency != kInvalidAlpha) {
@@ -16277,20 +16253,6 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     if (fabs(self.alpha - finalAlpha) >= 0.01) {
         %orig(finalAlpha);
     }
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    %orig;
-    dyyyCommentViewVisible = NO;
-    updateSpeedButtonVisibility();
-    updateClearButtonVisibility();
-}
-
-- (void)viewDidDisappear:(BOOL)animated {
-    %orig;
-    dyyyCommentViewVisible = YES;
-    updateSpeedButtonVisibility();
-    updateClearButtonVisibility();
 }
 
 - (void)didMoveToWindow {
@@ -16394,16 +16356,6 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     BOOL isApplyingGlobal = (dyyyGlobalTransparencyMutationDepth > 0);
     if (!isApplyingGlobal) {
         objc_setAssociatedObject(self, &kDYYYGlobalTransparencyBaseAlphaKey, @(alpha), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-
-    if (!isApplyingGlobal && ((speedButton && isFloatSpeedButtonEnabled) || hideButton)) {
-        if (alpha == 0) {
-            dyyyCommentViewVisible = YES;
-        } else if (alpha == 1) {
-            dyyyCommentViewVisible = NO;
-        }
-        updateSpeedButtonVisibility();
-        updateClearButtonVisibility();
     }
 
     CGFloat finalAlpha = alpha;
@@ -17139,7 +17091,8 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     [[NSUserDefaults standardUserDefaults] registerDefaults:@{
         DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY : @NO,
         @"DYYYSpeedSettings" : @"1.0,1.25,1.5,2.0",
-        @"DYYYSpeedButtonSize" : @32.0,
+        @"DYYYSpeedButtonSize" : @35.0,
+        @"DYYYAutoHideSpeedButtonTime" : @30.0,
         kDYYYEnableLoginBypassKey : @YES
     }];
 
@@ -17203,7 +17156,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         isFloatSpeedButtonEnabled = [defaults boolForKey:@"DYYYEnableFloatSpeedButton"];
         showSpeedX = [defaults boolForKey:@"DYYYSpeedButtonShowX"];
         CGFloat configuredSpeedButtonSize = [defaults floatForKey:@"DYYYSpeedButtonSize"];
-        speedButtonSize = configuredSpeedButtonSize > 0.0 ? configuredSpeedButtonSize : 32.0;
+        speedButtonSize = configuredSpeedButtonSize > 0.0 ? configuredSpeedButtonSize : 35.0;
 
         static dispatch_once_t onceToken;
         dispatch_once(&onceToken, ^{

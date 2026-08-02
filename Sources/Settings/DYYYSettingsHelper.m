@@ -64,7 +64,8 @@
 	              @"DYYYMessageOneWayReadReceipt" : @[ @"DYYYMessageReadReceiptTargets" ],
 	              @"DYYYMessageEnableCustomAudioDuration" : @[ @"DYYYMessageCustomAudioSeconds" ],
 	              @"DYYYMessageShowTimeLabel" : @[ @"DYYYMessageTimeLabelColor" ],
-	              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
+	              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoHideSpeedButton", @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
+              @"DYYYAutoHideSpeedButton" : @[ @"DYYYAutoHideSpeedButtonTime" ],
               @"DYYYEnableFloatClearButton" : @[
                   @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYRemoveTimeProgress", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar",
                   @"DYYYHideSpeed", @"DYYYHideClearButtonOnTap", @"DYYYHideChapter", @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"

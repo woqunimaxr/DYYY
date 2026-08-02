@@ -3,7 +3,9 @@
 #import <UIKit/UIKit.h>
 #import "DYYYConstants.h"
 #import "DYYYFloatClearButton.h"
+#import "DYYYFloatSpeedButton.h"
 #import "DYYYKeyboardAvoidanceCoordinator.h"
+#import "DYYYUtils.h"
 
 typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYYYSettingItemTypeTextField, DYYYSettingItemTypePicker };
 
@@ -76,8 +78,13 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     }
 
     if (![defaults objectForKey:@"DYYYSpeedButtonSize"]) {
-        [defaults setFloat:32.0 forKey:@"DYYYSpeedButtonSize"];
+        [defaults setFloat:35.0 forKey:@"DYYYSpeedButtonSize"];
     }
+
+    if (![defaults objectForKey:@"DYYYAutoHideSpeedButtonTime"]) {
+        [defaults setFloat:30.0 forKey:@"DYYYAutoHideSpeedButtonTime"];
+    }
+
 }
 
 - (void)viewDidAppear:(BOOL)animated {
@@ -378,9 +385,11 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"快捷倍速数值设置" key:@"DYYYSpeedSettings" type:DYYYSettingItemTypeTextField placeholder:@"逗号分隔"],
             [DYYYSettingItem itemWithTitle:@"自动恢复默认倍速" key:@"DYYYAutoRestoreSpeed" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"倍速按钮显示后缀" key:@"DYYYSpeedButtonShowX" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"快捷倍速按钮大小" key:@"DYYYSpeedButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"默认32"],
+            [DYYYSettingItem itemWithTitle:@"自动隐藏快捷倍速按钮" key:@"DYYYAutoHideSpeedButton" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"隐藏快捷倍速按钮时间" key:@"DYYYAutoHideSpeedButtonTime" type:DYYYSettingItemTypeTextField placeholder:@"s"],
+            [DYYYSettingItem itemWithTitle:@"快捷倍速按钮大小" key:@"DYYYSpeedButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"20-60"],
             [DYYYSettingItem itemWithTitle:@"启用一键清屏按钮" key:@"DYYYEnableFloatClearButton" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"快捷清屏按钮大小" key:@"DYYYEnableFloatClearButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"默认40"],
+            [DYYYSettingItem itemWithTitle:@"快捷清屏按钮大小" key:@"DYYYEnableFloatClearButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"20-60"],
             [DYYYSettingItem itemWithTitle:@"清屏隐藏弹幕" key:@"DYYYHideDanmaku" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清屏移除时间进度" key:@"DYYYRemoveTimeProgress" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清屏隐藏时间进度" key:@"DYYYHideTimeProgress" type:DYYYSettingItemTypeSwitch],
@@ -647,7 +656,26 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         textField.borderStyle = UITextBorderStyleRoundedRect;
         textField.placeholder = item.placeholder;
         textField.attributedPlaceholder = [[NSAttributedString alloc] initWithString:item.placeholder attributes:@{NSForegroundColorAttributeName : [UIColor lightGrayColor]}];
-        textField.text = [[NSUserDefaults standardUserDefaults] objectForKey:item.key];
+        if ([item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"] || [item.key isEqualToString:@"DYYYSpeedButtonSize"]) {
+            CGFloat size = [[NSUserDefaults standardUserDefaults] floatForKey:item.key];
+            if (size <= 0.0) {
+                size = [item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"] ? 40.0 : 35.0;
+            }
+            textField.text = [NSString stringWithFormat:@"%.0f", size];
+            textField.keyboardType = UIKeyboardTypeNumberPad;
+        } else if ([item.key isEqualToString:@"DYYYAutoHideSpeedButtonTime"]) {
+            CGFloat seconds = [[NSUserDefaults standardUserDefaults] floatForKey:item.key];
+            if (seconds <= 0.0) {
+                seconds = 30.0;
+            }
+            textField.text = [NSString stringWithFormat:@"%.0f", seconds];
+            textField.keyboardType = UIKeyboardTypeDecimalPad;
+        } else if ([item.key isEqualToString:@"DYYYSpeedSettings"]) {
+            NSString *saved = [[NSUserDefaults standardUserDefaults] stringForKey:item.key];
+            textField.text = saved.length > 0 ? saved : @"1.0,1.25,1.5,2.0";
+        } else {
+            textField.text = [[NSUserDefaults standardUserDefaults] objectForKey:item.key];
+        }
         textField.textAlignment = NSTextAlignmentRight;
         textField.backgroundColor = [UIColor colorWithWhite:1 alpha:0.1];
         textField.textColor = [UIColor whiteColor];
@@ -752,6 +780,15 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     DYYYSettingItem *item = self.settingSections[indexPath.section][indexPath.row];
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults setBool:sender.isOn forKey:item.key];
+    if ([item.key isEqualToString:@"DYYYAutoHideSpeedButton"]) {
+        if (speedButton) {
+            if (!sender.isOn && speedButton.isEdgeHidden) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            } else {
+                [speedButton resetFadeTimer];
+            }
+        }
+    }
     if ([item.key isEqualToString:@"DYYYEnableFloatClearButton"] ||
         [item.key isEqualToString:@"DYYYHideDanmaku"] ||
         [item.key isEqualToString:@"DYYYRemoveTimeProgress"] ||
@@ -780,6 +817,62 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
 - (void)textFieldDidChange:(UITextField *)textField {
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:textField.tag % 1000 inSection:textField.tag / 1000];
     DYYYSettingItem *item = self.settingSections[indexPath.section][indexPath.row];
+    if ([item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"] || [item.key isEqualToString:@"DYYYSpeedButtonSize"]) {
+        NSInteger size = textField.text.integerValue;
+        if (size < 20 || size > 60) {
+            [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
+            CGFloat restoredSize = [[NSUserDefaults standardUserDefaults] floatForKey:item.key];
+            if (restoredSize <= 0.0) {
+                restoredSize = [item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"] ? 40.0 : 35.0;
+            }
+            textField.text = [NSString stringWithFormat:@"%.0f", restoredSize];
+            return;
+        }
+        [[NSUserDefaults standardUserDefaults] setFloat:size forKey:item.key];
+        textField.text = [NSString stringWithFormat:@"%ld", (long)size];
+        if ([item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"]) {
+            reloadClearButtonConfiguration();
+        } else {
+            speedButtonSize = size;
+            DYYYRefreshFloatSpeedButton();
+        }
+        return;
+    }
+    if ([item.key isEqualToString:@"DYYYAutoHideSpeedButtonTime"]) {
+        double seconds = textField.text.doubleValue;
+        if (seconds <= 0.0) {
+            [DYYYUtils showToast:@"请输入有效的时间"];
+            CGFloat restored = [[NSUserDefaults standardUserDefaults] floatForKey:item.key];
+            if (restored <= 0.0) {
+                restored = 30.0;
+            }
+            textField.text = [NSString stringWithFormat:@"%.0f", restored];
+            return;
+        }
+        [[NSUserDefaults standardUserDefaults] setFloat:seconds forKey:item.key];
+        textField.text = [NSString stringWithFormat:@"%.0f", seconds];
+        if (speedButton) {
+            if (speedButton.isEdgeHidden) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            } else {
+                [speedButton resetFadeTimer];
+            }
+        }
+        return;
+    }
+    if ([item.key isEqualToString:@"DYYYSpeedSettings"]) {
+        NSString *trimmed = [textField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (trimmed.length == 0) {
+            [DYYYUtils showToast:@"请输入有效的倍速数值"];
+            NSString *restored = [[NSUserDefaults standardUserDefaults] stringForKey:item.key];
+            textField.text = restored.length > 0 ? restored : @"1.0,1.25,1.5,2.0";
+            return;
+        }
+        [[NSUserDefaults standardUserDefaults] setObject:trimmed forKey:item.key];
+        textField.text = trimmed;
+        updateSpeedButtonUI();
+        return;
+    }
     [[NSUserDefaults standardUserDefaults] setObject:textField.text forKey:item.key];
     if ([item.key isEqualToString:@"DYYYEnableFloatClearButtonSize"]) {
         reloadClearButtonConfiguration();

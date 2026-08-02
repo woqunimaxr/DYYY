@@ -22,8 +22,6 @@ BOOL DYYYIsDynamicAlphaView(UIView *view);
 void DYYYApplyClearTargetViewHiddenState(UIView *view);
 void DYYYRestoreClearTargetViewStateIfNeeded(UIView *view);
 
-UIWindow *getKeyWindow(void);
-
 void updateClearButtonVisibility(void);
 void showClearButton(void);
 void hideClearButton(void);

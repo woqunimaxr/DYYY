@@ -1,20 +1,29 @@
 #import <UIKit/UIKit.h>
 
 @interface FloatingSpeedButton : UIButton
-@property(nonatomic, assign) CGPoint lastLocation;
 @property(nonatomic, weak) id interactionController;
 @property(nonatomic, assign) BOOL isLocked;
 @property(nonatomic, assign) BOOL justToggledLock;
-@property(nonatomic, assign) BOOL originalLockState;
 @property(nonatomic, assign) BOOL isResponding;
 @property(nonatomic, strong) NSTimer *statusCheckTimer;
 @property(nonatomic, strong) NSTimer *fadeTimer;
+@property(nonatomic, strong) NSTimer *autoHideTimer;
+@property(nonatomic, strong) UIView *edgeIndicatorView;
+@property(nonatomic, assign) BOOL isEdgeHidden;
+@property(nonatomic, assign) BOOL dyyyEdgeHiddenByClearMode;
+@property(nonatomic, assign) BOOL dyyyJustRestoredFromEdgeHidden;
 @property(nonatomic, assign) CGFloat originalAlpha;
 - (void)saveButtonPosition;
 - (void)loadSavedPosition;
 - (void)resetButtonState;
+- (void)dyyy_schedulePresentationTimersIfNeeded;
 - (void)toggleLockState;
 - (void)resetFadeTimer;
+- (void)dyyy_showEdgeIndicator;
+- (void)dyyy_hideEdgeIndicator;
+- (void)dyyy_restoreFromEdgeHidden;
+- (void)dyyy_hideToEdgeForClearMode;
+- (void)dyyy_restoreFromClearMode;
 @end
 
 #ifdef __cplusplus

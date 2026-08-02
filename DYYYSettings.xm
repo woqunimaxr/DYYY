@@ -511,7 +511,7 @@ static NSSet<NSString *> *DYYYInlineTextInputIdentifiers(void) {
           @"DYYYSelfTitle",
           @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
           @"DYYYVideoBGColor", @"DYYYDanmuColor", @"DYYYLabelColor", @"DYYYProgressLabelColor",
-          @"DYYYEnableFloatClearButtonSize"
+          @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", @"DYYYAutoHideSpeedButtonTime"
       ]];
     });
     return identifiers;
@@ -522,6 +522,9 @@ static NSString *DYYYInlineTextInputPlaceholder(NSString *identifier) {
         @"DYYYFilterLowLikes" : @"填0关闭", @"DYYYFilterTimeLimit" : @"单位：天",
         @"DYYYInterfaceDownload" : @"解析接口以url=结尾", @"DYYYRemoteConfigURL" : @"JSON URL",
         @"DYYYEnableFloatClearButtonSize" : @"20-60",
+        @"DYYYSpeedButtonSize" : @"20-60",
+        @"DYYYSpeedSettings" : @"逗号分隔",
+        @"DYYYAutoHideSpeedButtonTime" : @"s",
         @"DYYYCommentContent" : @"不填则默认",
         @"DYYYVideoBGColor" : @"十六进制", @"DYYYDanmuColor" : @"十六进制或 random",
         @"DYYYLabelColor" : @"十六进制", @"DYYYProgressLabelColor" : @"十六进制"
@@ -547,7 +550,8 @@ static UIKeyboardType DYYYInlineTextInputKeyboardType(NSString *identifier) {
     }
     NSSet<NSString *> *decimalIdentifiers = [NSSet setWithArray:@[
         @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYGlobalTransparency", @"DYYYNotificationCornerRadius",
-        @"DYYYSheetBlurTransparent", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent", @"DYYYEnableFloatClearButtonSize"
+        @"DYYYSheetBlurTransparent", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent", @"DYYYEnableFloatClearButtonSize",
+        @"DYYYSpeedButtonSize", @"DYYYAutoHideSpeedButtonTime"
     ]];
     if ([identifier isEqualToString:@"DYYYFilterLowLikes"] || [identifier isEqualToString:@"DYYYFilterTimeLimit"]) {
         return UIKeyboardTypeNumberPad;
@@ -566,6 +570,19 @@ static NSString *DYYYInlineTextInputCurrentValue(NSString *identifier) {
     if ([identifier isEqualToString:@"DYYYEnableFloatClearButtonSize"]) {
         return @"40";
     }
+    if ([identifier isEqualToString:@"DYYYSpeedButtonSize"]) {
+        return @"35";
+    }
+    if ([identifier isEqualToString:@"DYYYSpeedSettings"]) {
+        NSString *saved = [NSUserDefaults.standardUserDefaults stringForKey:identifier];
+        return saved.length > 0 ? saved : @"1.0,1.25,1.5,2.0";
+    }
+    if ([identifier isEqualToString:@"DYYYAutoHideSpeedButtonTime"]) {
+        if ([NSUserDefaults.standardUserDefaults objectForKey:identifier] == nil) {
+            return @"30";
+        }
+        return [NSString stringWithFormat:@"%.0f", [NSUserDefaults.standardUserDefaults doubleForKey:identifier]];
+    }
     if ([identifier isEqualToString:@"DYYYRemoteConfigURL"]) {
         return DYYY_DEFAULT_ABTEST_URL;
     }
@@ -575,12 +592,13 @@ static NSString *DYYYInlineTextInputCurrentValue(NSString *identifier) {
 static CGFloat DYYYInlineTextInputPreferredWidth(NSString *identifier, CGFloat contentWidth) {
     NSSet<NSString *> *compactIdentifiers = [NSSet setWithArray:@[
         @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYDescriptionScale", @"DYYYDescriptionVerticalOffset",
-        @"DYYYElementScale", @"DYYYEnableFloatClearButtonSize", @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYGlobalTransparency",
+        @"DYYYElementScale", @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYAutoHideSpeedButtonTime",
+        @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYGlobalTransparency",
         @"DYYYIPLabelScale", @"DYYYIPLabelVerticalOffset", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius",
         @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent"
     ]];
     NSSet<NSString *> *longIdentifiers = [NSSet setWithArray:@[
-        @"DYYYCommentContent", @"DYYYInterfaceDownload", @"DYYYRemoteConfigURL"
+        @"DYYYCommentContent", @"DYYYInterfaceDownload", @"DYYYRemoteConfigURL", @"DYYYSpeedSettings"
     ]];
     if ([compactIdentifiers containsObject:identifier]) {
         return MIN(contentWidth * 0.34, 132.0);
@@ -614,6 +632,43 @@ static NSString *DYYYCommitInlineTextInput(AWESettingItemModel *itemModel, NSStr
         [NSUserDefaults.standardUserDefaults setFloat:size forKey:identifier];
         value = [NSString stringWithFormat:@"%ld", (long)size];
         reloadClearButtonConfiguration();
+    } else if ([identifier isEqualToString:@"DYYYSpeedButtonSize"]) {
+        NSInteger size = value.integerValue;
+        if (size < 20 || size > 60) {
+            [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
+            return nil;
+        }
+        [NSUserDefaults.standardUserDefaults setFloat:size forKey:identifier];
+        value = [NSString stringWithFormat:@"%ld", (long)size];
+        speedButtonSize = size;
+        DYYYRefreshFloatSpeedButton();
+    } else if ([identifier isEqualToString:@"DYYYSpeedSettings"]) {
+        if (value.length == 0) {
+            [DYYYUtils showToast:@"请输入有效的倍速数值"];
+            return nil;
+        }
+        [DYYYSettingsHelper setUserDefaults:value forKey:identifier];
+        updateSpeedButtonUI();
+    } else if ([identifier isEqualToString:@"DYYYAutoHideSpeedButtonTime"]) {
+        if (value.length == 0) {
+            [DYYYUtils showToast:@"请输入有效的时间"];
+            return nil;
+        }
+        NSScanner *scanner = [NSScanner scannerWithString:value];
+        double seconds = 0.0;
+        if (![scanner scanDouble:&seconds] || seconds <= 0.0 || !scanner.isAtEnd) {
+            [DYYYUtils showToast:@"请输入有效的时间"];
+            return nil;
+        }
+        [NSUserDefaults.standardUserDefaults setFloat:seconds forKey:identifier];
+        value = [NSString stringWithFormat:@"%.0f", seconds];
+        if (speedButton) {
+            if (speedButton.isEdgeHidden) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            } else {
+                [speedButton resetFadeTimer];
+            }
+        }
     } else {
         [DYYYSettingsHelper setUserDefaults:value forKey:identifier];
     }
@@ -4825,25 +4880,12 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       speedSettingsItem.cellType = 26;
       speedSettingsItem.colorStyle = 2;
       speedSettingsItem.isEnable = YES;
-
       NSString *savedSpeedSettings = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYSpeedSettings"];
       if (!savedSpeedSettings || savedSpeedSettings.length == 0) {
           savedSpeedSettings = @"1.0,1.25,1.5,2.0";
       }
       speedSettingsItem.detail = savedSpeedSettings;
-      speedSettingsItem.cellTappedBlock = ^{
-        [DYYYSettingsHelper showTextInputAlert:@"设置快捷倍速数值"
-                                   defaultText:speedSettingsItem.detail
-                                   placeholder:@"使用半角逗号(,)分隔倍速值"
-                                     onConfirm:^(NSString *text) {
-                                       NSString *trimmedText = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-                                       [[NSUserDefaults standardUserDefaults] setObject:trimmedText forKey:@"DYYYSpeedSettings"];
-                                       speedSettingsItem.detail = trimmedText;
-                                       [speedSettingsItem refreshCell];
-                                       updateSpeedButtonUI();
-                                     }
-                                      onCancel:nil];
-      };
+      speedSettingsItem.cellTappedBlock = nil;
 
       AWESettingItemModel *autoRestoreSpeedItem = [[%c(AWESettingItemModel) alloc] init];
       autoRestoreSpeedItem.identifier = @"DYYYAutoRestoreSpeed";
@@ -4881,33 +4923,43 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       };
       [speedButtonItems addObject:showXItem];
 
+      AWESettingItemModel *autoHideSpeedButtonItem = [DYYYSettingsHelper
+          createSettingItem:@{
+              @"identifier" : @"DYYYAutoHideSpeedButton",
+              @"title" : @"自动隐藏快捷倍速按钮",
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : @"ic_eyeslash_outlined_16"
+          }];
+      [speedButtonItems addObject:autoHideSpeedButtonItem];
+
+      AWESettingItemModel *autoHideSpeedTimeItem = [[%c(AWESettingItemModel) alloc] init];
+      autoHideSpeedTimeItem.identifier = @"DYYYAutoHideSpeedButtonTime";
+      autoHideSpeedTimeItem.title = @"隐藏快捷倍速按钮时间";
+      CGFloat currentAutoHideTime = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYAutoHideSpeedButtonTime"];
+      if (currentAutoHideTime <= 0.0) {
+          currentAutoHideTime = 30.0;
+      }
+      autoHideSpeedTimeItem.detail = [NSString stringWithFormat:@"%.0f", currentAutoHideTime];
+      autoHideSpeedTimeItem.type = 0;
+      autoHideSpeedTimeItem.svgIconImageName = @"ic_speed_outlined_20";
+      autoHideSpeedTimeItem.cellType = 26;
+      autoHideSpeedTimeItem.colorStyle = 2;
+      autoHideSpeedTimeItem.isEnable = YES;
+      autoHideSpeedTimeItem.cellTappedBlock = nil;
+      [speedButtonItems addObject:autoHideSpeedTimeItem];
+
       AWESettingItemModel *buttonSizeItem = [[%c(AWESettingItemModel) alloc] init];
       buttonSizeItem.identifier = @"DYYYSpeedButtonSize";
       buttonSizeItem.title = @"快捷倍速按钮大小";
-      CGFloat currentButtonSize = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYSpeedButtonSize"] ?: 32;
+      CGFloat currentButtonSize = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYSpeedButtonSize"] ?: 35;
       buttonSizeItem.detail = [NSString stringWithFormat:@"%.0f", currentButtonSize];
       buttonSizeItem.type = 0;
       buttonSizeItem.svgIconImageName = @"ic_zoomin_outlined_20";
       buttonSizeItem.cellType = 26;
       buttonSizeItem.colorStyle = 2;
       buttonSizeItem.isEnable = YES;
-      buttonSizeItem.cellTappedBlock = ^{
-        [DYYYSettingsHelper showTextInputAlert:@"设置按钮大小"
-                                   defaultText:buttonSizeItem.detail
-                                   placeholder:@"请输入20-60之间的数值"
-                                     onConfirm:^(NSString *text) {
-                                       NSInteger size = text.integerValue;
-                                       if (size < 20 || size > 60) {
-                                           [DYYYUtils showToast:@"请输入20-60之间的有效数值"];
-                                           return;
-                                       }
-                                       [[NSUserDefaults standardUserDefaults] setFloat:size forKey:@"DYYYSpeedButtonSize"];
-                                       speedButtonSize = size;
-                                       buttonSizeItem.detail = [NSString stringWithFormat:@"%ld", (long)size];
-                                       [buttonSizeItem refreshCell];
-                                     }
-                                      onCancel:nil];
-      };
+      buttonSizeItem.cellTappedBlock = nil;
       [speedButtonItems addObject:buttonSizeItem];
       [speedButtonItems addObject:speedSettingsItem];
 
@@ -4924,6 +4976,22 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
         }
       };
       refreshSpeedDependentItems();
+
+      void (^originalAutoHideSwitchChangedBlock)(void) = autoHideSpeedButtonItem.switchChangedBlock;
+      autoHideSpeedButtonItem.switchChangedBlock = ^{
+        if (originalAutoHideSwitchChangedBlock) {
+            originalAutoHideSwitchChangedBlock();
+        }
+        BOOL autoHideEnabled = [NSUserDefaults.standardUserDefaults boolForKey:@"DYYYAutoHideSpeedButton"];
+        if (speedButton) {
+            if (!autoHideEnabled && speedButton.isEdgeHidden) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            } else {
+                [speedButton resetFadeTimer];
+            }
+        }
+        refreshSpeedDependentItems();
+      };
 
       void (^originalSpeedSwitchChangedBlock)(void) = enableSpeedButton.switchChangedBlock;
       enableSpeedButton.switchChangedBlock = ^{
