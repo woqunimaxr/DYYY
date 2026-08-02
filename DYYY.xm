@@ -1020,8 +1020,9 @@ static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromFastSpeedC
     }
 }
 
-static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractionController(AWEPlayInteractionViewController *interactionController) {
-    if (dyyyActiveDPlayerSpeedController) {
+static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractionControllerOptions(AWEPlayInteractionViewController *interactionController,
+                                                                                                  BOOL allowCachedController) {
+    if (allowCachedController && dyyyActiveDPlayerSpeedController) {
         return dyyyActiveDPlayerSpeedController;
     }
     if (!interactionController || ![interactionController respondsToSelector:@selector(controllerByProtocol:)]) {
@@ -1039,6 +1040,10 @@ static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractio
     } @catch (__unused NSException *exception) {
         return nil;
     }
+}
+
+static AWEDPlayerSpeedController *DYYYNativeDPlayerSpeedControllerFromInteractionController(AWEPlayInteractionViewController *interactionController) {
+    return DYYYNativeDPlayerSpeedControllerFromInteractionControllerOptions(interactionController, YES);
 }
 
 static BOOL DYYYSetPlaybackRateOnTarget(id target, double speed) {
@@ -1102,8 +1107,9 @@ static BOOL DYYYApplySpeedToAFDSlidesView(AFDSlidesView *slidesView, double spee
     }
 
     @try {
-        slidesView.needFastPlay = YES;
-        slidesView.fastPlaySpeed = speed;
+        BOOL useFastRate = fabs(speed - 1.0) > 0.001;
+        slidesView.fastPlaySpeed = useFastRate ? speed : 1.0;
+        slidesView.needFastPlay = useFastRate;
         if ([slidesView isPlaying]) {
             [slidesView pauseTimer];
             [slidesView setupAndPlayTimer];
@@ -1143,6 +1149,29 @@ static BOOL DYYYApplySpeedToAFDSlidesViewsInHierarchy(UIView *rootView, double s
     return applied;
 }
 
+static BOOL DYYYApplySpeedToVisibleAFDSlidesViews(AWEPlayInteractionViewController *interactionController,
+                                                  id albumTarget,
+                                                  double speed) {
+    BOOL applied = NO;
+    if (DYYYApplySpeedToAFDSlidesViewsInHierarchy(interactionController.view, speed)) {
+        applied = YES;
+    }
+    if ([albumTarget isKindOfClass:UIViewController.class] &&
+        DYYYApplySpeedToAFDSlidesViewsInHierarchy([(UIViewController *)albumTarget view], speed)) {
+        applied = YES;
+    }
+    // 图文 slides 常挂在 interaction 覆盖层的兄弟子树，向上扩一层父视图再找。
+    UIView *parentView = interactionController.view.superview;
+    for (NSInteger depth = 0; parentView && depth < 4; depth++) {
+        if (DYYYApplySpeedToAFDSlidesViewsInHierarchy(parentView, speed)) {
+            applied = YES;
+            break;
+        }
+        parentView = parentView.superview;
+    }
+    return applied;
+}
+
 static id DYYYRichContentAlbumSpeedTarget(AWEPlayInteractionViewController *interactionController) {
     if (!interactionController) {
         return nil;
@@ -1163,10 +1192,12 @@ static BOOL DYYYApplyImageAlbumPlaybackSpeed(AWEPlayInteractionViewController *i
     }
 
     BOOL applied = NO;
+    BOOL useFastRate = fabs(speed - 1.0) > 0.001;
     DYYYSyncNativeSpeedManagerCurrentSpeed(speed);
 
+    // 图文必须从当前 interaction 解析，避免复用上一个视频残留的 DPlayerSpeedController。
     AWEDPlayerSpeedController *dplayerSpeedController =
-        DYYYNativeDPlayerSpeedControllerFromInteractionController(interactionController);
+        DYYYNativeDPlayerSpeedControllerFromInteractionControllerOptions(interactionController, NO);
     if (dplayerSpeedController && [dplayerSpeedController respondsToSelector:@selector(speedContainer)]) {
         @try {
             AWEDSpeedCoreContainer *coreContainer = [dplayerSpeedController speedContainer];
@@ -1190,8 +1221,14 @@ static BOOL DYYYApplyImageAlbumPlaybackSpeed(AWEPlayInteractionViewController *i
             } else {
                 [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlaySpeed:speed];
             }
-            // 只更新图集播放速率。强制进入宿主的 fast-play 状态会触发其长按快进转场，
-            // 表现为内容被拉伸、停顿后再回弹，和悬浮按钮的单击语义不一致。
+            // 配置写入后必须真正启用/关闭图文快播。
+            // forcePlay:YES 会触发长按快进转场（拉伸/停顿/回弹）；这里用 forcePlay:NO 只驱动速率。
+            if ([albumTarget respondsToSelector:@selector(setAlbumFastPlay:forcePlay:)]) {
+                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlay:useFastRate
+                                                                             forcePlay:NO];
+            } else if ([albumTarget respondsToSelector:@selector(setAlbumFastPlay:)]) {
+                [(id<AFDRichContentAlbumContainerProtocol>)albumTarget setAlbumFastPlay:useFastRate];
+            }
             applied = YES;
         } @catch (NSException *exception) {
             NSLog(@"[DYYY][Speed] rich content album speed apply failed on %@: %@",
@@ -1200,11 +1237,7 @@ static BOOL DYYYApplyImageAlbumPlaybackSpeed(AWEPlayInteractionViewController *i
         }
     }
 
-    if (DYYYApplySpeedToAFDSlidesViewsInHierarchy(interactionController.view, speed)) {
-        applied = YES;
-    }
-    if ([albumTarget isKindOfClass:UIViewController.class] &&
-        DYYYApplySpeedToAFDSlidesViewsInHierarchy([(UIViewController *)albumTarget view], speed)) {
+    if (DYYYApplySpeedToVisibleAFDSlidesViews(interactionController, albumTarget, speed)) {
         applied = YES;
     }
 
