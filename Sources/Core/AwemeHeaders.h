@@ -1588,13 +1588,6 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
 @end
 
-// 评论区免费去看短剧
-@interface AWEShowPlayletCommentHeaderView : UIView
-- (void)setHidden:(BOOL)hidden;
-- (BOOL)isHidden;
-- (void)layoutSubviews;
-@end
-
 @interface ACCGestureResponsibleStickerView : UIView
 @end
 

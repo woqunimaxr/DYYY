@@ -34,6 +34,7 @@
 #import "DYYYHideMusicButtonHooks.h"
 #import "DYYYHideMessageAndMinePageHooks.h"
 #import "DYYYHideKeyboardAIHooks.h"
+#import "DYYYHideCommentAIAnalysisHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
@@ -9052,7 +9053,6 @@ static BOOL DYYYIsCommentHeaderLeafViewHiddenBySetting(UIView *view) {
     dispatch_once(&onceToken, ^{
       hiddenViewClassSuffixes = @[
           @"AWECommentSearchAnchorView",
-          @"AWEShowPlayletCommentHeaderView",
           @"AWEPOIEntryAnchorView",
           @"AWECommentGuideLunaAnchorView",
           @"CommentHeaderGeneralView",
@@ -9179,18 +9179,6 @@ static BOOL DYYYAllCommentHeaderModelsAreVerifiedCollapsed(id controller) {
 }
 
 %end
-
-%end
-
-// 隐藏评论区免费去看短剧
-%hook AWEShowPlayletCommentHeaderView
-- (void)layoutSubviews {
-    %orig;
-    if (DYYYGetBool(@"DYYYHideCommentViews")) {
-        self.hidden = YES;
-        return;
-    }
-}
 
 %end
 
@@ -15940,12 +15928,14 @@ static void DYYYRemoveAppLifecycleObservers(void) {
 - (void)applicationWillTerminate:(UIApplication *)application {
     DYYYRemoveAppLifecycleObservers();
     DYYYStopHideKeyboardAIHooks();
+    DYYYStopHideCommentAIAnalysisHooks();
     %orig;
 }
 
 - (void)dealloc {
     DYYYRemoveAppLifecycleObservers();
     DYYYStopHideKeyboardAIHooks();
+    DYYYStopHideCommentAIAnalysisHooks();
     @try {
         [[NSUserDefaults standardUserDefaults] removeObserver:(NSObject *)self forKeyPath:kDYYYGlobalTransparencyKey context:DYYYGlobalTransparencyContext];
     } @catch (NSException *exception) {
@@ -17025,6 +17015,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         DYYYStartHideMusicButtonHooks();
         DYYYStartHideMessageAndMinePageHooks();
         DYYYStartHideKeyboardAIHooks();
+        DYYYStartHideCommentAIAnalysisHooks();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");

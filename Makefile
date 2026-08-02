@@ -72,7 +72,8 @@ DYYY_FILES = DYYY.xm \
 	Sources/Features/DYYYMiniProgramRewardBypass.m \
 	Sources/Features/DYYYHideMusicButtonHooks.m \
 	Sources/Features/DYYYHideMessageAndMinePageHooks.m \
-	Sources/Features/DYYYHideKeyboardAIHooks.m
+	Sources/Features/DYYYHideKeyboardAIHooks.m \
+	Sources/Features/DYYYHideCommentAIAnalysisHooks.m
 DYYY_CFLAGS = -fobjc-arc -w \
 	-I$(THEOS_PROJECT_DIR)/Sources/Core \
 	-I$(THEOS_PROJECT_DIR)/Sources/Settings \
