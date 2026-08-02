@@ -59,6 +59,17 @@ raw_commit_type() {
 canonical_commit_type() {
     local subject=$1
     local raw_type
+    local content
+
+    # 提交类型用于分组，但“回滚”是对发布净差异有决定性的语义：即使历史提交
+    # 误写为 fix: 回滚…，也必须进入回滚处理，才能与同一发布范围内的原提交配对移除。
+    content=$(strip_commit_type_prefix "$subject")
+    case "$content" in
+        Revert\ *|revert:*|revert：*|回滚*|撤销*)
+            printf 'revert'
+            return
+            ;;
+    esac
 
     raw_type=$(raw_commit_type "$subject")
     case "$raw_type" in
@@ -264,23 +275,24 @@ summarize_commit_title() {
         feat)
             content=$(printf '%s' "$content" | sed -E 's/^(新增|增加|添加|支持|引入|实现|优化)[[:space:]:：]*//')
             content=$(trim_text "$content")
-            printf '新增%s' "${content:-插件功能}"
+            printf '%s' "${content:-插件功能}"
             ;;
         fix)
-            content=$(printf '%s' "$content" | sed -E 's/^(兜底修复|修复|解决|恢复|纠正|修改|调整)[[:space:]:：]*//; s/的问题$//')
+            content=$(printf '%s' "$content" | sed -E 's/^(兜底修复|修复|解决|恢复|纠正|修正|修改|调整|优化|完善)[[:space:]:：]*//; s/的问题$//')
             content=$(printf '%s' "$content" | sed -E 's/不生效/生效异常/g; s/失效/异常/g; s/无法/不能/g')
             content=$(trim_text "$content")
-            printf '修正%s' "${content:-已知问题}"
+            printf '%s' "${content:-已知问题}"
             ;;
         perf)
             content=$(printf '%s' "$content" | sed -E 's/^(性能优化|优化|提升|改善|提速|加速)[[:space:]:：]*//')
             content=$(trim_text "$content")
-            printf '优化%s' "${content:-运行性能}"
+            printf '%s' "${content:-运行性能}"
             ;;
         refactor)
             content=$(printf '%s' "$content" | sed -E 's/^(重构|简化|清理|整理|调整|优化|完善)[[:space:]:：]*//')
+            content=$(printf '%s' "$content" | sed -E 's/^将[[:space:]]*//')
             content=$(trim_text "$content")
-            printf '整理%s' "${content:-代码结构}"
+            printf '%s' "${content:-代码结构}"
             ;;
         docs)
             content=$(printf '%s' "$content" | sed -E 's/^(文档|更新|修改|补充)[[:space:]:：]*//')
@@ -295,12 +307,12 @@ summarize_commit_title() {
         revert)
             content=$(printf '%s' "$content" | sed -E 's/^(回滚|撤销|取消)[[:space:]:：]*//')
             content=$(trim_text "$content")
-            printf '回滚%s' "${content:-上一项变更}"
+            printf '%s' "${content:-上一项变更}"
             ;;
         *)
             content=$(printf '%s' "$content" | sed -E 's/^(杂项|其他|更新|调整|同步)[[:space:]:：]*//')
             content=$(trim_text "$content")
-            printf '调整%s' "${content:-构建与维护项}"
+            printf '%s' "${content:-构建与维护项}"
             ;;
     esac
 }
@@ -431,7 +443,7 @@ normalize_revert_match_text() {
 
     value=$(strip_commit_type_prefix "$value")
     value=$(printf '%s' "$value" |
-        sed -E 's/^(新增|增加|添加|支持|引入|实现|修复|解决|恢复|纠正|修改|调整|优化|完善|重构|简化|清理|整理)[[:space:]:：]*//')
+        sed -E 's/^(新增|增加|添加|支持|引入|实现|修复|解决|恢复|纠正|修改|调整|优化|完善|重构|简化|清理|整理|将)[[:space:]:：]*//; s/(迁移为|迁移到|改为)[[:space:]]*//g')
     value=$(printf '%s' "$value" |
         sed -E 's/(的问题|问题|逻辑|优化|功能|选项|状态|改动|变更|同步|显示|隐藏|判定|异常|失效|不能|闪退)$//')
     value=$(printf '%s' "$value" |
@@ -493,7 +505,7 @@ detect_same_range_reverts() {
             continue
         fi
 
-        target_subject=$(reverted_subject_from_title "$subject")
+        target_subject=$(reverted_subject_from_title "$(strip_commit_type_prefix "$subject")")
         target_key=$(normalize_revert_match_text "$target_subject")
         if [[ -z "$target_key" || "${#target_key}" -lt 6 ]]; then
             continue
