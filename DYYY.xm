@@ -16225,6 +16225,8 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     static AWMSafeDispatchTimer *pureModeTimer = nil;
     static int attempts = 0;
     static BOOL pureModeSet = NO;
+    static BOOL pureModeTimerStarted = NO;
+    static NSUInteger pureModeGeneration = 0;
     if (DYYYGetBool(@"DYYYEnablePure")) {
         %orig(0.0);
         if (pureModeSet) {
@@ -16233,15 +16235,26 @@ static void DYYYRemoveAppLifecycleObservers(void) {
         if (!pureModeTimer) {
             pureModeTimer = [[AWMSafeDispatchTimer alloc] init];
         }
-        if (!pureModeTimer.isRunning) {
+        // Guard before isRunning: startWithInterval schedules asynchronously, so
+        // repeated setAlpha (fullscreen/status-bar layout churn) can otherwise
+        // enqueue many overlapping starts while running is still NO.
+        if (!pureModeTimerStarted) {
+            pureModeTimerStarted = YES;
             attempts = 0;
+            NSUInteger generation = ++pureModeGeneration;
             __weak AWMSafeDispatchTimer *weakTimer = pureModeTimer;
             [pureModeTimer startWithInterval:0.5
                                       leeway:0.1
                                        queue:dispatch_get_main_queue()
                                      repeats:YES
                                      handler:^{
+                                       if (generation != pureModeGeneration) {
+                                           return;
+                                       }
                                        AWMSafeDispatchTimer *strongTimer = weakTimer;
+                                       if (!strongTimer) {
+                                           return;
+                                       }
                                        UIWindow *keyWindow = [DYYYUtils getActiveWindow];
                                        if (keyWindow && keyWindow.rootViewController) {
                                            UIViewController *feedVC = [DYYYUtils findViewControllerOfClass:NSClassFromString(@"AWEFeedTableViewController")
@@ -16249,17 +16262,25 @@ static void DYYYRemoveAppLifecycleObservers(void) {
                                            if (feedVC) {
                                                [feedVC setValue:@YES forKey:@"pureMode"];
                                                pureModeSet = YES;
-                                               [strongTimer cancel];
-                                               pureModeTimer = nil;
                                                attempts = 0;
+                                               pureModeGeneration++;
+                                               pureModeTimerStarted = NO;
+                                               if (pureModeTimer == strongTimer) {
+                                                   pureModeTimer = nil;
+                                               }
+                                               [strongTimer cancel];
                                                return;
                                            }
                                        }
                                        attempts++;
                                        if (attempts >= 10) {
-                                           [strongTimer cancel];
-                                           pureModeTimer = nil;
                                            attempts = 0;
+                                           pureModeGeneration++;
+                                           pureModeTimerStarted = NO;
+                                           if (pureModeTimer == strongTimer) {
+                                               pureModeTimer = nil;
+                                           }
+                                           [strongTimer cancel];
                                        }
                                      }];
         }
@@ -16268,8 +16289,11 @@ static void DYYYRemoveAppLifecycleObservers(void) {
 
     // 清理纯净模式的残留状态
     if (pureModeTimer) {
-        [pureModeTimer cancel];
+        AWMSafeDispatchTimer *timer = pureModeTimer;
         pureModeTimer = nil;
+        pureModeTimerStarted = NO;
+        pureModeGeneration++;
+        [timer cancel];
     }
     attempts = 0;
     pureModeSet = NO;
