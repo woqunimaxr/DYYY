@@ -42,13 +42,13 @@ find_commit_touching() {
     local pattern=$1
     shift
 
-    git log --all -G "$pattern" --format='%H' -- "$@" | head -n 1
+    git log -n 1 HEAD -G "$pattern" --format='%H' -- "$@"
 }
 
 # Sources/<Domain> 是 DYYY 的真实构建输入；发布脚本自身不应触发业务 Release。
 hide_ai_commit=$(find_commit_touching 'AWEGeneralSearchAIBallButton' DYYY.xm Sources)
 image_speed_commit=$(find_commit_touching 'DYYYApplySpeedToVisibleAFDSlidesViews' DYYY.xm)
-release_automation_commit=$(git log --all --format='%H' --grep='发布日志生成' | head -n 1)
+release_automation_commit=$(git log -n 1 HEAD --format='%H' --grep='发布日志生成')
 
 if [[ -z "$hide_ai_commit" || -z "$image_speed_commit" || -z "$release_automation_commit" ]]; then
     printf 'unable to locate release-note regression fixtures in Git history\n' >&2
@@ -62,7 +62,6 @@ assert_not_build_relevant "$release_automation_commit"
 RELEASE_PREVIOUS_TAG="${hide_ai_commit}^" \
 RELEASE_HEAD_SHA="$image_speed_commit" \
 RELEASE_TITLE='DYYY_2.3-0#19' \
-GITHUB_REPOSITORY='VexCove/DYYY' \
     .github/scripts/generate-release-notes.sh "$notes_file" 2>"$stderr_file" >/dev/null
 
 assert_contains '### 新功能与体验改进'
@@ -82,11 +81,15 @@ fi
 
 # 没有显式正文且没有专用差异证据时，用户可见的 feat/fix/perf 仍需得到
 # 一句可读说明，同时在 CI 中提示维护者补充更精确的 Release-Note。
-generic_parent=$(git rev-parse 'ff80c90^')
+generic_commit=$(git log -n 1 HEAD --format='%H' --fixed-strings --grep='feat: 新增主页关注确认弹窗与提示优化')
+if [[ -z "$generic_commit" ]]; then
+    printf 'unable to locate generic release-note fallback fixture in current HEAD history\n' >&2
+    exit 1
+fi
+generic_parent=$(git rev-parse "${generic_commit}^")
 RELEASE_PREVIOUS_TAG="$generic_parent" \
-RELEASE_HEAD_SHA=ff80c90 \
+RELEASE_HEAD_SHA="$generic_commit" \
 RELEASE_TITLE='fallback-test' \
-GITHUB_REPOSITORY='VexCove/DYYY' \
 GITHUB_ACTIONS=true \
     .github/scripts/generate-release-notes.sh "$notes_file" 2>"$stderr_file" >/dev/null
 
