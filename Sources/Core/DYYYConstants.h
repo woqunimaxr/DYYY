@@ -23,6 +23,12 @@
 
 #define DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY @"DYYYDisableFeedNowPlayingInfo"
 
+// 开启设备最高可用帧率（ProMotion 门闩 + 抖音 AWEProMotionFPSBooster / 关闭 DisplayLink 降帧；负载过重时自动降档）
+#define DYYY_ENABLE_HIGH_FPS_KEY @"DYYYEnableHighFPS"
+
+// 实时帧率浮窗（依赖 DYYYEnableHighFPS）
+#define DYYY_SHOW_FPS_OVERLAY_KEY @"DYYYShowFPSOverlay"
+
 #ifdef __cplusplus
 extern "C" {
 #endif

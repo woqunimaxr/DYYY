@@ -36,6 +36,8 @@
 #import "DYYYHideCommentAIAnalysisHooks.h"
 #import "DYYYHideTemplateCollectionHooks.h"
 #import "DYYYSearchKeyboardVoiceHooks.h"
+#import "DYYYHighFPSHooks.h"
+#import "DYYYFPSOverlay.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYPrivacyRecordUploadGuard.h"
 #import "DYYYSettingViewController.h"
@@ -17130,6 +17132,9 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     DYYYMigrateScaleAndSizeSettingsIfNeeded();
     DYYYMigrateScaleAndSizeSettingsV2IfNeeded();
 
+    // 尽早安装 HighFPS（含 ProMotion Info.plist 门闩），避免 CA 先按 60Hz 缓存策略。
+    DYYYStartHighFPSHooks();
+
     %init(DYYYLoginBypassCore);
 
     Class loginListenerClass = objc_getClass("AWEUserServiceListener");
@@ -17211,6 +17216,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         DYYYStartHideCommentAIAnalysisHooks();
         DYYYStartHideTemplateCollectionHooks();
         DYYYStartSearchKeyboardVoiceHooks();
+        DYYYStartFPSOverlay();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");
