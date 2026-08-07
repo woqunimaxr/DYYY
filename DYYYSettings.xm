@@ -13,7 +13,6 @@
 #import "DYYYABTestHook.h"
 
 #import "DYYYAboutDialogView.h"
-#import "DYYYBackupManager.h"
 #import "DYYYBottomAlertView.h"
 #import "DYYYCustomInputView.h"
 #import "DYYYIconOptionsDialogView.h"
@@ -5398,42 +5397,77 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     backupItem.type = 0;
     backupItem.svgIconImageName = @"ic_memorycard_outlined_20";
     backupItem.cellType = 26;
-    backupItem.colorStyle = 2;
+    backupItem.colorStyle = 0;
     backupItem.isEnable = YES;
     backupItem.cellTappedBlock = ^{
-      dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
-        formatter.dateFormat = @"yyyyMMdd_HHmmss";
-        NSString *timestamp = [formatter stringFromDate:NSDate.date];
-        NSString *backupFileName = [NSString stringWithFormat:@"DYYY_Backup_%@.dyyybackup", timestamp];
-        NSString *tempFilePath = [DYYYUtils cachePathForFilename:backupFileName];
-        NSError *backupError = nil;
-        NSDictionary *backupSummary = nil;
-        BOOL success = [DYYYBackupManager createBackupAtURL:[NSURL fileURLWithPath:tempFilePath]
-                               includeSensitiveCredentials:NO
-                                                    summary:&backupSummary
-                                                      error:&backupError];
-        dispatch_async(dispatch_get_main_queue(), ^{
-          if (!success) {
-              [DYYYUtils showToast:[NSString stringWithFormat:@"备份失败：%@", backupError.localizedDescription ?: @"未知错误"]];
-              return;
-          }
+      // 获取所有以DYYY开头的NSUserDefaults键值
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+      NSDictionary *allDefaults = [defaults dictionaryRepresentation];
+      NSMutableDictionary *dyyySettings = [NSMutableDictionary dictionary];
 
-          NSURL *tempFileURL = [NSURL fileURLWithPath:tempFilePath];
-          UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithURLs:@[ tempFileURL ] inMode:UIDocumentPickerModeExportToService];
-          DYYYBackupPickerDelegate *pickerDelegate = [[DYYYBackupPickerDelegate alloc] init];
-          pickerDelegate.tempFilePath = tempFilePath;
-          pickerDelegate.completionBlock = ^(__unused NSURL *url) {
-            [DYYYUtils showToast:[NSString stringWithFormat:@"备份成功：%@ 项设置、%@ 个资源文件", backupSummary[@"settingCount"],
-                                                                   backupSummary[@"resourceCount"]]];
-          };
-          static char kDYYYBackupPickerDelegateKey;
-          documentPicker.delegate = pickerDelegate;
-          objc_setAssociatedObject(documentPicker, &kDYYYBackupPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-          UIViewController *topVC = topView();
-          [topVC presentViewController:documentPicker animated:YES completion:nil];
-        });
-      });
+      for (NSString *key in allDefaults.allKeys) {
+          if ([key hasPrefix:@"DYYY"]) {
+              dyyySettings[key] = [defaults objectForKey:key];
+          }
+      }
+
+      // 查找并添加图标文件
+      NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+      NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
+      NSArray *iconFileNames = @[ @"like_before.png", @"like_after.png", @"comment.png", @"unfavorite.png", @"favorite.png", @"share.png", @"tab_plus.png", @"qingping.gif" ];
+      NSMutableDictionary *iconBase64Dict = [NSMutableDictionary dictionary];
+
+      for (NSString *iconFileName in iconFileNames) {
+          NSString *iconPath = [dyyyFolderPath stringByAppendingPathComponent:iconFileName];
+          if ([[NSFileManager defaultManager] fileExistsAtPath:iconPath]) {
+              // 读取图片数据并转换为Base64
+              NSData *imageData = [NSData dataWithContentsOfFile:iconPath];
+              if (imageData) {
+                  NSString *base64String = [imageData base64EncodedStringWithOptions:0];
+                  iconBase64Dict[iconFileName] = base64String;
+              }
+          }
+      }
+
+      // 将图标Base64数据添加到备份设置中
+      if (iconBase64Dict.count > 0) {
+          dyyySettings[@"DYYYIconsBase64"] = iconBase64Dict;
+      }
+
+      // 转换为JSON数据
+      NSError *error;
+      id jsonObject = DYYYJSONSafeObject(dyyySettings);
+      NSData *sortedJsonData = [NSJSONSerialization dataWithJSONObject:jsonObject options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:&error];
+      if (error) {
+          [DYYYUtils showToast:@"备份失败：无法序列化设置数据"];
+          return;
+      }
+
+      NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+      [formatter setDateFormat:@"yyyyMMdd_HHmmss"];
+      NSString *timestamp = [formatter stringFromDate:[NSDate date]];
+      NSString *backupFileName = [NSString stringWithFormat:@"DYYY_Backup_%@.json", timestamp];
+      NSString *tempFilePath = [DYYYUtils cachePathForFilename:backupFileName];
+      BOOL success = [sortedJsonData writeToFile:tempFilePath atomically:YES];
+      if (!success) {
+          [DYYYUtils showToast:@"备份失败：无法创建临时文件"];
+          return;
+      }
+
+      // 创建文档选择器让用户选择保存位置
+      NSURL *tempFileURL = [NSURL fileURLWithPath:tempFilePath];
+      UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithURLs:@[ tempFileURL ] inMode:UIDocumentPickerModeExportToService];
+      DYYYBackupPickerDelegate *pickerDelegate = [[DYYYBackupPickerDelegate alloc] init];
+      pickerDelegate.tempFilePath = tempFilePath; // 设置临时文件路径
+      pickerDelegate.completionBlock = ^(NSURL *url) {
+        // 备份成功
+        [DYYYUtils showToast:@"备份成功"];
+      };
+      static char kDYYYBackupPickerDelegateKey;
+      documentPicker.delegate = pickerDelegate;
+      objc_setAssociatedObject(documentPicker, &kDYYYBackupPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      UIViewController *topVC = topView();
+      [topVC presentViewController:documentPicker animated:YES completion:nil];
     };
     [backupItems addObject:backupItem];
 
@@ -5445,89 +5479,74 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     restoreItem.type = 0;
     restoreItem.svgIconImageName = @"ic_phonearrowup_outlined_20";
     restoreItem.cellType = 26;
-    restoreItem.colorStyle = 2;
+    restoreItem.colorStyle = 0;
     restoreItem.isEnable = YES;
-    __weak AWESettingItemModel *weakRestoreItem = restoreItem;
     restoreItem.cellTappedBlock = ^{
-      UTType *backupType = [UTType typeWithFilenameExtension:@"dyyybackup"];
-      if (!backupType) {
-          [DYYYUtils showToast:@"无法创建 .dyyybackup 文件类型"];
-          return;
-      }
-      UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ backupType ] asCopy:YES];
+      UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[ @"public.json", @"public.text" ] inMode:UIDocumentPickerModeImport];
       documentPicker.allowsMultipleSelection = NO;
+
+      // 设置委托
       DYYYBackupPickerDelegate *pickerDelegate = [[DYYYBackupPickerDelegate alloc] init];
       pickerDelegate.completionBlock = ^(NSURL *url) {
         if (!url) {
-            [DYYYUtils showToast:@"未选择备份文件"];
+            dispatch_async(dispatch_get_main_queue(), ^{
+              [DYYYUtils showToast:@"未选择备份文件"];
+            });
             return;
         }
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-          NSError *inspectionError = nil;
-          NSDictionary *inspection = [DYYYBackupManager inspectBackupAtURL:url error:&inspectionError];
-          dispatch_async(dispatch_get_main_queue(), ^{
-            if (!inspection) {
-                [DYYYUtils showToast:[NSString stringWithFormat:@"备份预检失败：%@", inspectionError.localizedDescription ?: @"未知错误"]];
-                return;
-            }
-            void (^performRestore)(DYYYBackupRestoreMode) = ^(DYYYBackupRestoreMode mode) {
-              dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-                NSError *restoreError = nil;
-                NSDictionary *restoreSummary = nil;
-                BOOL success = [DYYYBackupManager restoreBackupAtURL:url mode:mode summary:&restoreSummary error:&restoreError];
-                dispatch_async(dispatch_get_main_queue(), ^{
-                  if (!success) {
-                      [DYYYUtils showToast:[NSString stringWithFormat:@"恢复失败：%@", restoreError.localizedDescription ?: @"未知错误"]];
-                      return;
-                  }
-                  [DYYYUtils showToast:[NSString stringWithFormat:@"已%@恢复 %@ 项设置、%@ 个资源，请重启应用",
-                                                                     mode == DYYYBackupRestoreModeReplace ? @"覆盖" : @"合并", restoreSummary[@"settingCount"],
-                                                                     restoreSummary[@"resourceCount"]]];
-                  [weakRestoreItem refreshCell];
-                });
-              });
-            };
 
-            NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
-            dateFormatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-            NSString *createdAt = [inspection[@"createdAt"] isKindOfClass:NSDate.class] ? [dateFormatter stringFromDate:inspection[@"createdAt"]] : @"未知";
-            NSString *resourceSize = [NSByteCountFormatter stringFromByteCount:[inspection[@"resourceBytes"] longLongValue] countStyle:NSByteCountFormatterCountStyleFile];
-            NSString *previewMessage = [NSString
-                stringWithFormat:@"格式：%@\n创建时间：%@\n来源版本：%@\n设置：%@ 项\n资源：%@ 个（%@）\n\n合并恢复只覆盖备份中存在的内容；覆盖恢复会先清理该备份管理的设置和资源。",
-                                 inspection[@"format"], createdAt, inspection[@"sourceAppVersion"], inspection[@"settingCount"], inspection[@"resourceCount"], resourceSize];
-            // UIDocumentPicker 的关闭动画可能尚未结束，此时底部弹窗会因
-            // 顶部控制器处于 isBeingDismissed 状态而拒绝展示。仅在此恢复
-            // 入口重试，避免预检成功但用户看不到恢复方式选择。
-            __block void (^presentPreview)(NSUInteger);
-            presentPreview = ^(NSUInteger remainingAttempts) {
-              UIViewController *alertController = [DYYYBottomAlertView showAlertWithTitle:@"备份内容预检"
-                                                                                   message:previewMessage
-                                                                                 avatarURL:nil
-                                                                          cancelButtonText:@"合并恢复"
-                                                                         confirmButtonText:@"覆盖恢复"
-                                                                              cancelAction:^{
-                                                                                performRestore(DYYYBackupRestoreModeMerge);
-                                                                              }
-                                                                               closeAction:^{}
-                                                                             confirmAction:^{
-                                                                               performRestore(DYYYBackupRestoreModeReplace);
-                                                                             }];
-              if (alertController) {
-                  presentPreview = nil;
-                  return;
-              }
-              if (remainingAttempts == 0) {
-                  presentPreview = nil;
-                  [DYYYUtils showToast:@"备份预检已完成，但恢复弹窗展示失败，请重试"];
-                  return;
-              }
-              dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                if (presentPreview) {
-                    presentPreview(remainingAttempts - 1);
-                }
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+          NSData *jsonData = [NSData dataWithContentsOfURL:url];
+          if (!jsonData) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [DYYYUtils showToast:@"无法读取备份文件"];
               });
-            };
-            presentPreview(15);
+              return;
+          }
+
+          NSError *jsonError;
+          NSDictionary *dyyySettings = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:&jsonError];
+          if (jsonError || ![dyyySettings isKindOfClass:[NSDictionary class]]) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                [DYYYUtils showToast:@"备份文件格式错误"];
+              });
+              return;
+          }
+
+          NSDictionary *iconBase64Dict = dyyySettings[@"DYYYIconsBase64"];
+          if (iconBase64Dict && [iconBase64Dict isKindOfClass:[NSDictionary class]]) {
+              NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+              NSString *dyyyFolderPath = [documentsPath stringByAppendingPathComponent:@"DYYY"];
+              NSFileManager *fileManager = [NSFileManager defaultManager];
+              if (![fileManager fileExistsAtPath:dyyyFolderPath]) {
+                  [fileManager createDirectoryAtPath:dyyyFolderPath withIntermediateDirectories:YES attributes:nil error:nil];
+              }
+
+              for (NSString *iconFileName in iconBase64Dict) {
+                  NSString *base64String = iconBase64Dict[iconFileName];
+                  if (![base64String isKindOfClass:[NSString class]]) {
+                      continue;
+                  }
+                  NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
+                  if (imageData) {
+                      NSString *iconPath = [dyyyFolderPath stringByAppendingPathComponent:iconFileName];
+                      [imageData writeToFile:iconPath atomically:YES];
+                  }
+              }
+
+              NSMutableDictionary *cleanSettings = [dyyySettings mutableCopy];
+              [cleanSettings removeObjectForKey:@"DYYYIconsBase64"];
+              dyyySettings = cleanSettings;
+          }
+
+          NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+          for (NSString *key in dyyySettings) {
+              [defaults setObject:dyyySettings[key] forKey:key];
+          }
+
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [DYYYUtils showToast:@"设置已恢复，请重启应用以应用所有更改"];
+            [restoreItem refreshCell];
           });
         });
       };

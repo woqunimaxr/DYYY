@@ -49,7 +49,6 @@ DYYY_FILES = DYYY.xm \
 	Sources/Features/DYYYFloatSpeedButton.m \
 	Sources/Settings/DYYYSettingsHelper.m \
 	Sources/Settings/DYYYPickerDelegates.m \
-	Sources/Media/DYYYBackupManager.m \
 	Sources/Settings/DYYYSettingViewController.m \
 	Sources/UI/DYYYKeyboardAvoidanceCoordinator.m \
 	Sources/Features/DYYYLivePreStreamLayoutCoordinator.m \
