@@ -3,7 +3,7 @@ packages
 .DS_Store
 Aweme
 Makefile.local
-headers
+/headers/
 .vscode/
 build/
 output/
@@ -18,7 +18,14 @@ DYYYLongPressPanel.mm
 DYYY.xcodeproj/
 DYYY/
 DYYYDylib/
-AGENTS.md
 .agents/
 .cursor/
+/AGENTS.md
 /Reverse/
+/Tests/
+/Tools/
+/Workflow/
+/.github/pull_request_template.md
+/.github/workflows/engineering-governance.yml
+/Docs/
+/Features/

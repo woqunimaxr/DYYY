@@ -26,9 +26,8 @@ static atomic_bool gDYYYCFBundleHookInstalled = false;
 static atomic_bool gDYYYDegradeHookInstalled = false;
 static atomic_bool gDYYYLoadObserversInstalled = false;
 
-static BOOL gDYYYProMotionDiskKeyKnown = NO;
-static BOOL gDYYYProMotionDiskKeyValue = NO;
 static BOOL gDYYYHighFPSThrottled = NO;
+static BOOL gDYYYUnsupportedDisplayLogged = NO;
 
 static id gDYYYThermalObserver = nil;
 static id gDYYYPowerObserver = nil;
@@ -109,73 +108,15 @@ static id DYYYProMotionBoosterTarget(Class *outClass) {
 
 #pragma mark - ProMotion Info.plist unlock
 
-static NSString *DYYYMainBundleInfoPlistPath(void) {
-    NSString *bundlePath = [NSBundle mainBundle].bundlePath;
-    if (bundlePath.length == 0) {
-        return nil;
-    }
-    return [bundlePath stringByAppendingPathComponent:@"Info.plist"];
+// `UIScreen` 首次初始化会加载 UIKit 的 application initialization context。
+// DYYYStartHighFPSHooks 在 dylib initializer 中调用，因此那里不能访问它；
+// 仅在设置页或 UIApplicationDidBecomeActive 后调用本函数。
+static NSInteger DYYYMaximumSupportedFramesPerSecond(void) {
+    return UIScreen.mainScreen.maximumFramesPerSecond;
 }
 
-static void DYYYCaptureDiskProMotionKeyIfNeeded(void) {
-    if (gDYYYProMotionDiskKeyKnown) {
-        return;
-    }
-    gDYYYProMotionDiskKeyKnown = YES;
-    NSString *path = DYYYMainBundleInfoPlistPath();
-    NSDictionary *diskInfo = path.length ? [NSDictionary dictionaryWithContentsOfFile:path] : nil;
-    id value = diskInfo[kDYYYCADisableMinimumFrameDurationOnPhoneKey];
-    if ([value respondsToSelector:@selector(boolValue)]) {
-        gDYYYProMotionDiskKeyValue = [value boolValue];
-    }
-}
-
-static BOOL DYYYMutateMainBundleInfoDictionary(BOOL enabled) {
-    CFBundleRef bundle = CFBundleGetMainBundle();
-    if (!bundle) {
-        return NO;
-    }
-    CFDictionaryRef info = CFBundleGetInfoDictionary(bundle);
-    if (!info) {
-        return NO;
-    }
-    CFMutableDictionaryRef mutableInfo = (CFMutableDictionaryRef)info;
-    if (enabled) {
-        CFDictionarySetValue(mutableInfo, CFSTR("CADisableMinimumFrameDurationOnPhone"), kCFBooleanTrue);
-    } else {
-        DYYYCaptureDiskProMotionKeyIfNeeded();
-        if (gDYYYProMotionDiskKeyValue) {
-            CFDictionarySetValue(mutableInfo, CFSTR("CADisableMinimumFrameDurationOnPhone"), kCFBooleanTrue);
-        } else if (CFDictionaryContainsKey(mutableInfo, CFSTR("CADisableMinimumFrameDurationOnPhone"))) {
-            CFDictionarySetValue(mutableInfo, CFSTR("CADisableMinimumFrameDurationOnPhone"), kCFBooleanFalse);
-        }
-    }
-    return YES;
-}
-
-static BOOL DYYYWriteMainBundleInfoPlistIfPossible(BOOL enabled) {
-    NSString *path = DYYYMainBundleInfoPlistPath();
-    if (path.length == 0 || ![[NSFileManager defaultManager] isWritableFileAtPath:path]) {
-        return NO;
-    }
-    DYYYCaptureDiskProMotionKeyIfNeeded();
-    NSMutableDictionary *info = [[NSDictionary dictionaryWithContentsOfFile:path] mutableCopy];
-    if (!info) {
-        return NO;
-    }
-    if (enabled) {
-        info[kDYYYCADisableMinimumFrameDurationOnPhoneKey] = @YES;
-    } else if (gDYYYProMotionDiskKeyValue) {
-        info[kDYYYCADisableMinimumFrameDurationOnPhoneKey] = @YES;
-    } else {
-        [info removeObjectForKey:kDYYYCADisableMinimumFrameDurationOnPhoneKey];
-    }
-    NSError *error = nil;
-    NSData *data = [NSPropertyListSerialization dataWithPropertyList:info format:NSPropertyListXMLFormat_v1_0 options:0 error:&error];
-    if (!data) {
-        return NO;
-    }
-    return [data writeToFile:path atomically:YES];
+static BOOL DYYYCurrentDisplaySupportsHighFPS(void) {
+    return DYYYMaximumSupportedFramesPerSecond() > 60;
 }
 
 static CFTypeRef DYYYCFBundleGetValueForInfoDictionaryKey(CFBundleRef bundle, CFStringRef key) {
@@ -386,42 +327,53 @@ static void DYYYInstallLoadObserversIfNeeded(void) {
 
 #pragma mark - Apply / Start
 
-static void DYYYApplyProMotionUnlock(BOOL enabled) {
-    DYYYCaptureDiskProMotionKeyIfNeeded();
+static void DYYYApplyProMotionUnlock(void) {
     DYYYInstallCFBundleProMotionHookIfNeeded();
-    BOOL mutated = DYYYMutateMainBundleInfoDictionary(enabled);
-    BOOL written = DYYYWriteMainBundleInfoPlistIfPossible(enabled);
     id runtimeValue = [[NSBundle mainBundle] objectForInfoDictionaryKey:kDYYYCADisableMinimumFrameDurationOnPhoneKey];
-    NSLog(@"[DYYY][RuntimeHook][HighFPS] ProMotion门闩 enabled=%d mutate=%d write=%d runtime=%@ diskOriginal=%d maxFPS=%ld",
-          enabled,
-          mutated,
-          written,
+    NSLog(@"[DYYY][RuntimeHook][HighFPS] ProMotion门闩已启用（未修改 Aweme Info.plist） runtime=%@ maxFPS=%ld",
           runtimeValue,
-          gDYYYProMotionDiskKeyValue,
-          (long)UIScreen.mainScreen.maximumFramesPerSecond);
+          (long)DYYYMaximumSupportedFramesPerSecond());
+}
+
+static void DYYYApplyHighFPSSettingChangeOnMain(BOOL enabled) {
+    if (!enabled) {
+        gDYYYHighFPSThrottled = NO;
+        return;
+    }
+
+    if (!DYYYCurrentDisplaySupportsHighFPS()) {
+        gDYYYHighFPSThrottled = NO;
+        if (!gDYYYUnsupportedDisplayLogged) {
+            gDYYYUnsupportedDisplayLogged = YES;
+            NSLog(@"[DYYY][RuntimeHook][HighFPS] 当前设备最高仅 %ldHz，跳过高帧率宿主调用",
+                  (long)DYYYMaximumSupportedFramesPerSecond());
+        }
+        return;
+    }
+
+    DYYYInstallLoadObserversIfNeeded();
+    DYYYApplyProMotionUnlock();
+    // 先按当前负载决定 boost 或降档。
+    gDYYYHighFPSThrottled = NO;
+    if (DYYYHighFPSLoadRequiresThrottle()) {
+        DYYYHighFPSEnterThrottle();
+    } else {
+        DYYYApplyDisplayLinkDegradePolicy(YES);
+        DYYYInvokeProMotionFPSBooster();
+    }
+}
+
+static void DYYYScheduleHighFPSSettingChange(BOOL enabled) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      DYYYApplyHighFPSSettingChangeOnMain(enabled);
+    });
 }
 
 void DYYYApplyHighFPSSettingChange(BOOL enabled) {
-    void (^block)(void) = ^{
-      DYYYInstallLoadObserversIfNeeded();
-      DYYYApplyProMotionUnlock(enabled);
-      if (!enabled) {
-          gDYYYHighFPSThrottled = NO;
-          return;
-      }
-      // 先按当前负载决定 boost 或降档。
-      gDYYYHighFPSThrottled = NO;
-      if (DYYYHighFPSLoadRequiresThrottle()) {
-          DYYYHighFPSEnterThrottle();
-      } else {
-          DYYYApplyDisplayLinkDegradePolicy(YES);
-          DYYYInvokeProMotionFPSBooster();
-      }
-    };
     if ([NSThread isMainThread]) {
-        block();
+        DYYYApplyHighFPSSettingChangeOnMain(enabled);
     } else {
-        dispatch_async(dispatch_get_main_queue(), block);
+        DYYYScheduleHighFPSSettingChange(enabled);
     }
 }
 
@@ -432,26 +384,18 @@ void DYYYStartHighFPSHooks(void) {
     }
 
     DYYYInstallCFBundleProMotionHookIfNeeded();
-    DYYYInstallLoadObserversIfNeeded();
 
-    if (DYYYHighFPSEnabled()) {
-        DYYYApplyHighFPSSettingChange(YES);
-    } else {
-        DYYYCaptureDiskProMotionKeyIfNeeded();
-        NSLog(@"[DYYY][RuntimeHook][HighFPS] 已就绪（默认关闭），diskOriginal ProMotion=%d", gDYYYProMotionDiskKeyValue);
-    }
+    // 不能在 dylib initializer 中访问 UIKit。XR 上的真实崩溃表明这会与
+    // +[UIScreen initialize] 相互等待，最终触发启动 watchdog。
+    NSLog(@"[DYYY][RuntimeHook][HighFPS] 已就绪；将于 App 激活后检查显示能力");
 
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
                                                       object:nil
-                                                       queue:[NSOperationQueue mainQueue]
+                                                      queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(__unused NSNotification *note) {
                                                     if (!DYYYHighFPSEnabled()) {
                                                         return;
                                                     }
-                                                    DYYYHighFPSReevaluateLoad();
-                                                    if (DYYYHighFPSShouldBoost()) {
-                                                        DYYYApplyDisplayLinkDegradePolicy(YES);
-                                                        DYYYInvokeProMotionFPSBooster();
-                                                    }
+                                                    DYYYScheduleHighFPSSettingChange(YES);
                                                   }];
 }

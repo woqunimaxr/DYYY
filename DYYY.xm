@@ -17157,7 +17157,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     DYYYMigrateScaleAndSizeSettingsIfNeeded();
     DYYYMigrateScaleAndSizeSettingsV2IfNeeded();
 
-    // 尽早安装 HighFPS（含 ProMotion Info.plist 门闩），避免 CA 先按 60Hz 缓存策略。
+    // 仅在构造阶段准备 C Hook；UIKit 与宿主帧率对象延后至 App 激活后访问。
     DYYYStartHighFPSHooks();
 
     %init(DYYYLoginBypassCore);
