@@ -1874,31 +1874,87 @@
     // 检查是否有视频列表(优先处理)
     BOOL hasVideoList = [videoList isKindOfClass:[NSArray class]] && videoList.count > 0;
     if (hasVideoList) {
+        // DYYY-PATCH: per-row MediaType
+        // 图集帖的 video_list 里混有图片直链与实况 mp4。原先整帖统一按 MediaTypeVideo 处理，
+        // 图片会落盘成 .mp4，PhotoKit 按视频建资产必然失败。改为逐行判定：
+        //   行 URL 命中 images[]/img[]  -> MediaTypeImage
+        //   行 URL 命中 live_videos[]   -> 与同下标 images[i] 配对存原生实况照片
+        //   都不命中（画质行）          -> MediaTypeVideo，与改动前完全一致
+        // 按下标判定而不是解析 level 文案：文案由服务端配置，下标是结构。
+        NSArray *rowImages = [dataDict[@"images"] isKindOfClass:[NSArray class]] ? dataDict[@"images"] : @[];
+        NSArray *rowImgArray = [dataDict[@"img"] isKindOfClass:[NSArray class]] ? dataDict[@"img"] : @[];
+        NSArray *rowLiveVideos = [dataDict[@"live_videos"] isKindOfClass:[NSArray class]] ? dataDict[@"live_videos"] : @[];
+
         AWEUserActionSheetView *actionSheet = [[NSClassFromString(@"AWEUserActionSheetView") alloc] init];
         NSMutableArray *actions = [NSMutableArray array];
 
         for (NSDictionary *videoDict in videoList) {
+            if (![videoDict isKindOfClass:[NSDictionary class]]) {
+                continue;
+            }
             NSString *url = videoDict[@"url"];
             NSString *level = videoDict[@"level"];
-            if (url.length > 0 && level.length > 0) {
-                AWEUserSheetAction *qualityAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:level
-                                                                                                      imgName:nil
-                                                                                                      handler:^{
-                                                                                                        NSURL *videoDownloadUrl = [NSURL URLWithString:url];
-                                                                                                        NSURL *optionalAudioURL = nil;
-                                                                                                        if (musicURL.length > 0) {
-                                                                                                            optionalAudioURL = [NSURL URLWithString:musicURL];
-                                                                                                        }
-                                                                                                        [self downloadMedia:videoDownloadUrl
-                                                                                                                  mediaType:MediaTypeVideo
-                                                                                                                      audio:optionalAudioURL
-                                                                                                                 completion:^(BOOL success) {
-                                                                                                                   if (!success) {
-                                                                                                                   }
-                                                                                                                 }];
-                                                                                                      }];
-                [actions addObject:qualityAction];
+            if (![url isKindOfClass:[NSString class]] || ![level isKindOfClass:[NSString class]]) {
+                continue;
             }
+            if (url.length == 0 || level.length == 0) {
+                continue;
+            }
+
+            NSUInteger liveIndex = [rowLiveVideos indexOfObject:url];
+            BOOL isImageRow = ([rowImages indexOfObject:url] != NSNotFound) || ([rowImgArray indexOfObject:url] != NSNotFound);
+            MediaType rowMediaType = isImageRow ? MediaTypeImage : MediaTypeVideo;
+
+            NSString *pairedImageURL = nil;
+            if (liveIndex != NSNotFound && liveIndex < rowImages.count) {
+                NSString *candidate = rowImages[liveIndex];
+                if ([candidate isKindOfClass:[NSString class]] && candidate.length > 0) {
+                    pairedImageURL = candidate;
+                }
+            }
+
+            AWEUserSheetAction *qualityAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:level
+                                                                                                  imgName:nil
+                                                                                                  handler:^{
+                                                                                                    // 实况行：与同下标静图配对，存成 iOS 原生实况照片
+                                                                                                    if (pairedImageURL.length > 0) {
+                                                                                                        [self downloadLivePhoto:[NSURL URLWithString:pairedImageURL]
+                                                                                                                       videoURL:[NSURL URLWithString:url]
+                                                                                                                     completion:nil];
+                                                                                                        return;
+                                                                                                    }
+
+                                                                                                    // 没有配对静图的实况行退化为存 mp4；图片行存 .jpg；画质行不变
+                                                                                                    NSURL *mediaDownloadUrl = [NSURL URLWithString:url];
+                                                                                                    NSURL *optionalAudioURL = nil;
+                                                                                                    if (rowMediaType == MediaTypeVideo && musicURL.length > 0) {
+                                                                                                        optionalAudioURL = [NSURL URLWithString:musicURL];
+                                                                                                    }
+                                                                                                    [self downloadMedia:mediaDownloadUrl
+                                                                                                              mediaType:rowMediaType
+                                                                                                                  audio:optionalAudioURL
+                                                                                                             completion:^(BOOL success) {
+                                                                                                               if (!success) {
+                                                                                                               }
+                                                                                                             }];
+                                                                                                  }];
+            [actions addObject:qualityAction];
+        }
+
+        // 多图帖补一行「保存全部图片」
+        NSMutableArray *allRowImages = [NSMutableArray array];
+        for (NSString *candidate in rowImages) {
+            if ([candidate isKindOfClass:[NSString class]] && candidate.length > 0) {
+                [allRowImages addObject:candidate];
+            }
+        }
+        if (allRowImages.count > 1) {
+            AWEUserSheetAction *saveAllImagesAction = [NSClassFromString(@"AWEUserSheetAction") actionWithTitle:@"保存全部图片"
+                                                                                                        imgName:nil
+                                                                                                        handler:^{
+                                                                                                          [self downloadAllImages:allRowImages];
+                                                                                                        }];
+            [actions addObject:saveAllImagesAction];
         }
 
         if (actions.count > 0) {
