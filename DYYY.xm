@@ -11924,6 +11924,42 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 
 %end
 
+// 隐藏直播间分享面板直播伴侣提示
+%hook IESLiveFlowGuidanceFragment
+
++ (BOOL)componentShouldActive:(id)attacher {
+    if (DYYYGetBool(@"DYYYHideLiveRoomShareCompanion")) {
+        return NO;
+    }
+    return %orig;
+}
+
+%end
+
+%hook IESLiveFlowGuidanceAdView
+
+- (void)layoutSubviews {
+    if (DYYYGetBool(@"DYYYHideLiveRoomShareCompanion")) {
+        self.hidden = YES;
+        [self removeFromSuperview];
+        return;
+    }
+    %orig;
+}
+
+- (void)didMoveToSuperview {
+    if (DYYYGetBool(@"DYYYHideLiveRoomShareCompanion")) {
+        if (self.superview) {
+            self.hidden = YES;
+            [self removeFromSuperview];
+        }
+        return;
+    }
+    %orig;
+}
+
+%end
+
 // 隐藏直播退出清屏、投屏按钮
 %hook IESLiveButton
 

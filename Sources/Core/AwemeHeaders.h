@@ -1088,6 +1088,13 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface BDXWebView : UIView
 @end
 
+@interface IESLiveFlowGuidanceAdView : UIView
+@end
+
+@interface IESLiveFlowGuidanceFragment : NSObject
++ (BOOL)componentShouldActive:(id)attacher;
+@end
+
 @interface IESLiveActivityBannnerView : UIView
 @end
 @interface AWECommentSearchAnchorView : UIView

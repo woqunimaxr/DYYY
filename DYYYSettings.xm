@@ -3694,6 +3694,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"detail" : @"",
             @"cellType" : @6,
             @"imageName" : @"ic_eyeslash_outlined_16"},
+          @{
+              @"identifier" : @"DYYYHideLiveRoomShareCompanion",
+              @"title" : @"隐藏直播伴侣提示",
+              @"subTitle" : @"隐藏直播间分享面板中的直播伴侣下载提示",
+              @"detail" : @"",
+              @"cellType" : @37,
+              @"imageName" : @"ic_eyeslash_outlined_16"
+          },
           @{@"identifier" : @"DYYYHideLiveDiscovery",
             @"title" : @"隐藏直播发现",
             @"detail" : @"",
