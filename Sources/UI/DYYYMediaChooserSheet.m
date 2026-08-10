@@ -3,9 +3,10 @@
 
 static const CGFloat kDYYYChooserRowHeight = 56.0;
 static const CGFloat kDYYYChooserCancelHeight = 56.0;
-static const CGFloat kDYYYChooserGroupGap = 8.0;
+/** 条目区与「取消」之间的分隔带，卡片内部的一条浅色横条。 */
+static const CGFloat kDYYYChooserDividerHeight = 8.0;
 static const CGFloat kDYYYChooserCornerRadius = 12.0;
-/** 弹窗整体高度上限占窗口高度的比例，超出后条目区域改为滚动。 */
+/** 卡片高度上限占窗口高度的比例，超出后条目区域改为滚动。 */
 static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
 
 @implementation DYYYMediaChooserItem
@@ -24,10 +25,9 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
 @interface DYYYMediaChooserSheet () <UITableViewDataSource, UITableViewDelegate>
 
 @property(nonatomic, strong) UIView *dimmingView;
-@property(nonatomic, strong) UIView *containerView;
-@property(nonatomic, strong) UIView *actionsCard;
+@property(nonatomic, strong) UIView *cardView;
 @property(nonatomic, strong) UITableView *tableView;
-@property(nonatomic, strong) UIView *cancelCard;
+@property(nonatomic, strong) UIView *dividerView;
 @property(nonatomic, strong) UIButton *cancelButton;
 @property(nonatomic, copy) NSArray<DYYYMediaChooserItem *> *items;
 @property(nonatomic, assign) BOOL dismissing;
@@ -54,8 +54,8 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
     }
 
     DYYYMediaChooserSheet *sheet = [[DYYYMediaChooserSheet alloc] initWithItems:items];
-    [window addSubview:sheet];
     sheet.frame = window.bounds;
+    [window addSubview:sheet];
     [sheet layoutIfNeeded];
     [sheet presentAnimated];
 }
@@ -80,15 +80,13 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleDimmingTap)];
     [_dimmingView addGestureRecognizer:tap];
 
-    _containerView = [[UIView alloc] init];
-    _containerView.backgroundColor = [UIColor clearColor];
-    [self addSubview:_containerView];
-
-    _actionsCard = [[UIView alloc] init];
-    _actionsCard.layer.cornerRadius = kDYYYChooserCornerRadius;
-    _actionsCard.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
-    _actionsCard.clipsToBounds = YES;
-    [_containerView addSubview:_actionsCard];
+    // 一张卡片从条目区一直盖到屏幕底部，安全区那段由卡片自己的底色填上，
+    // 不再让视频从缝里透出来。
+    _cardView = [[UIView alloc] init];
+    _cardView.layer.cornerRadius = kDYYYChooserCornerRadius;
+    _cardView.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    _cardView.clipsToBounds = YES;
+    [self addSubview:_cardView];
 
     _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     _tableView.dataSource = self;
@@ -96,34 +94,36 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
     _tableView.rowHeight = kDYYYChooserRowHeight;
     _tableView.separatorInset = UIEdgeInsetsZero;
     _tableView.tableFooterView = [[UIView alloc] init];
-    _tableView.showsVerticalScrollIndicator = YES;
+    _tableView.showsVerticalScrollIndicator = NO;
     _tableView.alwaysBounceVertical = NO;
+    if (@available(iOS 11.0, *)) {
+        // 卡片自己处理安全区，交给系统调整会在条目区上下多出空白。
+        _tableView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    }
     if (@available(iOS 15.0, *)) {
         _tableView.sectionHeaderTopPadding = 0.0;
     }
-    [_actionsCard addSubview:_tableView];
+    [_cardView addSubview:_tableView];
 
-    _cancelCard = [[UIView alloc] init];
-    _cancelCard.layer.cornerRadius = kDYYYChooserCornerRadius;
-    _cancelCard.clipsToBounds = YES;
-    [_containerView addSubview:_cancelCard];
+    _dividerView = [[UIView alloc] init];
+    [_cardView addSubview:_dividerView];
 
     _cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [_cancelButton setTitle:@"取消" forState:UIControlStateNormal];
     _cancelButton.titleLabel.font = [UIFont systemFontOfSize:16.0];
     [_cancelButton addTarget:self action:@selector(handleCancelTap) forControlEvents:UIControlEventTouchUpInside];
-    [_cancelCard addSubview:_cancelButton];
+    [_cardView addSubview:_cancelButton];
 }
 
 - (void)applyThemeColors {
     UIColor *cardColor = [DYYYUtils douyinPanelBackgroundColor];
-    UIColor *separatorColor = [DYYYUtils douyinSeparatorColor];
     UIColor *textColor = [DYYYUtils isDarkMode] ? [UIColor whiteColor] : [UIColor blackColor];
 
-    self.actionsCard.backgroundColor = cardColor;
-    self.cancelCard.backgroundColor = cardColor;
+    self.cardView.backgroundColor = cardColor;
     self.tableView.backgroundColor = cardColor;
-    self.tableView.separatorColor = separatorColor;
+    self.tableView.separatorColor = [DYYYUtils douyinSeparatorColor];
+    // 分隔带是半透明覆盖色，压在卡片不透明底色上就得到那条浅色横条。
+    self.dividerView.backgroundColor = [DYYYUtils douyinInteractiveControlBackgroundColor];
     [self.cancelButton setTitleColor:textColor forState:UIControlStateNormal];
     [self.tableView reloadData];
 }
@@ -136,29 +136,42 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
     self.dimmingView.frame = self.bounds;
 
     CGFloat width = CGRectGetWidth(self.bounds);
+    CGFloat height = CGRectGetHeight(self.bounds);
     CGFloat bottomInset = 0.0;
     if (@available(iOS 11.0, *)) {
         bottomInset = self.safeAreaInsets.bottom;
     }
 
     // 高度按窗口比例算、底部留安全区，各机型自动适配，无需按屏幕尺寸分支。
-    CGFloat maxSheetHeight = CGRectGetHeight(self.bounds) * kDYYYChooserMaxHeightRatio;
-    CGFloat reservedHeight = kDYYYChooserCancelHeight + kDYYYChooserGroupGap + bottomInset;
-    CGFloat maxTableHeight = MAX(kDYYYChooserRowHeight, maxSheetHeight - reservedHeight);
+    CGFloat reservedHeight = kDYYYChooserDividerHeight + kDYYYChooserCancelHeight + bottomInset;
+    CGFloat maxCardHeight = height * kDYYYChooserMaxHeightRatio;
+    CGFloat maxTableHeight = MAX(kDYYYChooserRowHeight, maxCardHeight - reservedHeight);
     CGFloat naturalTableHeight = kDYYYChooserRowHeight * (CGFloat)self.items.count;
     CGFloat tableHeight = MIN(naturalTableHeight, maxTableHeight);
-    self.tableView.scrollEnabled = naturalTableHeight > tableHeight;
+    self.tableView.scrollEnabled = (naturalTableHeight > tableHeight + 0.5);
 
-    CGFloat containerHeight = tableHeight + reservedHeight;
-    self.containerView.frame = CGRectMake(0.0, CGRectGetHeight(self.bounds) - containerHeight, width, containerHeight);
-    self.actionsCard.frame = CGRectMake(0.0, 0.0, width, tableHeight);
-    self.tableView.frame = self.actionsCard.bounds;
-    self.cancelCard.frame = CGRectMake(0.0, tableHeight + kDYYYChooserGroupGap, width, kDYYYChooserCancelHeight);
-    self.cancelButton.frame = self.cancelCard.bounds;
+    CGFloat cardHeight = tableHeight + reservedHeight;
+    CGRect cardFrame = CGRectMake(0.0, height - cardHeight, width, cardHeight);
+
+    // 转场途中卡片带着 transform。此时直接改 frame，UIKit 会按 transform 反推 center，
+    // 卡片会先弹回原位再继续动，看起来就是闪一下。先复位再落 frame，最后把 transform 放回去。
+    CGAffineTransform activeTransform = self.cardView.transform;
+    self.cardView.transform = CGAffineTransformIdentity;
+    self.cardView.frame = cardFrame;
+    self.cardView.transform = activeTransform;
+
+    self.tableView.frame = CGRectMake(0.0, 0.0, width, tableHeight);
+    self.dividerView.frame = CGRectMake(0.0, tableHeight, width, kDYYYChooserDividerHeight);
+    self.cancelButton.frame = CGRectMake(0.0, tableHeight + kDYYYChooserDividerHeight, width, kDYYYChooserCancelHeight);
 }
 
 - (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
     [super traitCollectionDidChange:previousTraitCollection];
+
+    // 移出窗口时也会走到这里，收起途中重绘会闪一下，所以只在仍然在屏上时才换色。
+    if (!self.window || self.dismissing) {
+        return;
+    }
 
     if (@available(iOS 13.0, *)) {
         if ([self.traitCollection hasDifferentColorAppearanceComparedToTraitCollection:previousTraitCollection]) {
@@ -169,19 +182,20 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
 
 #pragma mark - 转场
 
+- (CGFloat)slideOffset {
+    return MAX(CGRectGetHeight(self.cardView.bounds), 1.0);
+}
+
 - (void)presentAnimated {
-    CGFloat offset = MAX(CGRectGetHeight(self.containerView.frame), 1.0);
-    self.containerView.transform = CGAffineTransformMakeTranslation(0.0, offset);
+    self.cardView.transform = CGAffineTransformMakeTranslation(0.0, [self slideOffset]);
 
     NSTimeInterval duration = UIAccessibilityIsReduceMotionEnabled() ? 0.16 : 0.28;
     [UIView animateWithDuration:duration
                           delay:0.0
-         usingSpringWithDamping:0.9
-          initialSpringVelocity:0.2
                         options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction
                      animations:^{
                        self.dimmingView.alpha = 1.0;
-                       self.containerView.transform = CGAffineTransformIdentity;
+                       self.cardView.transform = CGAffineTransformIdentity;
                      }
                      completion:nil];
 }
@@ -191,15 +205,17 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
         return;
     }
     self.dismissing = YES;
+    // 收起过程中不再接受点击，避免连点触发两次下载。
+    self.userInteractionEnabled = NO;
 
-    CGFloat offset = MAX(CGRectGetHeight(self.containerView.frame), 1.0);
+    CGFloat offset = [self slideOffset];
     NSTimeInterval duration = UIAccessibilityIsReduceMotionEnabled() ? 0.12 : 0.22;
     [UIView animateWithDuration:duration
         delay:0.0
         options:UIViewAnimationOptionCurveEaseIn | UIViewAnimationOptionBeginFromCurrentState
         animations:^{
           self.dimmingView.alpha = 0.0;
-          self.containerView.transform = CGAffineTransformMakeTranslation(0.0, offset);
+          self.cardView.transform = CGAffineTransformMakeTranslation(0.0, offset);
         }
         completion:^(BOOL finished) {
           [self removeFromSuperview];
@@ -245,7 +261,7 @@ static const CGFloat kDYYYChooserMaxHeightRatio = 0.5;
 #pragma mark - UITableViewDelegate
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    [tableView deselectRowAtIndexPath:indexPath animated:NO];
 
     if ((NSUInteger)indexPath.row >= self.items.count) {
         return;
