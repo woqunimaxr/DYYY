@@ -18,9 +18,22 @@
 
 #pragma mark - UI相关方法
 
+#pragma mark - 相册说明文字
+/**
+ * 记录当前作品，之后保存到相册的媒体会带上「抖音号 · 抖音用户 · 发布时间」说明。
+ * 在弹出下载菜单前调用即可；传 nil 表示本次保存不写说明。
+ */
++ (void)setAlbumDescriptionContextWithAwemeModel:(AWEAwemeModel *)awemeModel;
+
+/** 按当前作品生成说明文字，取不到任何字段时返回 nil。 */
++ (NSString *)albumDescriptionForAwemeModel:(AWEAwemeModel *)awemeModel;
+
 #pragma mark - 媒体保存方法
 /** 保存媒体文件到相册 */
 + (void)saveMedia:(NSURL *)mediaURL mediaType:(MediaType)mediaType completion:(void (^)(BOOL success))completion;
+
+/** 保存媒体文件到相册，并把说明文字写进文件元数据 */
++ (void)saveMedia:(NSURL *)mediaURL mediaType:(MediaType)mediaType albumDescription:(NSString *)albumDescription completion:(void (^)(BOOL success))completion;
 
 /** 保存实况照片 */
 - (void)saveLivePhoto:(NSString *)imageSourcePath videoUrl:(NSString *)videoSourcePath;
