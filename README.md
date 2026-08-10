@@ -225,12 +225,6 @@ DYYY 可以通过远程 JSON 文件批量应用设置。默认下载地址在 `D
 make clean package
 ```
 
-- 安装到设备（需要配置 `THEOS_DEVICE_IP`）：
-
-```bash
-make package INSTALL=1
-```
-
 - 默认打包为 rootless；切换其他方案：
 
 ```bash

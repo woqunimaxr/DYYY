@@ -11,7 +11,6 @@
 TARGET = iphone:clang:latest:14.0
 ARCHS = arm64 arm64e
 
-#export THEOS=/Users/huami/theos
 #export THEOS_PACKAGE_SCHEME=roothide
 
 # 本地默认 rootless；SCHEME=rootful / SCHEME=roothide 可切换
@@ -95,28 +94,10 @@ export LOGOS_DEFAULT_GENERATOR=internal
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
-ifeq ($(shell whoami),huami)
-    THEOS_DEVICE_IP = 192.168.31.227
-else
-    THEOS_DEVICE_IP = 192.168.15.201
-endif
-THEOS_DEVICE_PORT = 22
-
 # 清理 packages 目录
 clean::
 	@echo -e "\033[31m==>\033[0m Cleaning packages…"
 	@rm -rf .theos packages
 
-# 编译并自动安装
 after-package::
 	@echo -e "\033[32m==>\033[0m Packaging complete."
-	@if [ "$(GITHUB_ACTIONS)" != "true" ] && [ "$(INSTALL)" = "1" ]; then \
-        DEB_FILE=$$(ls -t packages/*.deb | head -1); \
-        PACKAGE_NAME=$$(basename "$$DEB_FILE" | cut -d'_' -f1); \
-        echo -e "\033[34m==>\033[0m Installing $$PACKAGE_NAME to device…"; \
-        ssh root@$(THEOS_DEVICE_IP) "rm -rf /tmp/$${PACKAGE_NAME}.deb"; \
-        scp "$$DEB_FILE" root@$(THEOS_DEVICE_IP):/tmp/$${PACKAGE_NAME}.deb; \
-        ssh root@$(THEOS_DEVICE_IP) "dpkg -i --force-overwrite /tmp/$${PACKAGE_NAME}.deb && rm -f /tmp/$${PACKAGE_NAME}.deb"; \
-	else \
-        echo -e "\033[33m==>\033[0m Skipping installation (GitHub Actions environment or INSTALL!=1)"; \
-	fi
