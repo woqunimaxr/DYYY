@@ -4826,8 +4826,11 @@ static void DYYYShowProfileFollowGlassConfirm(id user, void (^confirmAction)(voi
 
 static char kDYYYFeedLocationContainerManagedHiddenKey;
 static char kDYYYFeedLocationContainerOriginalHiddenKey;
+static char kDYYYFeedAnchorArrangedManagedHiddenKey;
+static char kDYYYFeedAnchorArrangedOriginalHiddenKey;
 
 static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallbackClassName);
+static void DYYYSyncHiddenFeedAnchorArrangedView(UIView *inner);
 
 %hook AWEFeedAnchorContainerView
 
@@ -4861,6 +4864,11 @@ static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallba
             objc_setAssociatedObject(self, &kDYYYFeedLocationContainerManagedHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
         self.hidden = YES;
+        return;
+    }
+
+    DYYYSyncHiddenFeedAnchorArrangedView(self);
+    if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
         return;
     }
 
@@ -5708,6 +5716,62 @@ static BOOL DYYYShouldSkipAnchorFollowLayout(UIView *target) {
         }
     }
     return YES;
+}
+
+static UIView *DYYYFeedAnchorArrangedView(UIView *inner) {
+    if (!inner) {
+        return nil;
+    }
+    Class stackClass = %c(AWEElementStackView);
+    UIView *arranged = inner;
+    while (arranged.superview && stackClass && ![arranged.superview isKindOfClass:stackClass]) {
+        arranged = arranged.superview;
+    }
+    if (stackClass && arranged.superview && [arranged.superview isKindOfClass:stackClass]) {
+        return arranged;
+    }
+    return inner;
+}
+
+static void DYYYLogFeedAnchorHookOnce(NSString *event) {
+    static NSMutableSet<NSString *> *loggedEvents = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      loggedEvents = [NSMutableSet set];
+    });
+    @synchronized(loggedEvents) {
+        if ([loggedEvents containsObject:event]) {
+            return;
+        }
+        [loggedEvents addObject:event];
+    }
+    NSLog(@"[DYYY][RuntimeHook][FeedAnchor] %@", event);
+}
+
+static void DYYYSyncHiddenFeedAnchorArrangedView(UIView *inner) {
+    UIView *arranged = DYYYFeedAnchorArrangedView(inner);
+    if (!arranged) {
+        return;
+    }
+
+    NSNumber *managed = objc_getAssociatedObject(arranged, &kDYYYFeedAnchorArrangedManagedHiddenKey);
+    if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+        if (![managed boolValue]) {
+            objc_setAssociatedObject(arranged, &kDYYYFeedAnchorArrangedOriginalHiddenKey, @(arranged.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            objc_setAssociatedObject(arranged, &kDYYYFeedAnchorArrangedManagedHiddenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            DYYYLogFeedAnchorHookOnce(@"Hook 已安装");
+            DYYYLogFeedAnchorHookOnce(@"collapsed arranged view");
+        }
+        arranged.hidden = YES;
+        return;
+    }
+
+    if ([managed boolValue]) {
+        NSNumber *originalHidden = objc_getAssociatedObject(arranged, &kDYYYFeedAnchorArrangedOriginalHiddenKey);
+        objc_setAssociatedObject(arranged, &kDYYYFeedAnchorArrangedManagedHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(arranged, &kDYYYFeedAnchorArrangedOriginalHiddenKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        arranged.hidden = originalHidden ? originalHidden.boolValue : NO;
+    }
 }
 
 static BOOL DYYYShouldSkipDanmakuFollowLayout(UIView *target) {
@@ -6703,6 +6767,208 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
 }
 
 %end
+
+%group DYYYHideFeedAnchorGroup
+
+%hook AWEPlayInteractionAnchorElement
+
++ (id)activateInfoWithContext:(id)context {
+    if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+        DYYYLogFeedAnchorHookOnce(@"Hook 已安装");
+        DYYYLogFeedAnchorHookOnce(@"activateInfoWithContext: skipped");
+        return nil;
+    }
+    return %orig;
+}
+
+- (void)layoutElementView {
+    %orig;
+    id elementView = nil;
+    if ([self respondsToSelector:@selector(elementView)]) {
+        elementView = [self elementView];
+    }
+    if ([elementView isKindOfClass:[UIView class]]) {
+        DYYYSyncHiddenFeedAnchorArrangedView((UIView *)elementView);
+    }
+    if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+        if ([self respondsToSelector:@selector(setAnchorHidden:)]) {
+            [self setAnchorHidden:YES];
+        }
+        return;
+    }
+    DYYYApplyPlayInteractionElementLayoutFromElement(self, @"AWEPlayInteractionAnchorElement");
+}
+
+%end
+
+%hook AWEAwemeModel
+
+- (id)anchorInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setAnchorInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)anchorList {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setAnchorList:(id)list {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)anchorNormalInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setAnchorNormalInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)doubleColumnAnchorNormalInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setDoubleColumnAnchorNormalInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)localLifeAnchorInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setLocalLifeAnchorInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)nearbyFeedDualAnchorInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setNearbyFeedDualAnchorInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)minorAnchorInfo {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setMinorAnchorInfo:(id)info {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+- (id)commonAnchor {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		return nil;
+	}
+	return %orig;
+}
+
+- (void)setCommonAnchor:(id)anchor {
+	if (DYYYGetBool(@"DYYYHideFeedAnchorContainer")) {
+		%orig(nil);
+		return;
+	}
+	%orig;
+}
+
+%end
+
+%end
+
+%group DYYYHideFeedAnchorTemplateGroup
+
+%hook AWEFeedTemplateAnchorViewV2
+
+- (void)layoutSubviews {
+    %orig;
+    DYYYSyncHiddenFeedAnchorArrangedView(self);
+}
+
+%end
+
+%end
+
+static void DYYYInitHideFeedAnchorGroupIfNeeded(void) {
+    static BOOL coreReady = NO;
+    static BOOL templateReady = NO;
+    if (!coreReady && objc_getClass("AWEAwemeModel") && objc_getClass("AWEPlayInteractionAnchorElement")) {
+        %init(DYYYHideFeedAnchorGroup);
+        coreReady = YES;
+        NSLog(@"[DYYY][RuntimeHook][FeedAnchor] Hook 已安装");
+    }
+    if (!templateReady && objc_getClass("AWEFeedTemplateAnchorViewV2")) {
+        %init(DYYYHideFeedAnchorTemplateGroup);
+        templateReady = YES;
+        NSLog(@"[DYYY][RuntimeHook][FeedAnchor] AWEFeedTemplateAnchorViewV2 group installed");
+    }
+}
+
+static void DYYYStartHideFeedAnchorHookInstaller(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        DYYYInitHideFeedAnchorGroupIfNeeded();
+        NSArray<NSNumber *> *delays = @[ @0.2, @0.8, @2.0, @5.0, @10.0 ];
+        for (NSNumber *delay in delays) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(),
+                           ^{
+                               DYYYInitHideFeedAnchorGroupIfNeeded();
+                           });
+        }
+    });
+}
 
 %hook AWEPlayInteractionChapterElement
 
@@ -13256,93 +13522,6 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
 	return %orig;
 }
 
-// 屏蔽锚点信息
-- (id)anchorInfo {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		return nil;
-	}
-	return %orig;
-}
-
-- (void)setAnchorInfo:(id)info {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		%orig(nil);
-		return;
-	}
-	%orig;
-}
-
-- (id)localLifeAnchorInfo {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		return nil;
-	}
-	return %orig;
-}
-
-- (void)setLocalLifeAnchorInfo:(id)info {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		%orig(nil);
-		return;
-	}
-	%orig;
-}
-
-- (id)nearbyFeedDualAnchorInfo {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		return nil;
-	}
-	return %orig;
-}
-
-- (void)setNearbyFeedDualAnchorInfo:(id)info {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		%orig(nil);
-		return;
-	}
-	%orig;
-}
-
-- (id)minorAnchorInfo {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		return nil;
-	}
-	return %orig;
-}
-
-- (void)setMinorAnchorInfo:(id)info {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		%orig(nil);
-		return;
-	}
-	%orig;
-}
-
-// 屏蔽通用锚点（合并到锚点信息）
-- (id)commonAnchor {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		return nil;
-	}
-	return %orig;
-}
-
-- (void)setCommonAnchor:(id)anchor {
-	BOOL DYYYHideFeedAnchorContainer = DYYYGetBool(@"DYYYHideFeedAnchorContainer");
-	if (DYYYHideFeedAnchorContainer) {
-		%orig(nil);
-		return;
-	}
-	%orig;
-}
-
 // 屏蔽作者声明及风险提示
 - (id)riskInfoModel {
 	BOOL DYYYHideAntiAddictedNotice = DYYYGetBool(@"DYYYHideAntiAddictedNotice");
@@ -17293,6 +17472,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     // 仅在构造阶段准备 C Hook；UIKit 与宿主帧率对象延后至 App 激活后访问。
     DYYYStartHighFPSHooks();
     DYYYStartFeedTagHookInstaller();
+    DYYYStartHideFeedAnchorHookInstaller();
 
     %init(DYYYLoginBypassCore);
     DYYYLoginRepairInstallHooks();

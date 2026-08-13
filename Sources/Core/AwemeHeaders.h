@@ -1167,6 +1167,13 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 - (void)layoutElementView;
 @end
 
+@interface AWEPlayInteractionAnchorElement : NSObject
++ (id)activateInfoWithContext:(id)context;
+- (void)layoutElementView;
+- (void)setAnchorHidden:(BOOL)hidden;
+- (id)elementView;
+@end
+
 @interface AWEPlayInteractionChapterElement : NSObject
 - (void)layoutElementView;
 @end
