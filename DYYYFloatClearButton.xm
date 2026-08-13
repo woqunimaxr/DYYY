@@ -1,9 +1,4 @@
-/*
- * Tweak Name: 1KeyHideDYUI
- * Target App: com.ss.iphone.ugc.Aweme
- * Dev: @c00kiec00k 曲奇的坏品味🍻
- * iOS Version: 16.5
- */
+// 一键清屏悬浮按钮
 #import "DYYYFloatClearButton.h"
 #import "DYYYFloatSpeedButton.h"
 #import "DYYYUtils.h"

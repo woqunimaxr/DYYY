@@ -21,7 +21,6 @@ typedef void (*DYYYLoginRepairStatusCollectParamsIMP)(id, SEL, id, id, int, id);
 typedef id (*DYYYLoginRepairEncryptDtraitIMP)(id, SEL, long long, unsigned long long, id, id *);
 
 static atomic_bool gDYYYLoginRepairHooksStarted = false;
-static NSUInteger gDYYYLoginRepairInstalledCount = 0;
 
 #define DYYY_LR_SLOT(name) static IMP gOrig_##name = NULL
 
@@ -56,7 +55,7 @@ DYYY_LR_SLOT(ttAccountSetURLString);
 DYYY_LR_SLOT(ttNetworkTransferedURL);
 
 static BOOL DYYYLoginRepairEnabled(void) {
-    return [DYYYLoginBypassManager isLoginBypassEnabled];
+    return [DYYYLoginBypassManager shouldApplyLoginNetworkCamouflage];
 }
 
 static void DYYYLoginRepairLogTriggerOnce(SEL selector) {
@@ -75,7 +74,7 @@ static void DYYYLoginRepairLogTriggerOnce(SEL selector) {
         }
         [logged addObject:name];
     }
-    NSLog(@"[DYYY][登录修复] hook-trigger %@", name);
+    NSLog(@"[DYYY][绕登录] hook-trigger %@", name);
 }
 
 static BOOL DYYYLoginRepairClassDefinesSelector(Class targetClass, SEL selector) {
@@ -120,7 +119,7 @@ static BOOL DYYYLoginRepairInstallHook(Class targetClass,
         return NO;
     }
     if (!DYYYLoginRepairClassDefinesSelector(hookClass, selector)) {
-        NSLog(@"[DYYY][登录修复] hook-skip class=%s sel=%@ classMethod=%d encoding=(absent-on-class)",
+        NSLog(@"[DYYY][绕登录] hook-skip class=%s sel=%@ classMethod=%d encoding=(absent-on-class)",
               class_getName(targetClass), NSStringFromSelector(selector), classMethod ? 1 : 0);
         return NO;
     }
@@ -128,7 +127,7 @@ static BOOL DYYYLoginRepairInstallHook(Class targetClass,
     Method method = classMethod ? class_getClassMethod(targetClass, selector) : class_getInstanceMethod(targetClass, selector);
     const char *actualTypeEncoding = method ? method_getTypeEncoding(method) : NULL;
     if (!method || !DYYYLoginRepairEncodingAllowed(actualTypeEncoding, allowedEncodings, allowedCount)) {
-        NSLog(@"[DYYY][登录修复] hook-skip class=%s sel=%@ classMethod=%d encoding=%s",
+        NSLog(@"[DYYY][绕登录] hook-skip class=%s sel=%@ classMethod=%d encoding=%s",
               class_getName(targetClass), NSStringFromSelector(selector), classMethod ? 1 : 0,
               actualTypeEncoding ?: "(null)");
         return NO;
@@ -521,8 +520,7 @@ void DYYYLoginRepairInstallHooks(void) {
         }
     }
 
-    gDYYYLoginRepairInstalledCount = installed;
-    NSLog(@"[DYYY][登录修复] hook-init status=%@ targets=%lu installed=%lu expected=%lu enabled=%d",
+    NSLog(@"[DYYY][绕登录] hook-init status=%@ targets=%lu installed=%lu expected=%lu enabled=%d",
           installed == kDYYYLoginRepairExpectedInstallCount ? @"PASS" : @"PARTIAL", (unsigned long)targetCount, (unsigned long)installed,
           (unsigned long)kDYYYLoginRepairExpectedInstallCount, DYYYLoginRepairEnabled() ? 1 : 0);
 }

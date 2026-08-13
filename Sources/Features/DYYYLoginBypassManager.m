@@ -5,7 +5,7 @@
 #import <objc/message.h>
 
 static NSString *const kDYYYLoginBypassManagerEnabledKey = @"DYYYEnableLoginBypass";
-static NSString *const kDYYYLoginBypassStickyCloneBundleMapKey = @"DYYYLoginBypassStickyCloneBundleMap";
+static NSString *const kDYYYOfficialAwemeBundleIdentifier = @"com.ss.iphone.ugc.Aweme";
 static NSString *const kDYYYLoginBypassDisabledToast = @"检测账号登录，绕登录设置关闭";
 static NSString *const kDYYYLoginBypassManualCloseToast = @"检测登录态失败，请手动关闭绕登录设置";
 
@@ -18,6 +18,7 @@ typedef NS_ENUM(NSUInteger, DYYYOfficialAccountLoginState) {
 static NSString *dyyyLoginBypassDefaultsDomainName = nil;
 static BOOL dyyyLoginBypassInitialConfigurationPending = NO;
 static BOOL dyyyLoginBypassDisableInFlight = NO;
+static BOOL dyyyLoginBypassPostLoginNetworkRestore = NO;
 static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 
 @implementation DYYYLoginBypassManager
@@ -223,12 +224,16 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
           return;
       }
       if ([self hasPersistentLoginBypassSetting]) {
+          if ([self officialAccountLoginState] == DYYYOfficialAccountLoginStateLoggedIn) {
+              dyyyLoginBypassPostLoginNetworkRestore = YES;
+          }
           return;
       }
 
       // 同步探测：已登录场景尽早写 NO，避免 registerDefaults=YES 造成短暂误开。
       DYYYOfficialAccountLoginState loginState = [self officialAccountLoginState];
       if (loginState == DYYYOfficialAccountLoginStateLoggedIn) {
+          dyyyLoginBypassPostLoginNetworkRestore = YES;
           [self persistLoginBypassEnabled:NO];
           NSLog(@"[DYYY][绕登录] 首次同步配置：已登录，绕登录已关闭");
           return;
@@ -268,16 +273,42 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 }
 
 + (BOOL)isNumericAwemeCloneBundleIdentifier:(NSString *)bundleIdentifier {
-    static NSString *const kOfficialAwemeBundleIdentifier = @"com.ss.iphone.ugc.Aweme";
-    if (bundleIdentifier.length != kOfficialAwemeBundleIdentifier.length + 4) {
+    if (bundleIdentifier.length != kDYYYOfficialAwemeBundleIdentifier.length + 4) {
         return NO;
     }
-    if (![bundleIdentifier hasPrefix:kOfficialAwemeBundleIdentifier]) {
+    if (![bundleIdentifier hasPrefix:kDYYYOfficialAwemeBundleIdentifier]) {
         return NO;
     }
-    NSString *suffix = [bundleIdentifier substringFromIndex:kOfficialAwemeBundleIdentifier.length];
+    NSString *suffix = [bundleIdentifier substringFromIndex:kDYYYOfficialAwemeBundleIdentifier.length];
     NSCharacterSet *nonDigits = NSCharacterSet.decimalDigitCharacterSet.invertedSet;
     return [suffix rangeOfCharacterFromSet:nonDigits].location == NSNotFound;
+}
+
++ (NSString *)realMainBundleIdentifier {
+    static NSString *identifier = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      NSString *plistPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Info.plist"];
+      NSDictionary *plist = plistPath.length > 0 ? [NSDictionary dictionaryWithContentsOfFile:plistPath] : nil;
+      NSString *bundleIdentifier = plist[@"CFBundleIdentifier"];
+      identifier = [bundleIdentifier isKindOfClass:NSString.class] ? [bundleIdentifier copy] : @"";
+    });
+    return identifier;
+}
+
++ (BOOL)isNumericAwemeCloneProcess {
+    return [self isNumericAwemeCloneBundleIdentifier:[self realMainBundleIdentifier]];
+}
+
++ (BOOL)shouldApplyEmojiBundleSpoof {
+    return !dyyyLoginBypassPostLoginNetworkRestore && [self isLoginBypassEnabled];
+}
+
++ (BOOL)shouldMaintainCloneSessionIdentity {
+    if (![self isNumericAwemeCloneProcess]) {
+        return NO;
+    }
+    return [self isLoginBypassEnabled] || dyyyLoginBypassPostLoginNetworkRestore;
 }
 
 + (BOOL)isTargetBundleIdentifier:(id)value {
@@ -291,13 +322,6 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
         }
     }
     return [self isNumericAwemeCloneBundleIdentifier:bundleIdentifier];
-}
-
-+ (NSString *)canonicalSpoofBaseForBundleIdentifier:(NSString *)bundleIdentifier {
-    if ([self isNumericAwemeCloneBundleIdentifier:bundleIdentifier]) {
-        return @"com.ss.iphone.ugc.Aweme";
-    }
-    return bundleIdentifier;
 }
 
 + (NSArray<NSString *> *)emojiSuffixes {
@@ -314,63 +338,11 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     return suffixes;
 }
 
-+ (NSMutableDictionary<NSString *, NSString *> *)stickyCloneBundleMap {
-    static NSMutableDictionary<NSString *, NSString *> *map = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      NSDictionary *stored = [NSUserDefaults.standardUserDefaults dictionaryForKey:kDYYYLoginBypassStickyCloneBundleMapKey];
-      map = stored.count > 0 ? stored.mutableCopy : [NSMutableDictionary dictionary];
-    });
-    return map;
-}
-
-+ (void)persistStickyCloneBundleMap {
-    NSDictionary<NSString *, NSString *> *snapshot = nil;
-    NSMutableDictionary<NSString *, NSString *> *map = [self stickyCloneBundleMap];
-    @synchronized(map) {
-        snapshot = [map copy];
++ (BOOL)shouldApplyLoginNetworkCamouflage {
+    if ([self isNumericAwemeCloneProcess]) {
+        return [self shouldMaintainCloneSessionIdentity];
     }
-    if (snapshot.count == 0) {
-        [NSUserDefaults.standardUserDefaults removeObjectForKey:kDYYYLoginBypassStickyCloneBundleMapKey];
-    } else {
-        [NSUserDefaults.standardUserDefaults setObject:snapshot forKey:kDYYYLoginBypassStickyCloneBundleMapKey];
-    }
-}
-
-+ (void)rememberStickyReplacement:(NSString *)replacement forBundleIdentifier:(NSString *)bundleIdentifier {
-    if (![self isNumericAwemeCloneBundleIdentifier:bundleIdentifier] || replacement.length == 0) {
-        return;
-    }
-
-    NSMutableDictionary<NSString *, NSString *> *map = [self stickyCloneBundleMap];
-    @synchronized(map) {
-        if ([map[bundleIdentifier] isEqualToString:replacement]) {
-            return;
-        }
-        map[bundleIdentifier] = replacement;
-    }
-    [self persistStickyCloneBundleMap];
-}
-
-+ (nullable NSString *)stickyReplacementForBundleIdentifier:(NSString *)bundleIdentifier {
-    if (![self isNumericAwemeCloneBundleIdentifier:bundleIdentifier]) {
-        return nil;
-    }
-    NSMutableDictionary<NSString *, NSString *> *map = [self stickyCloneBundleMap];
-    @synchronized(map) {
-        NSString *value = map[bundleIdentifier];
-        return value.length > 0 ? value : nil;
-    }
-}
-
-+ (BOOL)shouldRewriteBundleIdentity {
-    if ([self isLoginBypassEnabled]) {
-        return YES;
-    }
-    NSMutableDictionary<NSString *, NSString *> *map = [self stickyCloneBundleMap];
-    @synchronized(map) {
-        return map.count > 0;
-    }
+    return [self shouldApplyEmojiBundleSpoof];
 }
 
 + (NSMutableDictionary<NSString *, NSString *> *)replacementCache {
@@ -378,6 +350,13 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
       cache = [NSMutableDictionary dictionary];
+      [NSTimer scheduledTimerWithTimeInterval:60.0
+                                      repeats:YES
+                                        block:^(__unused NSTimer *timer) {
+                                          @synchronized(cache) {
+                                              [cache removeAllObjects];
+                                          }
+                                        }];
     });
     return cache;
 }
@@ -387,11 +366,12 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
         return bundleIdentifier;
     }
 
-    NSString *stickyReplacement = [self stickyReplacementForBundleIdentifier:bundleIdentifier];
-    if (stickyReplacement.length > 0) {
-        return stickyReplacement;
+    // 分身在绕登录或登录会话内映射为精确官方包名，不加 emoji。
+    if ([self isNumericAwemeCloneBundleIdentifier:bundleIdentifier]) {
+        return [self shouldMaintainCloneSessionIdentity] ? kDYYYOfficialAwemeBundleIdentifier : bundleIdentifier;
     }
-    if (![self isLoginBypassEnabled]) {
+
+    if (![self shouldApplyEmojiBundleSpoof]) {
         return bundleIdentifier;
     }
 
@@ -399,7 +379,6 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     @synchronized(cache) {
         NSString *cachedValue = cache[bundleIdentifier];
         if (cachedValue.length > 0) {
-            [self rememberStickyReplacement:cachedValue forBundleIdentifier:bundleIdentifier];
             return cachedValue;
         }
 
@@ -408,13 +387,11 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
             return bundleIdentifier;
         }
 
-        NSString *canonicalBase = [self canonicalSpoofBaseForBundleIdentifier:bundleIdentifier];
         NSString *suffix = suffixes[arc4random_uniform((uint32_t)suffixes.count)];
-        NSString *replacement = [canonicalBase stringByAppendingString:suffix];
+        NSString *replacement = [bundleIdentifier stringByAppendingString:suffix];
         if (replacement.length > 0 && cache.count <= 99) {
             cache[bundleIdentifier] = replacement;
         }
-        [self rememberStickyReplacement:replacement forBundleIdentifier:bundleIdentifier];
         return replacement.length > 0 ? replacement : bundleIdentifier;
     }
 }
@@ -434,7 +411,7 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 }
 
 + (NSDictionary *)headersByReplacingBundleIdentifiers:(NSDictionary *)headers {
-    if (![self shouldRewriteBundleIdentity] || ![headers isKindOfClass:NSDictionary.class]) {
+    if (![headers isKindOfClass:NSDictionary.class]) {
         return headers;
     }
 
@@ -456,26 +433,33 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 }
 
 + (NSString *)stringByReplacingTargetBundleIdentifiers:(NSString *)value {
-    if (![self shouldRewriteBundleIdentity] || ![value isKindOfClass:NSString.class] || value.length == 0) {
+    if (![value isKindOfClass:NSString.class] || value.length == 0) {
         return value;
     }
 
     NSString *updatedString = value;
-    NSArray<NSString *> *officialIdentifiers = [self officialFamilyBundleIdentifiers];
-    NSMutableArray<NSString *> *candidates = officialIdentifiers.mutableCopy ?: [NSMutableArray array];
-    static NSRegularExpression *cloneRegex = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      cloneRegex = [NSRegularExpression regularExpressionWithPattern:@"com\\.ss\\.iphone\\.ugc\\.Aweme\\d{4}"
-                                                             options:0
-                                                               error:nil];
-    });
-    NSArray<NSTextCheckingResult *> *cloneMatches =
-        [cloneRegex matchesInString:value options:0 range:NSMakeRange(0, value.length)];
-    for (NSTextCheckingResult *match in cloneMatches) {
-        NSString *cloneIdentifier = [value substringWithRange:match.range];
-        if (cloneIdentifier.length > 0 && ![candidates containsObject:cloneIdentifier]) {
-            [candidates addObject:cloneIdentifier];
+    NSMutableArray<NSString *> *candidates = [NSMutableArray array];
+    if ([self shouldApplyEmojiBundleSpoof]) {
+        NSArray<NSString *> *officialIdentifiers = [self officialFamilyBundleIdentifiers];
+        if (officialIdentifiers.count > 0) {
+            [candidates addObjectsFromArray:officialIdentifiers];
+        }
+    }
+    if ([self shouldMaintainCloneSessionIdentity]) {
+        static NSRegularExpression *cloneRegex = nil;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+          cloneRegex = [NSRegularExpression regularExpressionWithPattern:@"com\\.ss\\.iphone\\.ugc\\.Aweme\\d{4}"
+                                                                 options:0
+                                                                   error:nil];
+        });
+        NSArray<NSTextCheckingResult *> *cloneMatches =
+            [cloneRegex matchesInString:value options:0 range:NSMakeRange(0, value.length)];
+        for (NSTextCheckingResult *match in cloneMatches) {
+            NSString *cloneIdentifier = [value substringWithRange:match.range];
+            if (cloneIdentifier.length > 0 && ![candidates containsObject:cloneIdentifier]) {
+                [candidates addObject:cloneIdentifier];
+            }
         }
     }
 
@@ -498,7 +482,7 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 }
 
 + (NSURL *)URLByReplacingTargetBundleIdentifiers:(NSURL *)url {
-    if (![self shouldRewriteBundleIdentity] || ![url isKindOfClass:NSURL.class]) {
+    if (![url isKindOfClass:NSURL.class]) {
         return url;
     }
 
@@ -560,6 +544,8 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     }
 
     dyyyLoginBypassDisableInFlight = YES;
+    dyyyLoginBypassPostLoginNetworkRestore = YES;
+    NSLog(@"[DYYY][绕登录] 登录成功回调：将关闭版本门控开关；分身继续维持指纹抑制与官方包名");
     return YES;
 }
 
@@ -604,6 +590,7 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     }
 
     if (isLastAttempt) {
+        dyyyLoginBypassPostLoginNetworkRestore = NO;
         NSLog(@"[DYYY][绕登录] 登录态校验失败，请手动关闭绕登录开关");
         [self showToastOnMainQueue:kDYYYLoginBypassManualCloseToast];
         [self markDisablePipelineFinished];
@@ -625,6 +612,7 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 
     DYYYOfficialAccountLoginState loginState = [self officialAccountLoginState];
     if (loginState == DYYYOfficialAccountLoginStateLoggedIn) {
+        dyyyLoginBypassPostLoginNetworkRestore = YES;
         if ([self isLoginBypassEnabled]) {
             [self persistLoginBypassEnabled:NO];
             NSLog(@"[DYYY][绕登录] 启动对账：官方账号已登录，绕登录已关闭");
@@ -633,6 +621,9 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
         return;
     }
     if (loginState == DYYYOfficialAccountLoginStateLoggedOut || retryIndex >= retryDelays.count) {
+        if (loginState == DYYYOfficialAccountLoginStateLoggedOut) {
+            dyyyLoginBypassPostLoginNetworkRestore = NO;
+        }
         return;
     }
 
@@ -643,6 +634,8 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
 }
 
 + (void)handleOfficialLoginCompletionWithUserID:(nullable id)userIDOrAccount {
+    dyyyLoginBypassPostLoginNetworkRestore = YES;
+
     NSString *normalizedUserID = [self userIDFromLoginPayload:userIDOrAccount];
     if (normalizedUserID.length == 0) {
         normalizedUserID = [self currentOfficialUserID];
@@ -655,6 +648,11 @@ static CFAbsoluteTime dyyyLoginBypassLastHandledAt = 0;
     dispatch_async(dispatch_get_main_queue(), ^{
       [self attemptDisableWithUserID:normalizedUserID retryIndex:0];
     });
+}
+
++ (void)handleOfficialLogout {
+    dyyyLoginBypassPostLoginNetworkRestore = NO;
+    NSLog(@"[DYYY][绕登录] 已退出登录，结束分身会话身份");
 }
 
 @end

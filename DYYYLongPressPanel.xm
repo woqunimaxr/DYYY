@@ -760,7 +760,7 @@ static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
     NSInteger firstRowCount = 0;
     NSInteger secondRowCount = 0;
 
-    // 确定分配方式与原代码相同
+    // 按当前按钮数量拆成两行排布
     if (totalButtons <= 2) {
         firstRowCount = totalButtons;
     } else if (totalButtons <= 4) {

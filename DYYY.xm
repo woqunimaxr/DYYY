@@ -167,6 +167,19 @@ static NSURL *DYYYLoginBypassURLByReplacingBundleIdentifier(NSURL *url) {
 
 %end
 
+%group DYYYLoginBypassAccountLogout
+
+%hook AWEUserServiceListener
+
+- (void)didFinishLogoutWithUid:(NSString *)userID {
+    %orig(userID);
+    [DYYYLoginBypassManager handleOfficialLogout];
+}
+
+%end
+
+%end
+
 %group DYYYLoginBypassAccountLifecycleDidFinishLogin
 
 %hook AWEUserServiceListener
@@ -2237,7 +2250,7 @@ static BOOL DYYYShouldBlockFeedNowPlayingSystemInfoWrite(void) {
 
 %end
 
-// 采用 HideNowPlayingInfo 的强屏蔽思路：播放中心写入时直接清空系统 Now Playing，不再走原实现。
+// 写入播放中心时清空系统 Now Playing，不再走宿主写入路径。
 %hook AWENowPlayingInfoCenter
 
 - (void)becomePlayingPlayer:(id)player {
@@ -12117,11 +12130,21 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 %hook AWEListDataController
 
 - (void)setDataSource:(NSMutableArray *)dataSource {
+    Class userPostsClass = objc_getClass("AWEUserPostsDataManager");
+    if (userPostsClass && [self isKindOfClass:userPostsClass]) {
+        %orig(dataSource);
+        return;
+    }
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:dataSource];
     %orig(filtered);
 }
 
 - (void)setFilteredDataSource:(NSMutableArray *)filteredDataSource {
+    Class userPostsClass = objc_getClass("AWEUserPostsDataManager");
+    if (userPostsClass && [self isKindOfClass:userPostsClass]) {
+        %orig(filteredDataSource);
+        return;
+    }
     NSArray *filtered = [DYYYUtils arrayByRemovingAdvertisements:filteredDataSource];
     %orig(filtered);
 }
@@ -17093,6 +17116,9 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     Class loginListenerClass = objc_getClass("AWEUserServiceListener");
     if (loginListenerClass && class_getInstanceMethod(loginListenerClass, @selector(didFinishLoginWithUid:))) {
         %init(DYYYLoginBypassAccountLifecycle);
+    }
+    if (loginListenerClass && class_getInstanceMethod(loginListenerClass, @selector(didFinishLogoutWithUid:))) {
+        %init(DYYYLoginBypassAccountLogout);
     }
     if (loginListenerClass && class_getInstanceMethod(loginListenerClass, @selector(didFinishLogin:))) {
         %init(DYYYLoginBypassAccountLifecycleDidFinishLogin);

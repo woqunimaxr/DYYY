@@ -59,11 +59,6 @@
 	              @"DYYYShowScheduleDisplay" : @[ @"DYYYScheduleStyle", @"DYYYProgressLabelColor", @"DYYYTimelineVerticalPosition" ],
               @"DYYYEnableNotificationTransparency" : @[ @"DYYYNotificationCornerRadius" ],
 	              @"DYYYEnableSheetBlur" : @[ @"DYYYSheetBlurTransparent" ],
-	              @"DYYYMessageShowVideoDateLabel" :
-	                  @[ @"DYYYMessageVideoDateLabelColor", @"DYYYMessageVideoDateFontSize", @"DYYYMessageCustomVideoDateFormat", @"DYYYMessageVideoDateLabelPosition", @"DYYYMessageVideoDateLabelLineCount" ],
-	              @"DYYYMessageOneWayReadReceipt" : @[ @"DYYYMessageReadReceiptTargets" ],
-	              @"DYYYMessageEnableCustomAudioDuration" : @[ @"DYYYMessageCustomAudioSeconds" ],
-	              @"DYYYMessageShowTimeLabel" : @[ @"DYYYMessageTimeLabelColor" ],
 	              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoHideSpeedButton", @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
               @"DYYYEnableFloatClearButton" : @[
                   @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYRemoveTimeProgress", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar",

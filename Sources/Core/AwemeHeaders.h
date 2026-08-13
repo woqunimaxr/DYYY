@@ -146,6 +146,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 
 @interface AWEUserServiceListener : NSObject
 - (void)didFinishLoginWithUid:(NSString *)userID;
+- (void)didFinishLogoutWithUid:(NSString *)userID;
 @end
 
 @interface TTAccountMulticast : NSObject
