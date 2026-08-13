@@ -14176,6 +14176,7 @@ static BOOL DYYYAwemeModelMatchesConfiguredContentFilters(AWEAwemeModel *aweme,
         AWEAwemeModel *awemeModel = nil;
 
         awemeModel = [self performSelector:@selector(awemeModel)];
+        [DYYYManager setAlbumDescriptionContextWithAwemeModel:awemeModel];
 
         AWEVideoModel *videoModel = awemeModel.video;
         AWEMusicModel *musicModel = awemeModel.music;

@@ -30,17 +30,6 @@ on:
       - 'Makefile'
       - 'layout/**'
   workflow_dispatch:
-    inputs:
-      scheme:
-        description: '打包方案（留空则全打）'
-        required: false
-        default: 'all'
-        type: choice
-        options:
-          - all
-          - rootful
-          - rootless
-          - roothide
 
 permissions:
   actions: read

@@ -80,6 +80,9 @@ static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
 // Modern风格长按面板（新版UI）
 %hook AWEModernLongPressPanelTableViewController
 - (NSArray *)dataArray {
+    // 面板一弹出就记下当前作品，面板里的保存项落到相册时才带得上说明文字。
+    [DYYYManager setAlbumDescriptionContextWithAwemeModel:self.awemeModel];
+
     // 检查是否开启精简模式
     BOOL simplifyPanel = DYYYGetBool(@"DYYYSimplifyLongPressPanel");
 
@@ -838,6 +841,9 @@ static NSString *DYYYLongPressFilterUserDisplayID(AWEUserModel *author) {
 // 经典风格长按面板
 %hook AWELongPressPanelTableViewController
 - (NSArray *)dataArray {
+    // 面板一弹出就记下当前作品，面板里的保存项落到相册时才带得上说明文字。
+    [DYYYManager setAlbumDescriptionContextWithAwemeModel:self.awemeModel];
+
     NSArray *originalArray = %orig;
     if (!originalArray) {
         originalArray = @[];

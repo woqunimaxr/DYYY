@@ -60,6 +60,7 @@ DYYY_FILES = DYYY.xm \
 	Sources/UI/DYYYAboutDialogView.m \
 	Sources/UI/DYYYGlassConfirmView.m \
 	Sources/UI/DYYYKeywordListView.m \
+	Sources/UI/DYYYMediaChooserSheet.m \
 	Sources/UI/DYYYFilterSettingsView.m \
 	Sources/UI/DYYYConfirmCloseView.m \
 	Sources/UI/DYYYToast.m \
