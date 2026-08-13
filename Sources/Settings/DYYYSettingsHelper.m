@@ -1,6 +1,7 @@
 #import "DYYYSettingsHelper.h"
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
+#import "DYYYConstants.h"
 #import "DYYYPickerDelegates.h"
 #import "DYYYUtils.h"
 
@@ -59,10 +60,14 @@
 	              @"DYYYShowScheduleDisplay" : @[ @"DYYYScheduleStyle", @"DYYYProgressLabelColor", @"DYYYTimelineVerticalPosition" ],
               @"DYYYEnableNotificationTransparency" : @[ @"DYYYNotificationCornerRadius" ],
 	              @"DYYYEnableSheetBlur" : @[ @"DYYYSheetBlurTransparent" ],
-	              @"DYYYEnableFloatSpeedButton" : @[ @"DYYYAutoHideSpeedButton", @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings" ],
+	              @"DYYYEnableFloatSpeedButton" : @[
+                  @"DYYYAutoHideSpeedButton", @"DYYYAutoRestoreSpeed", @"DYYYSpeedButtonShowX", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY,
+                  DYYY_RESET_SPEED_BUTTON_POSITION_KEY
+              ],
               @"DYYYEnableFloatClearButton" : @[
-                  @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", @"DYYYRemoveTimeProgress", @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar",
-                  @"DYYYHideSpeed", @"DYYYHideClearButtonOnTap", @"DYYYHideChapter", @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"
+                  @"DYYYClearButtonIcon", @"DYYYEnableFloatClearButtonSize", DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY, DYYY_RESET_CLEAR_BUTTON_POSITION_KEY, @"DYYYRemoveTimeProgress",
+                  @"DYYYHideTimeProgress", @"DYYYHideDanmaku", @"DYYYHideSlider", @"DYYYHideTabBar", @"DYYYHideSpeed", @"DYYYHideClearButtonOnTap", @"DYYYHideChapter",
+                  @"DYYYHidePauseVideoIcon", @"DYYYHideStatusBarOnClear"
               ],
               @"DYYYEnableModernPanel" : @[ @"DYYYLongPressPanelBlur", @"DYYYLongPressPanelDark" ],
               @"DYYYEnableDoubleTapMenu" : @[ @"DYYYDoubleTapMenuSettings" ],
@@ -89,6 +94,8 @@
               @"DYYYSkipAllLive" : @[ @"DYYYSkipLive" ],
               @"DYYYHideEntry" : @[ @"DYYYRemoveEntry" ],
               @"DYYYRemoveEntry" : @[ @"DYYYHideEntry" ],
+              DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY : @[ @"DYYYAutoHideSpeedButton" ],
+              @"DYYYAutoHideSpeedButton" : @[ DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY ],
           },
 
           // ===== 互斥激活配置 =====

@@ -384,6 +384,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         ],
         @[
             [DYYYSettingItem itemWithTitle:@"启用快捷倍速按钮" key:@"DYYYEnableFloatSpeedButton" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"固定按钮贴边" key:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"重置按钮位置" key:DYYY_RESET_SPEED_BUTTON_POSITION_KEY type:DYYYSettingItemTypePicker],
             [DYYYSettingItem itemWithTitle:@"快捷倍速数值设置" key:@"DYYYSpeedSettings" type:DYYYSettingItemTypeTextField placeholder:@"逗号分隔"],
             [DYYYSettingItem itemWithTitle:@"自动恢复默认倍速" key:@"DYYYAutoRestoreSpeed" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"倍速按钮显示后缀" key:@"DYYYSpeedButtonShowX" type:DYYYSettingItemTypeSwitch],
@@ -391,6 +393,8 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"隐藏快捷倍速按钮时间" key:@"DYYYAutoHideSpeedButtonTime" type:DYYYSettingItemTypeTextField placeholder:@"s"],
             [DYYYSettingItem itemWithTitle:@"快捷倍速按钮大小" key:@"DYYYSpeedButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"20-60"],
             [DYYYSettingItem itemWithTitle:@"启用一键清屏按钮" key:@"DYYYEnableFloatClearButton" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"固定按钮贴边" key:DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"重置按钮位置" key:DYYY_RESET_CLEAR_BUTTON_POSITION_KEY type:DYYYSettingItemTypePicker],
             [DYYYSettingItem itemWithTitle:@"快捷清屏按钮大小" key:@"DYYYEnableFloatClearButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"20-60"],
             [DYYYSettingItem itemWithTitle:@"清屏隐藏弹幕" key:@"DYYYHideDanmaku" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"清屏移除时间进度" key:@"DYYYRemoveTimeProgress" type:DYYYSettingItemTypeSwitch],
@@ -687,6 +691,10 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         textField.tag = indexPath.section * 1000 + indexPath.row;
         cell.accessoryView = textField;
     } else if (item.type == DYYYSettingItemTypePicker) {
+        if ([item.key isEqualToString:DYYY_RESET_SPEED_BUTTON_POSITION_KEY] || [item.key isEqualToString:DYYY_RESET_CLEAR_BUTTON_POSITION_KEY]) {
+            cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+            cell.accessoryView = nil;
+        } else {
         cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
 
         UILabel *pickerLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, 80, 44)];
@@ -712,6 +720,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         ]];
 
         cell.accessoryView = containerView;
+        }
     }
 
     return cell;
@@ -726,6 +735,30 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     DYYYSettingItem *item = self.settingSections[indexPath.section][indexPath.row];
+    if ([item.key isEqualToString:DYYY_RESET_SPEED_BUTTON_POSITION_KEY]) {
+        if (speedButton) {
+            [speedButton resetToDefaultPosition];
+        } else {
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults removeObjectForKey:@"DYYYSpeedButtonCenterXPercent"];
+            [defaults removeObjectForKey:@"DYYYSpeedButtonCenterYPercent"];
+        }
+        [DYYYUtils showToast:@"已重置按钮位置"];
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        return;
+    }
+    if ([item.key isEqualToString:DYYY_RESET_CLEAR_BUTTON_POSITION_KEY]) {
+        if (hideButton) {
+            [hideButton resetToDefaultPosition];
+        } else {
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults removeObjectForKey:@"DYYYHideButtonCenterXPercent"];
+            [defaults removeObjectForKey:@"DYYYHideButtonCenterYPercent"];
+        }
+        [DYYYUtils showToast:@"已重置按钮位置"];
+        [tableView deselectRowAtIndexPath:indexPath animated:YES];
+        return;
+    }
     if (item.type == DYYYSettingItemTypePicker) {
         [self showUniversalPickerForIndexPath:indexPath];
     }
@@ -791,14 +824,26 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             }
         }
     }
+    if ([item.key isEqualToString:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY]) {
+        if (speedButton) {
+            if (sender.isOn && speedButton.isEdgeHidden && !speedButton.dyyyEdgeHiddenByClearMode) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            }
+            [speedButton loadSavedPosition];
+        }
+    }
     if ([item.key isEqualToString:@"DYYYEnableFloatClearButton"] ||
         [item.key isEqualToString:@"DYYYHideDanmaku"] ||
         [item.key isEqualToString:@"DYYYRemoveTimeProgress"] ||
         [item.key isEqualToString:@"DYYYHideTimeProgress"] ||
         [item.key isEqualToString:@"DYYYHideSlider"] ||
         [item.key isEqualToString:@"DYYYHideTabBar"] ||
-        [item.key isEqualToString:@"DYYYHideChapter"]) {
+        [item.key isEqualToString:@"DYYYHideChapter"] ||
+        [item.key isEqualToString:DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY]) {
         reloadClearButtonConfiguration();
+        if ([item.key isEqualToString:DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY] && hideButton) {
+            [hideButton loadSavedPosition];
+        }
     }
 
     if (sender.isOn) {
@@ -807,6 +852,10 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             conflictingKey = @"DYYYHideFollowPromptView";
         } else if ([item.key isEqualToString:@"DYYYHideFollowPromptView"]) {
             conflictingKey = @"DYYYHideLOTAnimationView";
+        } else if ([item.key isEqualToString:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY]) {
+            conflictingKey = @"DYYYAutoHideSpeedButton";
+        } else if ([item.key isEqualToString:@"DYYYAutoHideSpeedButton"]) {
+            conflictingKey = DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY;
         }
 
         if (conflictingKey) {

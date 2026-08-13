@@ -15,6 +15,7 @@
 @property(nonatomic, assign) CGFloat originalAlpha;
 - (void)saveButtonPosition;
 - (void)loadSavedPosition;
+- (void)resetToDefaultPosition;
 - (void)resetButtonState;
 - (void)dyyy_schedulePresentationTimersIfNeeded;
 - (void)toggleLockState;

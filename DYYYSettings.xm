@@ -62,6 +62,13 @@ static NSString *const kDYYYCommentPausePlaybackSVGIconName = @"ic_commentpause_
 static NSString *const kDYYYLoginBypassSVGIconName = @"ic_unlocknew_outlined_20";
 static NSString *const kDYYYHideRecommendAppDownloadSettingIdentifier = @"DYYYHideRecommendAppDownload";
 static NSString *const kDYYYMiniProgramJumpingAdsSettingIdentifier = @"DYYYEnableMiniProgramJumpingAds";
+static NSString *const kDYYYSpeedButtonStickToEdgeSettingIdentifier = DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY;
+static NSString *const kDYYYClearButtonStickToEdgeSettingIdentifier = DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY;
+static NSString *const kDYYYStickToEdgeSettingTitle = @"固定按钮贴边";
+static NSString *const kDYYYStickToEdgeSVGIconName = @"ic_sticktoedge_dyyy_outlined_20";
+static NSString *const kDYYYResetButtonPositionSettingTitle = @"重置按钮位置";
+static NSString *const kDYYYSpeedButtonResetPositionSettingIdentifier = DYYY_RESET_SPEED_BUTTON_POSITION_KEY;
+static NSString *const kDYYYClearButtonResetPositionSettingIdentifier = DYYY_RESET_CLEAR_BUTTON_POSITION_KEY;
 
 static char kDYYYGeneratedSettingIconIdentifierKey;
 static char kDYYYGeneratedSettingIconRetryScheduledKey;
@@ -94,7 +101,7 @@ static UIImage *DYYYRenderGeneratedSettingTemplateIcon(NSString *cacheName, CGSi
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
       imageCache = [[NSCache alloc] init];
-      imageCache.countLimit = 16;
+      imageCache.countLimit = 24;
     });
 
     NSString *cacheKey = [NSString stringWithFormat:@"%@-%@", cacheName, NSStringFromCGSize(targetSize)];
@@ -335,6 +342,35 @@ static UIImage *DYYYMiniProgramJumpingAdsIcon(CGSize requestedSize) {
     });
 }
 
+static UIImage *DYYYStickToEdgeIcon(CGSize requestedSize) {
+    return DYYYRenderGeneratedSettingTemplateIcon(@"stick-to-edge", requestedSize, ^(CGContextRef context, CGSize targetSize) {
+      CGContextScaleCTM(context, targetSize.width / 20.0, targetSize.height / 20.0);
+      UIColor *iconColor = [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:1.0];
+      [iconColor setStroke];
+      [iconColor setFill];
+      CGContextSetLineWidth(context, 1.55);
+      CGContextSetLineCap(context, kCGLineCapRound);
+      CGContextSetLineJoin(context, kCGLineJoinRound);
+
+      UIBezierPath *screen = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(3.15, 2.35, 13.7, 15.3) cornerRadius:2.35];
+      screen.lineWidth = 1.55;
+      [screen stroke];
+
+      UIBezierPath *button = [UIBezierPath bezierPathWithOvalInRect:CGRectMake(12.05, 8.15, 3.7, 3.7)];
+      button.lineWidth = 1.45;
+      [button stroke];
+
+      UIBezierPath *guides = [UIBezierPath bezierPath];
+      [guides moveToPoint:CGPointMake(4.55, 6.2)];
+      [guides addLineToPoint:CGPointMake(4.55, 13.8)];
+      [guides moveToPoint:CGPointMake(15.45, 6.2)];
+      [guides addLineToPoint:CGPointMake(15.45, 13.8)];
+      guides.lineWidth = 1.35;
+      guides.lineCapStyle = kCGLineCapRound;
+      [guides stroke];
+    });
+}
+
 @interface AWESettingsTableViewCell : UITableViewCell
 @property(nonatomic, strong) AWESettingItemModel *itemModel;
 @property(nonatomic, strong) UILabel *titleLabel;
@@ -356,7 +392,9 @@ static BOOL DYYYIsGeneratedSettingIconIdentifier(NSString *identifier) {
            [identifier isEqualToString:kDYYYEnableHighFPSSettingIdentifier] ||
            [identifier isEqualToString:kDYYYShowFPSOverlaySettingIdentifier] ||
            [identifier isEqualToString:kDYYYCommentPausePlaybackSettingIdentifier] ||
-           [identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier];
+           [identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier] ||
+           [identifier isEqualToString:kDYYYSpeedButtonStickToEdgeSettingIdentifier] ||
+           [identifier isEqualToString:kDYYYClearButtonStickToEdgeSettingIdentifier];
 }
 
 static UIImage *DYYYGeneratedSettingIconForIdentifier(NSString *identifier, CGSize targetSize) {
@@ -374,6 +412,10 @@ static UIImage *DYYYGeneratedSettingIconForIdentifier(NSString *identifier, CGSi
     }
     if ([identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier]) {
         return DYYYMiniProgramJumpingAdsIcon(targetSize);
+    }
+    if ([identifier isEqualToString:kDYYYSpeedButtonStickToEdgeSettingIdentifier] ||
+        [identifier isEqualToString:kDYYYClearButtonStickToEdgeSettingIdentifier]) {
+        return DYYYStickToEdgeIcon(targetSize);
     }
     return nil;
 }
@@ -5079,6 +5121,40 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 @"imageName" : @"ic_xspeed_outlined"}];
       [speedButtonItems addObject:enableSpeedButton];
 
+      AWESettingItemModel *speedStickToEdgeItem = [DYYYSettingsHelper
+          createSettingItem:@{
+              @"identifier" : kDYYYSpeedButtonStickToEdgeSettingIdentifier,
+              @"title" : kDYYYStickToEdgeSettingTitle,
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : kDYYYStickToEdgeSVGIconName
+          }];
+      [speedButtonItems addObject:speedStickToEdgeItem];
+
+      AWESettingItemModel *speedResetPositionItem = [[%c(AWESettingItemModel) alloc] init];
+      speedResetPositionItem.identifier = kDYYYSpeedButtonResetPositionSettingIdentifier;
+      speedResetPositionItem.title = kDYYYResetButtonPositionSettingTitle;
+      speedResetPositionItem.detail = @"";
+      speedResetPositionItem.type = 0;
+      speedResetPositionItem.svgIconImageName = @"ic_switch_outlined";
+      speedResetPositionItem.cellType = 26;
+      speedResetPositionItem.colorStyle = 2;
+      speedResetPositionItem.isEnable = YES;
+      speedResetPositionItem.cellTappedBlock = ^{
+        if (![DYYYSettingsHelper getUserDefaults:@"DYYYEnableFloatSpeedButton"]) {
+            return;
+        }
+        if (speedButton) {
+            [speedButton resetToDefaultPosition];
+        } else {
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults removeObjectForKey:@"DYYYSpeedButtonCenterXPercent"];
+            [defaults removeObjectForKey:@"DYYYSpeedButtonCenterYPercent"];
+        }
+        [DYYYUtils showToast:@"已重置按钮位置"];
+      };
+      [speedButtonItems addObject:speedResetPositionItem];
+
       AWESettingItemModel *speedSettingsItem = [[%c(AWESettingItemModel) alloc] init];
       speedSettingsItem.identifier = @"DYYYSpeedSettings";
       speedSettingsItem.title = @"快捷倍速数值设置";
@@ -5200,6 +5276,20 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
         refreshSpeedDependentItems();
       };
 
+      void (^originalSpeedStickSwitchChangedBlock)(void) = speedStickToEdgeItem.switchChangedBlock;
+      speedStickToEdgeItem.switchChangedBlock = ^{
+        if (originalSpeedStickSwitchChangedBlock) {
+            originalSpeedStickSwitchChangedBlock();
+        }
+        if (speedButton) {
+            if (speedButton.isEdgeHidden && !speedButton.dyyyEdgeHiddenByClearMode) {
+                [speedButton dyyy_restoreFromEdgeHidden];
+            }
+            [speedButton loadSavedPosition];
+        }
+        refreshSpeedDependentItems();
+      };
+
       void (^originalSpeedSwitchChangedBlock)(void) = enableSpeedButton.switchChangedBlock;
       enableSpeedButton.switchChangedBlock = ^{
         if (originalSpeedSwitchChangedBlock) {
@@ -5234,6 +5324,42 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 @"cellType" : @6,
                 @"imageName" : @"ic_eyeslash_outlined_16"}];
       [clearButtonItems addObject:enableClearButton];
+
+      AWESettingItemModel *clearStickToEdgeItem = [DYYYSettingsHelper
+          createSettingItem:@{
+              @"identifier" : kDYYYClearButtonStickToEdgeSettingIdentifier,
+              @"title" : kDYYYStickToEdgeSettingTitle,
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : kDYYYStickToEdgeSVGIconName
+          }];
+      [clearButtonItems addObject:clearStickToEdgeItem];
+
+      AWESettingItemModel *clearResetPositionItem = [[%c(AWESettingItemModel) alloc] init];
+      clearResetPositionItem.identifier = kDYYYClearButtonResetPositionSettingIdentifier;
+      clearResetPositionItem.title = kDYYYResetButtonPositionSettingTitle;
+      clearResetPositionItem.detail = @"";
+      clearResetPositionItem.type = 0;
+      clearResetPositionItem.svgIconImageName = @"ic_switch_outlined";
+      clearResetPositionItem.cellType = 26;
+      clearResetPositionItem.colorStyle = 2;
+      clearResetPositionItem.isEnable = YES;
+      clearResetPositionItem.cellTappedBlock = ^{
+        if (![DYYYSettingsHelper getUserDefaults:@"DYYYEnableFloatClearButton"]) {
+            return;
+        }
+        if (hideButton) {
+            [hideButton resetToDefaultPosition];
+        } else {
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults removeObjectForKey:@"DYYYHideButtonCenterXPercent"];
+            [defaults removeObjectForKey:@"DYYYHideButtonCenterYPercent"];
+        }
+        [DYYYUtils showToast:@"已重置按钮位置"];
+      };
+      [clearButtonItems addObject:clearResetPositionItem];
+
+      // 添加清屏按钮大小配置项
 
       // 添加清屏按钮大小配置项
       AWESettingItemModel *clearButtonSizeItem = [[%c(AWESettingItemModel) alloc] init];

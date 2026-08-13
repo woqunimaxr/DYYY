@@ -837,7 +837,7 @@ static void DYYYEnsureFloatSpeedButton(AWEPlayInteractionViewController *preferr
 
     if (!speedButton) {
         CGRect windowBounds = keyWindow.bounds;
-        CGFloat initialY = CGRectGetHeight(windowBounds) * 0.7 - speedButtonSize / 2.0;
+        CGFloat initialY = CGRectGetHeight(windowBounds) * (1.0 - 0.65) - speedButtonSize / 2.0;
         initialY = MAX(10.0, MIN(initialY, CGRectGetHeight(windowBounds) - speedButtonSize - 10.0));
         CGRect initialFrame = CGRectMake(CGRectGetWidth(windowBounds) - speedButtonSize - 10.0,
                                          initialY,
@@ -15782,7 +15782,6 @@ static Class tabBarButtonClass = nil;
 
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
-    isInPlayInteractionVC = YES;
     dyyyInteractionViewVisible = YES;
     dyyyActivePlaybackInteractionController = self;
     DYYYScheduleCurrentAwemeTracking(self, self.model);
@@ -15906,7 +15905,6 @@ static Class tabBarButtonClass = nil;
           }
           dyyyActivePlaybackInteractionController = replacementController;
           BOOL hasVisibleInteractionController = replacementController != nil;
-          isInPlayInteractionVC = hasVisibleInteractionController;
           dyyyInteractionViewVisible = hasVisibleInteractionController;
           dyyyCommentViewVisible = strongSelf.isCommentVCShowing;
           updateSpeedButtonVisibility();

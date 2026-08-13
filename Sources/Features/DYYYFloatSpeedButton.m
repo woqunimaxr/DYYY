@@ -1,4 +1,5 @@
 #import "AwemeHeaders.h"
+#import "DYYYConstants.h"
 #import "DYYYFloatClearButton.h"
 #import "DYYYFloatSpeedButton.h"
 #import "DYYYUtils.h"
@@ -16,7 +17,7 @@ BOOL speedButtonForceHidden = NO;
 BOOL dyyyInteractionViewVisible = NO;
 
 static const CGFloat kDYYYSpeedButtonEdgeInset = 10.0;
-static const CGFloat kDYYYSpeedButtonDefaultYPercent = 0.7;
+static const CGFloat kDYYYSpeedButtonDefaultYFromBottomPercent = 0.65;
 static const CGFloat kDYYYSpeedButtonPressedScale = 0.75;
 
 typedef NS_ENUM(NSInteger, DYYYSpeedButtonEdge) {
@@ -26,8 +27,12 @@ typedef NS_ENUM(NSInteger, DYYYSpeedButtonEdge) {
     DYYYSpeedButtonEdgeBottom,
 };
 
+static BOOL DYYYSpeedButtonStickToEdgeEnabled(void) {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY];
+}
+
 static BOOL DYYYAutoHideSpeedButtonEnabled(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoHideSpeedButton"];
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoHideSpeedButton"] && !DYYYSpeedButtonStickToEdgeEnabled();
 }
 
 static NSTimeInterval DYYYAutoHideSpeedButtonInterval(void) {
@@ -208,6 +213,8 @@ void updateSpeedButtonVisibility() {
 
 @interface FloatingSpeedButton ()
 @property (nonatomic, assign) DYYYSpeedButtonEdge dyyyActiveDragEdge;
+@property (nonatomic, assign) BOOL dyyyHasCenterBeforeEdgeHidden;
+@property (nonatomic, assign) CGPoint dyyyCenterBeforeEdgeHidden;
 - (void)dyyy_cancelAutoHideTimer;
 - (void)dyyy_applyEdgeHiddenState;
 - (void)dyyy_playTapFeedback;
@@ -402,7 +409,7 @@ void updateSpeedButtonVisibility() {
     [DYYYUtils showToast:toastMessage];
 
     if (self.isLocked) {
-        self.center = [self dyyySnappedCenterForProposedCenter:self.center];
+        self.center = [self dyyyConstrainedCenterForProposedCenter:self.center];
         [self saveButtonPosition];
     }
 
@@ -452,6 +459,27 @@ void updateSpeedButtonVisibility() {
     }
 }
 
+- (void)dyyy_rememberCenterBeforeEdgeHidden {
+    if (self.dyyyHasCenterBeforeEdgeHidden) {
+        return;
+    }
+    self.dyyyCenterBeforeEdgeHidden = self.center;
+    self.dyyyHasCenterBeforeEdgeHidden = YES;
+}
+
+- (void)dyyy_moveToNearestEdgeForHiddenState {
+    [self dyyy_rememberCenterBeforeEdgeHidden];
+    self.center = [self dyyySnappedCenterForProposedCenter:self.center];
+}
+
+- (void)dyyy_restoreCenterBeforeEdgeHiddenIfNeeded {
+    if (!self.dyyyHasCenterBeforeEdgeHidden) {
+        return;
+    }
+    self.center = [self dyyyConstrainedCenterForProposedCenter:self.dyyyCenterBeforeEdgeHidden];
+    self.dyyyHasCenterBeforeEdgeHidden = NO;
+}
+
 - (void)dyyy_applyEdgeHiddenState {
     // 位置锁定只限制拖动，不能阻止自动隐藏计时器收边。
     if (self.isEdgeHidden || self.dyyyEdgeHiddenByClearMode || !DYYYAutoHideSpeedButtonEnabled()) {
@@ -459,6 +487,7 @@ void updateSpeedButtonVisibility() {
     }
 
     [self dyyy_cancelAutoHideTimer];
+    [self dyyy_moveToNearestEdgeForHiddenState];
     self.dyyyEdgeHiddenByClearMode = NO;
     self.isEdgeHidden = YES;
     self.alpha = 0.02;
@@ -471,6 +500,7 @@ void updateSpeedButtonVisibility() {
     }
 
     self.isEdgeHidden = NO;
+    [self dyyy_restoreCenterBeforeEdgeHiddenIfNeeded];
     self.alpha = self.originalAlpha;
     [self dyyy_hideEdgeIndicator];
     [self resetFadeTimer];
@@ -489,6 +519,7 @@ void updateSpeedButtonVisibility() {
         [self.fadeTimer invalidate];
         self.fadeTimer = nil;
     }
+    [self dyyy_moveToNearestEdgeForHiddenState];
     self.dyyyEdgeHiddenByClearMode = YES;
     self.isEdgeHidden = YES;
     self.alpha = 0.02;
@@ -502,6 +533,7 @@ void updateSpeedButtonVisibility() {
 
     self.dyyyEdgeHiddenByClearMode = NO;
     self.isEdgeHidden = NO;
+    [self dyyy_restoreCenterBeforeEdgeHiddenIfNeeded];
     self.alpha = self.originalAlpha;
     [self dyyy_hideEdgeIndicator];
     [self resetFadeTimer];
@@ -760,6 +792,22 @@ static const CGFloat kDYYYSpeedButtonEdgeSwitchHysteresis = 12.0;
     return [self dyyyCenterOnEdge:edge forPoint:proposed];
 }
 
+- (CGPoint)dyyyClampedCenterForProposedCenter:(CGPoint)proposed {
+    CGFloat minX, maxX, minY, maxY;
+    CGFloat unusedLeft, unusedRight, unusedTop, unusedBottom;
+    if (![self dyyyEdgeMetricsWithLeftX:&unusedLeft rightX:&unusedRight topY:&unusedTop bottomY:&unusedBottom minX:&minX maxX:&maxX minY:&minY maxY:&maxY]) {
+        return proposed;
+    }
+    return CGPointMake(MIN(MAX(proposed.x, minX), maxX), MIN(MAX(proposed.y, minY), maxY));
+}
+
+- (CGPoint)dyyyConstrainedCenterForProposedCenter:(CGPoint)proposed {
+    if (DYYYSpeedButtonStickToEdgeEnabled()) {
+        return [self dyyySnappedCenterForProposedCenter:proposed];
+    }
+    return [self dyyyClampedCenterForProposedCenter:proposed];
+}
+
 - (CGPoint)dyyyDefaultCenter {
     if (!self.superview) {
         return self.center;
@@ -781,7 +829,7 @@ static const CGFloat kDYYYSpeedButtonEdgeSwitchHysteresis = 12.0;
                             minAlongEdgeY:&minY
                             maxAlongEdgeY:&maxY];
 
-    CGFloat defaultY = size.height * kDYYYSpeedButtonDefaultYPercent;
+    CGFloat defaultY = size.height * (1.0 - kDYYYSpeedButtonDefaultYFromBottomPercent);
     defaultY = MIN(MAX(defaultY, minY), maxY);
     return CGPointMake(rightX, defaultY);
 }
@@ -812,22 +860,28 @@ static const CGFloat kDYYYSpeedButtonEdgeSwitchHysteresis = 12.0;
 
     if (pan.state == UIGestureRecognizerStateBegan) {
         [self dyyy_restoreTapTransform];
-        self.dyyyActiveDragEdge = [self dyyyEdgeForCenter:self.center];
-        self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:self.center];
+        if (DYYYSpeedButtonStickToEdgeEnabled()) {
+            self.dyyyActiveDragEdge = [self dyyyEdgeForCenter:self.center];
+            self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:self.center];
+        }
     } else if (pan.state == UIGestureRecognizerStateChanged) {
         CGPoint touchPoint = [pan locationInView:self.superview];
-        DYYYSpeedButtonEdge nearestEdge = [self dyyyNearestEdgeForPoint:touchPoint];
-        if (nearestEdge != self.dyyyActiveDragEdge) {
-            CGFloat currentDist = [self dyyyDistanceFromPoint:touchPoint toEdge:self.dyyyActiveDragEdge];
-            CGFloat nearestDist = [self dyyyDistanceFromPoint:touchPoint toEdge:nearestEdge];
-            if (nearestDist + kDYYYSpeedButtonEdgeSwitchHysteresis < currentDist) {
-                self.dyyyActiveDragEdge = nearestEdge;
+        if (DYYYSpeedButtonStickToEdgeEnabled()) {
+            DYYYSpeedButtonEdge nearestEdge = [self dyyyNearestEdgeForPoint:touchPoint];
+            if (nearestEdge != self.dyyyActiveDragEdge) {
+                CGFloat currentDist = [self dyyyDistanceFromPoint:touchPoint toEdge:self.dyyyActiveDragEdge];
+                CGFloat nearestDist = [self dyyyDistanceFromPoint:touchPoint toEdge:nearestEdge];
+                if (nearestDist + kDYYYSpeedButtonEdgeSwitchHysteresis < currentDist) {
+                    self.dyyyActiveDragEdge = nearestEdge;
+                }
             }
+            self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:touchPoint];
+        } else {
+            self.center = [self dyyyClampedCenterForProposedCenter:touchPoint];
         }
-        self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:touchPoint];
         self.alpha = self.originalAlpha;
     } else if (pan.state == UIGestureRecognizerStateEnded || pan.state == UIGestureRecognizerStateCancelled) {
-        self.center = [self dyyyCenterOnEdge:self.dyyyActiveDragEdge forPoint:self.center];
+        self.center = [self dyyyConstrainedCenterForProposedCenter:self.center];
         self.alpha = self.originalAlpha;
         [self saveButtonPosition];
         if (self.isEdgeHidden) {
@@ -863,7 +917,24 @@ static const CGFloat kDYYYSpeedButtonEdgeSwitchHysteresis = 12.0;
         targetCenter = [self dyyyDefaultCenter];
     }
 
-    self.center = [self dyyySnappedCenterForProposedCenter:targetCenter];
+    self.center = [self dyyyConstrainedCenterForProposedCenter:targetCenter];
+}
+
+- (void)resetToDefaultPosition {
+    if (!self.superview) {
+        return;
+    }
+
+    self.dyyyHasCenterBeforeEdgeHidden = NO;
+    if (self.isEdgeHidden && !self.dyyyEdgeHiddenByClearMode) {
+        [self dyyy_restoreFromEdgeHidden];
+    }
+
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults removeObjectForKey:@"DYYYSpeedButtonCenterXPercent"];
+    [defaults removeObjectForKey:@"DYYYSpeedButtonCenterYPercent"];
+    self.center = [self dyyyDefaultCenter];
+    [self resetFadeTimer];
 }
 
 - (void)didMoveToSuperview {

@@ -29,6 +29,12 @@
 // 实时帧率浮窗（依赖 DYYYEnableHighFPS）
 #define DYYY_SHOW_FPS_OVERLAY_KEY @"DYYYShowFPSOverlay"
 
+// 快捷倍速 / 一键清屏按钮：开启后才按四边固定边距贴边拖动；默认关闭
+#define DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY @"DYYYSpeedButtonStickToEdge"
+#define DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY @"DYYYClearButtonStickToEdge"
+#define DYYY_RESET_SPEED_BUTTON_POSITION_KEY @"DYYYResetSpeedButtonPosition"
+#define DYYY_RESET_CLEAR_BUTTON_POSITION_KEY @"DYYYResetClearButtonPosition"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
