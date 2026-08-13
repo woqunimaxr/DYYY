@@ -399,6 +399,22 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 @interface AWEFeedLiveTabTopSelectionView : UIView
 - (void)setHideTimer:(id)timer;
+- (void)showTabTopSelectionView:(BOOL)show;
+@end
+@interface AWEFeedLiveTabSelectionComponent : NSObject
+- (void)showTopTabView:(BOOL)show;
+@end
+@interface AWEFeedLiveTabViewController : UIViewController
+- (void)p_openRevisitView;
+- (void)p_openRevisitViewAnimation;
+- (void)p_showRevisitViewWithAnimation;
+- (void)openAndRefreshRevisit;
+- (void)p_closeRevisitViewImmediately;
+- (void)p_showTopSelectionView:(BOOL)show;
+- (CGFloat)portalViewHeight;
+- (void)feedLiveTabDidEnter:(id)context;
+- (void)clickOpenRevisitEvent:(BOOL)open visitType:(int)visitType;
+- (void)handleOpenAndRefreshRevisitNotification:(id)notification;
 @end
 
 @protocol AFDRichContentAlbumContainerProtocol <NSObject>
@@ -1219,8 +1235,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 // 关注直播
 @interface AWEConcernSkylightCapsuleView : UIView
 @end
-// 直播发现
+// 直播发现：上滑收起后的胶囊
 @interface AWEFeedLiveTabRevisitControlView : UIView
+- (void)showControlView:(BOOL)show animation:(BOOL)animation;
+- (void)autoOpenRevisitSection;
 @end
 // 直播 退出清屏、投屏按钮
 @interface IESLiveButton : UIView

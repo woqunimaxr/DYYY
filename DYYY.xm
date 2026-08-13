@@ -10023,12 +10023,72 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
 
 %end
 
+static BOOL DYYYLiveDiscoveryHideEnabled(void) {
+    return DYYYGetBool(@"DYYYHideLiveDiscovery");
+}
+
+static void DYYYApplyLiveDiscoveryChromeHidden(UIView *view) {
+    if (![view isKindOfClass:[UIView class]]) {
+        return;
+    }
+    view.hidden = YES;
+    view.alpha = 0;
+}
+
+static BOOL DYYYLiveDiscoveryClosingRevisit = NO;
+
+static void DYYYCloseLiveDiscoveryRevisitIfNeeded(id controller) {
+    if (!DYYYLiveDiscoveryHideEnabled() || DYYYLiveDiscoveryClosingRevisit) {
+        return;
+    }
+    if (![controller respondsToSelector:@selector(p_closeRevisitViewImmediately)]) {
+        return;
+    }
+    DYYYLiveDiscoveryClosingRevisit = YES;
+    [controller p_closeRevisitViewImmediately];
+    DYYYLiveDiscoveryClosingRevisit = NO;
+}
+
 %hook AWEFeedLiveTabTopSelectionView
 - (void)setHideTimer:(id)timer {
     if (DYYYGetBool(@"DYYYDisableAutoHideLive")) {
         timer = nil;
     }
     %orig(timer);
+}
+
+// 隐藏直播发现：展开态顶部标签栏（精选/关注/…/发现更多）
+// 宿主入口为 -showTabTopSelectionView:（v20@0:8B16）；隐藏优先于 DYYYDisableAutoHideLive
+- (void)showTabTopSelectionView:(BOOL)show {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(NO);
+        DYYYApplyLiveDiscoveryChromeHidden(self);
+        return;
+    }
+    %orig(show);
+}
+
+- (void)setHidden:(BOOL)hidden {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(YES);
+        return;
+    }
+    %orig(hidden);
+}
+
+- (void)setAlpha:(CGFloat)alpha {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(0);
+        return;
+    }
+    %orig(alpha);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYApplyLiveDiscoveryChromeHidden(self);
+    }
 }
 %end
 
@@ -11407,16 +11467,126 @@ static void DYYYLiveDurationInstallFromInnerFeedCell(id cell) {
 
 %end
 
-// 隐藏直播发现
+// 隐藏直播发现：上滑收起后的「直播发现」胶囊
+// 宿主入口为 -showControlView:animation:（v24@0:8B16B20）；layoutSubviews 仅作显隐回写
 %hook AWEFeedLiveTabRevisitControlView
+
+- (void)showControlView:(BOOL)show animation:(BOOL)animation {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(NO, NO);
+        DYYYApplyLiveDiscoveryChromeHidden(self);
+        return;
+    }
+    %orig(show, animation);
+}
+
+- (void)autoOpenRevisitSection {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        return;
+    }
+    %orig;
+}
+
+- (void)setHidden:(BOOL)hidden {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(YES);
+        return;
+    }
+    %orig(hidden);
+}
 
 - (void)layoutSubviews {
     %orig;
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYApplyLiveDiscoveryChromeHidden(self);
+    }
+}
+%end
 
-    if (DYYYGetBool(@"DYYYHideLiveDiscovery")) {
-        self.hidden = YES;
+%hook AWEFeedLiveTabSelectionComponent
+- (void)showTopTabView:(BOOL)show {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(NO);
         return;
     }
+    %orig(show);
+}
+%end
+
+// 进直播 Tab 自动下拉的是 VC 打开 revisit 面板（约 252pt 不透明空容器 + IESLiveImageView），
+// 不是 EventView 本身。关闭走宿主 -p_closeRevisitViewImmediately。
+%hook AWEFeedLiveTabViewController
+- (void)p_openRevisitView {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)p_openRevisitViewAnimation {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)p_showRevisitViewWithAnimation {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)openAndRefreshRevisit {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)p_showTopSelectionView:(BOOL)show {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        %orig(NO);
+        return;
+    }
+    %orig(show);
+}
+
+- (CGFloat)portalViewHeight {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        return 0;
+    }
+    return %orig;
+}
+
+- (void)clickOpenRevisitEvent:(BOOL)open visitType:(int)visitType {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)handleOpenAndRefreshRevisitNotification:(id)notification {
+    if (DYYYLiveDiscoveryHideEnabled()) {
+        DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+        return;
+    }
+    %orig;
+}
+
+- (void)feedLiveTabDidEnter:(id)context {
+    %orig;
+    DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    DYYYCloseLiveDiscoveryRevisitIfNeeded(self);
 }
 %end
 
