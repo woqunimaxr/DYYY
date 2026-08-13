@@ -5885,15 +5885,21 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     aboutItem.isEnable = YES;
     aboutItem.cellTappedBlock = ^{
       [DYYYSettingsHelper showAboutDialog:@"关于DYYY"
-                                  message:@"版本: " DYYY_VERSION @"\n\n"
-                                          @"感谢使用DYYY\n\n"
-                                          @"感谢huami开源\n\n"
-                                          @"@维他入我心 基于DYYY二次开发\n\n"
-                                          @"感谢huami group中群友的支持赞助\n\n"
-                                          @"Telegram @huamidev\n\n"
-                                          @"Telegram @vita_app\n\n"
-                                          @"开源地址 huami1314/DYYY\n\n"
-                                          @"仓库地址 Wtrwx/DYYY\n\n"
+                                  message:@"DYYY · VexCove Edition\n"
+                                          @"版本：" DYYY_VERSION @"\n\n"
+                                          @"感谢使用 DYYY\n\n"
+                                          @"本项目基于 Wtrwx/DYYY 继续开发与维护\n"
+                                          @"感谢 huami 开源 DYYY\n"
+                                          @"感谢 @维他 的二次开发贡献\n"
+                                          @"感谢 huami group 群友的支持与赞助\n\n"
+                                          @"Telegram\n"
+                                          @"• huami：@huamidev\n"
+                                          @"• 维他：@vita_app\n"
+                                          @"• VexCove：@VexCove1\n\n"
+                                          @"GitHub\n"
+                                          @"• 原始开源仓库：huami1314/DYYY\n"
+                                          @"• 上游仓库：Wtrwx/DYYY\n"
+                                          @"• 当前维护仓库：VexCove/DYYY"
                                 onConfirm:nil];
     };
     [aboutItems addObject:aboutItem];
