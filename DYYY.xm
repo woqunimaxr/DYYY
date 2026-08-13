@@ -11573,18 +11573,190 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
 
 %end
 
+static NSString *const kDYYYHideItemTagKey = @"DYYYHideItemTag";
+static NSString *const kDYYYHideLiveGIFKey = @"DYYYHideLiveGIF";
+static void *const kDYYYVideoTypeTagRestoreAttemptedKey = (void *)&kDYYYVideoTypeTagRestoreAttemptedKey;
+
+static NSHashTable<UIView *> *DYYYTrackedItemTagViews(void) {
+    static NSHashTable<UIView *> *views = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        views = [NSHashTable weakObjectsHashTable];
+    });
+    return views;
+}
+
+static NSHashTable<UIView *> *DYYYTrackedVideoTypeTagViews(void) {
+    static NSHashTable<UIView *> *views = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        views = [NSHashTable weakObjectsHashTable];
+    });
+    return views;
+}
+
+static void DYYYRequestTagSuperviewLayout(UIView *view, BOOL immediately) {
+    UIView *parent = view.superview;
+    if (!parent) {
+        return;
+    }
+    [parent setNeedsLayout];
+    if (immediately) {
+        [parent layoutIfNeeded];
+    }
+}
+
+static void DYYYSyncViewHiddenToSetting(UIView *view, BOOL hide, BOOL layoutImmediately) {
+    if (view.hidden == hide) {
+        return;
+    }
+    view.hidden = hide;
+    DYYYRequestTagSuperviewLayout(view, layoutImmediately);
+}
+
+static void DYYYApplyCorrelationItemTagSetting(UIView *view, BOOL layoutImmediately) {
+    if (![view isKindOfClass:[UIView class]]) {
+        return;
+    }
+    DYYYSyncViewHiddenToSetting(view, DYYYGetBool(kDYYYHideItemTagKey), layoutImmediately);
+}
+
+static BOOL DYYYVideoTypeTagLooksEmpty(UIView *view) {
+    if (view.subviews.count == 0) {
+        return YES;
+    }
+    if (![view respondsToSelector:@selector(tagLabel)]) {
+        return NO;
+    }
+    id label = ((id (*)(id, SEL))objc_msgSend)(view, @selector(tagLabel));
+    return label == nil;
+}
+
+static void DYYYRestoreVideoTypeTagContentIfNeeded(UIView *view, BOOL layoutImmediately) {
+    if (DYYYGetBool(kDYYYHideLiveGIFKey) || !DYYYVideoTypeTagLooksEmpty(view)) {
+        return;
+    }
+    if (objc_getAssociatedObject(view, kDYYYVideoTypeTagRestoreAttemptedKey)) {
+        return;
+    }
+
+    id viewModel = nil;
+    if ([view respondsToSelector:@selector(viewModel)]) {
+        viewModel = ((id (*)(id, SEL))objc_msgSend)(view, @selector(viewModel));
+    }
+    if (!viewModel) {
+        return;
+    }
+
+    objc_setAssociatedObject(view, kDYYYVideoTypeTagRestoreAttemptedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    if ([view respondsToSelector:@selector(configWithViewModel:)]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(view, @selector(configWithViewModel:), viewModel);
+    } else if ([view respondsToSelector:@selector(setupUI)]) {
+        ((void (*)(id, SEL))objc_msgSend)(view, @selector(setupUI));
+    }
+    [view setNeedsLayout];
+    DYYYRequestTagSuperviewLayout(view, layoutImmediately);
+}
+
+static void DYYYApplyVideoTypeTagSetting(UIView *view, BOOL layoutImmediately) {
+    if (![view isKindOfClass:[UIView class]]) {
+        return;
+    }
+    BOOL hide = DYYYGetBool(kDYYYHideLiveGIFKey);
+    DYYYSyncViewHiddenToSetting(view, hide, layoutImmediately);
+    if (!hide) {
+        DYYYRestoreVideoTypeTagContentIfNeeded(view, layoutImmediately);
+    }
+}
+
+static void DYYYEnsureTagSettingObserver(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
+                                                          object:nil
+                                                           queue:[NSOperationQueue mainQueue]
+                                                      usingBlock:^(__unused NSNotification *notification) {
+            NSArray<UIView *> *itemTags = [DYYYTrackedItemTagViews() allObjects];
+            for (UIView *view in itemTags) {
+                DYYYApplyCorrelationItemTagSetting(view, YES);
+            }
+            NSArray<UIView *> *gifTags = [DYYYTrackedVideoTypeTagViews() allObjects];
+            for (UIView *view in gifTags) {
+                DYYYApplyVideoTypeTagSetting(view, YES);
+            }
+        }];
+    });
+}
+
+static void DYYYTrackAndApplyItemTag(UIView *view) {
+    DYYYEnsureTagSettingObserver();
+    [DYYYTrackedItemTagViews() addObject:view];
+    DYYYApplyCorrelationItemTagSetting(view, NO);
+}
+
+static void DYYYTrackAndApplyVideoTypeTag(UIView *view) {
+    DYYYEnsureTagSettingObserver();
+    [DYYYTrackedVideoTypeTagViews() addObject:view];
+    DYYYApplyVideoTypeTagSetting(view, NO);
+}
+
+%group DYYYItemTagGroup
 // 隐藏笔记
 %hook AWECorrelationItemTag
 
 - (void)layoutSubviews {
     %orig;
-    if (DYYYGetBool(@"DYYYHideItemTag")) {
-        self.hidden = YES;
-        return;
-    }
+    DYYYTrackAndApplyItemTag(self);
 }
 
 %end
+%end
+
+%group DYYYLiveGIFTagGroup
+%hook AWEVideoTypeTagView
+
+- (void)setupUI {
+    %orig;
+    DYYYTrackAndApplyVideoTypeTag(self);
+}
+
+- (void)layoutSubviews {
+    %orig;
+    DYYYTrackAndApplyVideoTypeTag(self);
+}
+
+%end
+%end
+
+static void DYYYInitFeedTagGroupsIfNeeded(void) {
+    static BOOL itemTagGroupReady = NO;
+    static BOOL liveGIFGroupReady = NO;
+    if (!itemTagGroupReady && objc_getClass("AWECorrelationItemTag")) {
+        %init(DYYYItemTagGroup);
+        itemTagGroupReady = YES;
+        NSLog(@"[DYYY][RuntimeHook][FeedTag] AWECorrelationItemTag group installed");
+    }
+    if (!liveGIFGroupReady && objc_getClass("AWEVideoTypeTagView")) {
+        %init(DYYYLiveGIFTagGroup);
+        liveGIFGroupReady = YES;
+        NSLog(@"[DYYY][RuntimeHook][FeedTag] AWEVideoTypeTagView group installed");
+    }
+}
+
+static void DYYYStartFeedTagHookInstaller(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        DYYYInitFeedTagGroupsIfNeeded();
+        NSArray<NSNumber *> *delays = @[ @0.2, @0.8, @2.0, @5.0, @10.0 ];
+        for (NSNumber *delay in delays) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(),
+                           ^{
+                               DYYYInitFeedTagGroupsIfNeeded();
+                           });
+        }
+    });
+}
 
 // 屏蔽模板按钮组件（底部互动）- hook button 方法返回 nil
 %hook AWEPlayInteractionTemplateButton
@@ -11805,14 +11977,6 @@ static void DYYYHideProfilePostGuideView(UIView *view) {
     if ([title containsString:@"任务Banner"] || [title containsString:@"活动Banner"]) {
         self.hidden = YES;
     }
-}
-%end
-
-%hook AWEVideoTypeTagView
-
-- (void)setupUI {
-    if (![[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYHideLiveGIF"])
-        %orig;
 }
 %end
 
@@ -17109,6 +17273,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
     // 仅在构造阶段准备 C Hook；UIKit 与宿主帧率对象延后至 App 激活后访问。
     DYYYStartHighFPSHooks();
+    DYYYStartFeedTagHookInstaller();
 
     %init(DYYYLoginBypassCore);
     DYYYLoginRepairInstallHooks();
@@ -17212,6 +17377,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
         DYYYStartHideTemplateCollectionHooks();
         DYYYStartSearchKeyboardVoiceHooks();
         DYYYStartFPSOverlay();
+        DYYYStartFeedTagHookInstaller();
 
         // 初始化红包激励挂件容器视图类组
         Class incentivePendantClass = objc_getClass("AWEIncentiveSwiftImplDOUYINLite.IncentivePendantContainerView");

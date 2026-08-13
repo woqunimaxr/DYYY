@@ -1073,6 +1073,11 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEVideoTypeTagView : UIView
+- (void)setupUI;
+- (void)layoutSubviews;
+- (void)configWithViewModel:(id)viewModel;
+- (id)viewModel;
+- (id)tagLabel;
 @end
 
 @interface AWELiveStatusIndicatorView : UIView
