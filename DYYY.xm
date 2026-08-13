@@ -33,6 +33,7 @@
 #import "DYYYLoginBypassManager.h"
 #import "DYYYLoginRepairHooks.h"
 #import "DYYYHideMusicButtonHooks.h"
+#import "DYYYHideShareContentViewHooks.h"
 #import "DYYYHideMessageAndMinePageHooks.h"
 #import "DYYYHideCommentAIAnalysisHooks.h"
 #import "DYYYHideTemplateCollectionHooks.h"
@@ -9837,22 +9838,6 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
 }
 %end
 
-// 隐藏分享给朋友提示
-%hook AWEPlayInteractionStrongifyShareContentView
-
-- (void)layoutSubviews {
-    %orig;
-    if (DYYYGetBool(@"DYYYHideShareContentView")) {
-        UIView *parentView = self.superview;
-        if (parentView) {
-            parentView.hidden = YES;
-        } else {
-            self.hidden = YES;
-        }
-    }
-}
-
-%end
 
 %hook AWELeftSideBarEntranceView
 
@@ -17643,6 +17628,7 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     DYYYStartHighFPSHooks();
     DYYYStartFeedTagHookInstaller();
     DYYYStartHideFeedAnchorHookInstaller();
+    DYYYStartHideShareContentViewHooks();
 
     %init(DYYYLoginBypassCore);
     DYYYLoginRepairInstallHooks();

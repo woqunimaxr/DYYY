@@ -818,6 +818,10 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;
 @end
 
+@interface AWEPlayInteractionStrongifyShareContentViewV3 : UIView
+- (void)updateWithViewModel:(id)viewModel;
+@end
+
 @interface AWEAntiAddictedNoticeBarView : UIView
 @property(nonatomic, strong, readonly) UIView *superview;
 @property(nonatomic, assign, getter=isHidden) BOOL hidden;

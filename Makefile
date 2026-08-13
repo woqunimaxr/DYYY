@@ -71,6 +71,7 @@ DYYY_FILES = DYYY.xm \
 	Sources/Core/AWMSafeDispatchTimer.m \
 	Sources/Features/DYYYMiniProgramRewardBypass.m \
 	Sources/Features/DYYYHideMusicButtonHooks.m \
+	Sources/Features/DYYYHideShareContentViewHooks.m \
 	Sources/Features/DYYYHideMessageAndMinePageHooks.m \
 	Sources/Features/DYYYHideCommentAIAnalysisHooks.m \
 	Sources/Features/DYYYHideTemplateCollectionHooks.m \
