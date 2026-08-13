@@ -111,12 +111,14 @@ static char kDYYYLivePreStreamTransformStateKey;
                                                                         }];
     id defaultsToken = [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
                                                                           object:NSUserDefaults.standardUserDefaults
-                                                                           queue:[NSOperationQueue mainQueue]
+                                                                           queue:nil
                                                                       usingBlock:^(__unused NSNotification *notification) {
-                                                                        DYYYLivePreStreamControllerState *strongState = weakState;
-                                                                        if (strongState.layoutActive && strongState.viewController.view.window) {
-                                                                            [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:strongState.viewController];
-                                                                        }
+                                                                        dispatch_async(dispatch_get_main_queue(), ^{
+                                                                          DYYYLivePreStreamControllerState *strongState = weakState;
+                                                                          if (strongState.layoutActive && strongState.viewController.view.window) {
+                                                                              [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:strongState.viewController];
+                                                                          }
+                                                                        });
                                                                       }];
     NSMutableArray<id> *tokens = [NSMutableArray array];
     if (sizeChangeToken) {

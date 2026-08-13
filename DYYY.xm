@@ -9852,12 +9852,15 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
 - (void)layoutSubviews {
     %orig;
 
-    // 隐藏左侧边栏的 badge
     for (UIView *subview in self.subviews) {
-        if ([subview isKindOfClass:%c(DUXBadge)]) {
+        if ([subview isKindOfClass:%c(DUXBadge)] && !subview.hidden) {
             subview.hidden = YES;
             break;
         }
+    }
+
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideLeftSideBar"]) {
+        return;
     }
 
     UIResponder *responder = self;
@@ -9869,7 +9872,7 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
         }
     }
 
-    if (!(parentVC && [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYHideLeftSideBar"])) {
+    if (!parentVC) {
         return;
     }
 
@@ -9887,7 +9890,9 @@ static BOOL DYYYShouldVerifiedCollapseCommentHeaderModel(id model) {
     }
 
     for (UIView *v in cachedViews) {
-        v.hidden = YES;
+        if (!v.hidden) {
+            v.hidden = YES;
+        }
     }
 }
 
@@ -12108,21 +12113,39 @@ static void DYYYApplyVideoTypeTagSetting(UIView *view, BOOL layoutImmediately) {
     }
 }
 
+static BOOL gDYYYTagSettingRefreshScheduled = NO;
+
+static void DYYYRefreshTrackedTagSettings(void) {
+    NSArray<UIView *> *itemTags = [DYYYTrackedItemTagViews() allObjects];
+    for (UIView *view in itemTags) {
+        DYYYApplyCorrelationItemTagSetting(view, NO);
+    }
+    NSArray<UIView *> *gifTags = [DYYYTrackedVideoTypeTagViews() allObjects];
+    for (UIView *view in gifTags) {
+        DYYYApplyVideoTypeTagSetting(view, NO);
+    }
+}
+
 static void DYYYEnsureTagSettingObserver(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        // Widget / App Group 写入也会发 NSUserDefaultsDidChange。若用
+        // NSOperationQueue.mainQueue 且 layoutImmediately，会在宿主仍持有
+        // CFPreferences 锁时同步 DYYYGetBool + layoutIfNeeded，主线程自锁卡死。
         [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
-                                                          object:nil
-                                                           queue:[NSOperationQueue mainQueue]
+                                                          object:[NSUserDefaults standardUserDefaults]
+                                                           queue:nil
                                                       usingBlock:^(__unused NSNotification *notification) {
-            NSArray<UIView *> *itemTags = [DYYYTrackedItemTagViews() allObjects];
-            for (UIView *view in itemTags) {
-                DYYYApplyCorrelationItemTagSetting(view, YES);
-            }
-            NSArray<UIView *> *gifTags = [DYYYTrackedVideoTypeTagViews() allObjects];
-            for (UIView *view in gifTags) {
-                DYYYApplyVideoTypeTagSetting(view, YES);
-            }
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (gDYYYTagSettingRefreshScheduled) {
+                    return;
+                }
+                gDYYYTagSettingRefreshScheduled = YES;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    gDYYYTagSettingRefreshScheduled = NO;
+                    DYYYRefreshTrackedTagSettings();
+                });
+            });
         }];
     });
 }
@@ -12952,7 +12975,7 @@ static DYYYRecommendationFilterConfig *DYYYCurrentRecommendationFilterConfig(voi
     dispatch_once(&onceToken, ^{
         gDYYYRecommendationFilterDefaultsObserver =
             [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
-                                                              object:nil
+                                                              object:[NSUserDefaults standardUserDefaults]
                                                                queue:nil
                                                           usingBlock:^(__unused NSNotification *notification) {
             os_unfair_lock_lock(&gDYYYRecommendationFilterConfigLock);
@@ -15118,7 +15141,7 @@ static void DYYYHidePlusButtonOverlays(UIView *plusButton) {
         return;
     }
     plusButton.userInteractionEnabled = NO;
-    plusButton.hidden = YES;
+    // 不在这里写 plusButton.hidden：setHidden: Hook 会再次进入本函数，造成主线程递归卡死。
 
     static const SEL overlaySelectors[] = {
         @selector(animationImageView),
@@ -16084,9 +16107,7 @@ static Class tabBarButtonClass = nil;
 
 - (void)setBackgroundColor:(UIColor *)backgroundColor {
     if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [self setBackgroundColor:backgroundColor];
-        });
+        %orig(backgroundColor);
         return;
     }
 
@@ -16123,6 +16144,13 @@ static Class tabBarButtonClass = nil;
         return;
     }
 
+    // 「我」侧栏等页面会一次性布局大量小视图。只有底栏同高或较大容器才可能命中下面的业务。
+    BOOL looksLikeTabBarChrome = enableFS && originalTabBarHeight > 0 && fabs(self.frame.size.height - originalTabBarHeight) < 0.6;
+    BOOL looksLikeInteractionHost = CGRectGetHeight(self.bounds) >= 200.0 && self.subviews.count > 0;
+    if (!looksLikeTabBarChrome && !looksLikeInteractionHost) {
+        return;
+    }
+
     // 同一次布局里最多只回溯一次响应链，下面两段判定共用结果。
     UIViewController *vc = [DYYYUtils firstAvailableViewControllerFromView:self];
 
@@ -16130,14 +16158,16 @@ static Class tabBarButtonClass = nil;
         if (self.frame.size.height == originalTabBarHeight && originalTabBarHeight > 0) {
             if ([vc isKindOfClass:%c(AWEMixVideoPanelDetailTableViewController)] || [vc isKindOfClass:%c(AWECommentInputViewController)] ||
                 [vc isKindOfClass:%c(AWEAwemeDetailTableViewController)]) {
-                self.backgroundColor = [UIColor clearColor];
+                if (CGColorGetAlpha(self.backgroundColor.CGColor) > 0.01) {
+                    self.backgroundColor = [UIColor clearColor];
+                }
             }
         }
     }
 
     if ([vc isKindOfClass:%c(AWEPlayInteractionViewController)]) {
         for (UIView *subview in self.subviews) {
-            if ([subview isKindOfClass:[UIView class]] && subview.backgroundColor && CGColorEqualToColor(subview.backgroundColor.CGColor, [UIColor blackColor].CGColor)) {
+            if ([subview isKindOfClass:[UIView class]] && !subview.hidden && subview.backgroundColor && CGColorEqualToColor(subview.backgroundColor.CGColor, [UIColor blackColor].CGColor)) {
                 subview.hidden = YES;
             }
         }
@@ -16145,19 +16175,24 @@ static Class tabBarButtonClass = nil;
 }
 
 - (void)setFrame:(CGRect)frame {
-    if (![NSThread isMainThread]) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [self setFrame:frame];
-        });
-        return;
-    }
-
     BOOL enableBlur = DYYYGetBoolCached(@"DYYYEnableCommentBlur");
     BOOL enableFS = DYYYGetBoolCached(@"DYYYEnableFullScreen");
 
     // -setFrame: 在滚动时每帧会被调用上千次，而下面的响应链回溯与类查找只有
     // 毛玻璃或全屏开启时才会用到。两者都关闭时直接放行，行为与未 Hook 时一致。
     if (!enableBlur && !enableFS) {
+        %orig(frame);
+        return;
+    }
+
+    // 后台线程改 frame 是宿主正常路径。派回主线程会在开侧栏/切页时把布局风暴堆进主队列。
+    if (![NSThread isMainThread]) {
+        %orig(frame);
+        return;
+    }
+
+    // 播放器铺满只作用于较大视图；侧栏图标/按钮不必回溯响应链。
+    if (frame.size.width < 120.0 || frame.size.height < 80.0) {
         %orig(frame);
         return;
     }
@@ -16602,32 +16637,24 @@ static char kDYYYFeedTableFullScreenAppliedKey;
 
 %hook AWEFeedTableViewCell
 - (void)prepareForReuse {
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     %orig;
 }
 
 - (void)layoutSubviews {
     %orig;
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
 }
 %end
 
 %hook AWEFeedViewCell
 - (void)layoutSubviews {
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     %orig;
 }
 
 - (void)setModel:(id)model {
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     %orig;
 }
 %end
@@ -16636,9 +16663,7 @@ static char kDYYYFeedTableFullScreenAppliedKey;
 - (void)viewWillAppear:(BOOL)animated {
     %orig;
     isAppInTransition = YES;
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
       isAppInTransition = NO;
     });
@@ -16669,16 +16694,12 @@ static char kDYYYFeedTableFullScreenAppliedKey;
 
 %hook AWEFeedContainerViewController
 - (void)aweme:(id)arg1 currentIndexWillChange:(NSInteger)arg2 {
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     %orig;
 }
 
 - (void)aweme:(id)arg1 currentIndexDidChange:(NSInteger)arg2 {
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
     %orig;
     // This callback is the feed's committed index transition. Do not validate it
     // against the controller hierarchy: old/new controllers can overlap briefly
@@ -16688,9 +16709,7 @@ static char kDYYYFeedTableFullScreenAppliedKey;
 
 - (void)viewWillLayoutSubviews {
     %orig;
-    if (hideButton && hideButton.isElementsHidden) {
-        [hideButton hideUIElements];
-    }
+    DYYYRequestHideUIElementsIfNeeded();
 }
 %end
 

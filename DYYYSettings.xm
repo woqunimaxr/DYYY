@@ -48,6 +48,8 @@ static char kDYYYWeatherSubviewGestureInstalledKey;
 static char kDYYYSettingsSearchCoordinatorKey;
 static BOOL DYYYBuildingSettingsSearchIndex = NO;
 static BOOL DYYYSettingsSearchIndexBuilt = NO;
+static BOOL gDYYYApplyingSettingCellChrome = NO;
+static BOOL gDYYYOpeningSettings = NO;
 static NSString *const kDYYYFeedNowPlayingSettingTitle = @"屏蔽灵动岛抖音播放信息";
 static NSString *const kDYYYFeedNowPlayingSettingIdentifier = @"DYYYDisableFeedNowPlayingInfo";
 static NSString *const kDYYYFeedNowPlayingSVGIconName = @"ic_liveactivityplayslash_dyyy_outlined_20";
@@ -1122,6 +1124,16 @@ static void DYYYApplyInlineControlsToCell(AWESettingsTableViewCell *cell) {
     DYYYCenterSettingIconForSubtitle(cell);
 }
 
+static void DYYYApplySettingCellChrome(AWESettingsTableViewCell *cell) {
+    if (!cell || gDYYYApplyingSettingCellChrome) {
+        return;
+    }
+    gDYYYApplyingSettingCellChrome = YES;
+    DYYYApplyGeneratedSettingIconToCell(cell);
+    DYYYApplyInlineControlsToCell(cell);
+    gDYYYApplyingSettingCellChrome = NO;
+}
+
 static void DYYYRemoveRemoteConfigObserver(void) {
     if (dyyyRemoteConfigChangedToken) {
         [[NSNotificationCenter defaultCenter] removeObserver:dyyyRemoteConfigChangedToken];
@@ -1941,14 +1953,19 @@ static void DYYYBuildSettingsSearchIndexIfNeeded(NSArray<AWESettingItemModel *> 
 
 - (void)viewDidLayoutSubviews {
     %orig;
+    static char kDYYYSettingsLayoutGuardKey;
+    if (objc_getAssociatedObject(self, &kDYYYSettingsLayoutGuardKey)) {
+        return;
+    }
+    objc_setAssociatedObject(self, &kDYYYSettingsLayoutGuardKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     DYYYSettingsSearchCoordinator *coordinator = objc_getAssociatedObject(self, &kDYYYSettingsSearchCoordinatorKey);
     [coordinator updateLayout];
     for (AWESettingsTableViewCell *cell in self.tableView.visibleCells) {
         if ([cell isKindOfClass:%c(AWESettingsTableViewCell)]) {
-            DYYYApplyGeneratedSettingIconToCell(cell);
-            DYYYApplyInlineControlsToCell(cell);
+            DYYYApplySettingCellChrome(cell);
         }
     }
+    objc_setAssociatedObject(self, &kDYYYSettingsLayoutGuardKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 - (void)dealloc {
@@ -1976,8 +1993,7 @@ static void DYYYBuildSettingsSearchIndexIfNeeded(NSArray<AWESettingItemModel *> 
     self.iconImageView.transform = CGAffineTransformIdentity;
     self.detailLabel.transform = CGAffineTransformIdentity;
     %orig;
-    DYYYApplyGeneratedSettingIconToCell(self);
-    DYYYApplyInlineControlsToCell(self);
+    DYYYApplySettingCellChrome(self);
 }
 
 - (void)prepareForReuse {
@@ -1988,20 +2004,17 @@ static void DYYYBuildSettingsSearchIndexIfNeeded(NSArray<AWESettingItemModel *> 
 
 - (void)updateSubviews {
     %orig;
-    DYYYApplyGeneratedSettingIconToCell(self);
-    DYYYApplyInlineControlsToCell(self);
+    DYYYApplySettingCellChrome(self);
 }
 
 - (void)updateSubviewsAfterLayout {
     %orig;
-    DYYYApplyGeneratedSettingIconToCell(self);
-    DYYYApplyInlineControlsToCell(self);
+    DYYYApplySettingCellChrome(self);
 }
 
 - (void)layoutSubviews {
     %orig;
-    DYYYApplyGeneratedSettingIconToCell(self);
-    DYYYApplyInlineControlsToCell(self);
+    DYYYApplySettingCellChrome(self);
 }
 
 %new
@@ -2211,6 +2224,11 @@ static void DYYYBuildSettingsSearchIndexIfNeeded(NSArray<AWESettingItemModel *> 
 extern "C"
 #endif
 void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
+    if (!rootVC || gDYYYOpeningSettings) {
+        return;
+    }
+    gDYYYOpeningSettings = YES;
+
     AWESettingBaseViewController *settingsVC = [[%c(AWESettingBaseViewController) alloc] init];
     settingsVC.colorStyle = 2;
     if (!hasAgreed) {
@@ -2221,21 +2239,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                     [DYYYSettingsHelper showUserAgreementAlert];
                                   }];
     }
-
-    // 等待视图加载并使用KVO安全访问属性
-    dispatch_async(dispatch_get_main_queue(), ^{
-      if ([settingsVC.view isKindOfClass:[UIView class]]) {
-          for (UIView *subview in settingsVC.view.subviews) {
-              if ([subview isKindOfClass:%c(AWENavigationBar)]) {
-                  AWENavigationBar *navigationBar = (AWENavigationBar *)subview;
-                  if ([navigationBar respondsToSelector:@selector(titleLabel)]) {
-                      navigationBar.titleLabel.text = DYYY_NAME;
-                  }
-                  break;
-              }
-          }
-      }
-    });
 
     AWESettingsViewModel *viewModel = [[%c(AWESettingsViewModel) alloc] init];
     viewModel.colorStyle = 2;
@@ -5535,7 +5538,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     backupItem.type = 0;
     backupItem.svgIconImageName = @"ic_memorycard_outlined_20";
     backupItem.cellType = 26;
-    backupItem.colorStyle = 0;
+    backupItem.colorStyle = 2;
     backupItem.isEnable = YES;
     backupItem.cellTappedBlock = ^{
       // 获取所有以DYYY开头的NSUserDefaults键值
@@ -5617,7 +5620,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     restoreItem.type = 0;
     restoreItem.svgIconImageName = @"ic_phonearrowup_outlined_20";
     restoreItem.cellType = 26;
-    restoreItem.colorStyle = 0;
+    restoreItem.colorStyle = 2;
     restoreItem.isEnable = YES;
     restoreItem.cellTappedBlock = ^{
       UIDocumentPickerViewController *documentPicker = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[ @"public.json", @"public.text" ] inMode:UIDocumentPickerModeImport];
@@ -5937,15 +5940,47 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
     mainSection.itemArray = mainItems;
     aboutSection.itemArray = aboutItems;
 
-    DYYYResetSettingsSearchIndex();
-    DYYYBuildSettingsSearchIndexIfNeeded(mainItems);
     DYYYRegisterSearchSections(@"DYYY", @[ cleanupSection, backupSection, aboutSection ]);
 
     NSArray *rootSections = @[ mainSection, cleanupSection, backupSection, aboutSection ];
     viewModel.sectionDataArray = rootSections;
     objc_setAssociatedObject(settingsVC, &kViewModelKey, viewModel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    DYYYAttachSettingsSearchHeader(settingsVC, viewModel, rootSections, DYYYSettingsSearchEntries());
-    [rootVC.navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
+    DYYYAttachSettingsSearchHeader(settingsVC, viewModel, rootSections, DYYYSettingsSearchEntriesForSections(@"DYYY", rootSections));
+
+    UINavigationController *navigationController = rootVC.navigationController;
+    if (navigationController) {
+        [navigationController pushViewController:(UIViewController *)settingsVC animated:YES];
+    } else {
+        UIViewController *presenter = rootVC;
+        while (presenter.presentedViewController) {
+            presenter = presenter.presentedViewController;
+        }
+        UINavigationController *wrapper = [[UINavigationController alloc] initWithRootViewController:(UIViewController *)settingsVC];
+        wrapper.modalPresentationStyle = UIModalPresentationFullScreen;
+        [presenter presentViewController:wrapper animated:YES completion:nil];
+    }
+
+    NSArray<AWESettingItemModel *> *indexItems = [mainItems copy];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if ([settingsVC.view isKindOfClass:[UIView class]]) {
+          for (UIView *subview in settingsVC.view.subviews) {
+              if ([subview isKindOfClass:%c(AWENavigationBar)]) {
+                  AWENavigationBar *navigationBar = (AWENavigationBar *)subview;
+                  if ([navigationBar respondsToSelector:@selector(titleLabel)]) {
+                      navigationBar.titleLabel.text = DYYY_NAME;
+                  }
+                  break;
+              }
+          }
+      }
+
+      DYYYResetSettingsSearchIndex();
+      DYYYBuildSettingsSearchIndexIfNeeded(indexItems);
+      DYYYRegisterSearchSections(@"DYYY", @[ cleanupSection, backupSection, aboutSection ]);
+      DYYYSettingsSearchCoordinator *coordinator = objc_getAssociatedObject(settingsVC, &kDYYYSettingsSearchCoordinatorKey);
+      coordinator.searchEntries = DYYYSettingsSearchEntries();
+      gDYYYOpeningSettings = NO;
+    });
 }
 
 %hook AWESettingsViewModel

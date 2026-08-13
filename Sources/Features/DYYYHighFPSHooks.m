@@ -385,17 +385,22 @@ void DYYYStartHighFPSHooks(void) {
 
     DYYYInstallCFBundleProMotionHookIfNeeded();
 
-    // 不能在 dylib initializer 中访问 UIKit。XR 上的真实崩溃表明这会与
-    // +[UIScreen initialize] 相互等待，最终触发启动 watchdog。
-    NSLog(@"[DYYY][RuntimeHook][HighFPS] 已就绪；将于 App 激活后检查显示能力");
+    // 不能在 dylib initializer 中访问 UIKit / NSOperationQueue.mainQueue。
+    // XR 上 +[UIScreen initialize] 会与 dyld/runtimeLock 互相等待，表现为启动卡死。
+    NSLog(@"[DYYY][RuntimeHook][HighFPS] 已就绪；将于主线程空闲后检查显示能力");
 
-    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
-                                                      object:nil
-                                                      queue:[NSOperationQueue mainQueue]
-                                                  usingBlock:^(__unused NSNotification *note) {
-                                                    if (!DYYYHighFPSEnabled()) {
-                                                        return;
-                                                    }
-                                                    DYYYScheduleHighFPSSettingChange(YES);
-                                                  }];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                        object:nil
+                                                         queue:nil
+                                                    usingBlock:^(__unused NSNotification *note) {
+                                                      if (!DYYYHighFPSEnabled()) {
+                                                          return;
+                                                      }
+                                                      DYYYScheduleHighFPSSettingChange(YES);
+                                                    }];
+      if (DYYYHighFPSEnabled()) {
+          DYYYApplyHighFPSSettingChangeOnMain(YES);
+      }
+    });
 }

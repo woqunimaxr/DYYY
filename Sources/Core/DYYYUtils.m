@@ -450,8 +450,13 @@ uint32_t gDYYYSettingsGeneration = 0;
       __atomic_fetch_add(&gDYYYSettingsGeneration, 1, __ATOMIC_RELAXED);
     };
 
-    [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification object:nil queue:nil usingBlock:invalidate];
-    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:invalidate];
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
+                                                      object:[NSUserDefaults standardUserDefaults]
+                                                       queue:nil
+                                                  usingBlock:invalidate];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:invalidate];
+    });
 }
 
 #pragma mark - Public Model Filtering Utilities (公共模型过滤工具)

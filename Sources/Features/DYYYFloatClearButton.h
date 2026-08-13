@@ -25,6 +25,7 @@ void updateClearButtonVisibility(void);
 void initTargetClassNames(void);
 void reloadClearButtonConfiguration(void);
 void DYYYApplyFloatClearProgressStateToView(UIView *view);
+void DYYYRequestHideUIElementsIfNeeded(void);
 
 #ifdef __cplusplus
 }
