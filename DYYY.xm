@@ -6210,12 +6210,32 @@ static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallba
     DYYYApplyLeftAlignedScaleAndOffsetXY(target, scale, extraTx, verticalOffset);
 }
 
+static BOOL DYYYViewIsInsidePlayInteraction(UIView *view) {
+    if (!view) {
+        return NO;
+    }
+
+    Class playClass = %c(AWEPlayInteractionViewController);
+    Protocol *playProtocol = NSProtocolFromString(@"AWEPlayInteractionViewControllerProtocol");
+    for (UIResponder *responder = view.nextResponder; responder; responder = responder.nextResponder) {
+        if (![responder isKindOfClass:[UIViewController class]]) {
+            continue;
+        }
+        if (playClass && [responder isKindOfClass:playClass]) {
+            return YES;
+        }
+        if (playProtocol && [responder conformsToProtocol:playProtocol]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 static void DYYYApplyNicknameLayoutToLabel(UIView *label) {
     if (!label) {
         return;
     }
-    UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:label];
-    if (![viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+    if (!DYYYViewIsInsidePlayInteraction(label)) {
         return;
     }
     DYYYApplyPlayInteractionElementLayout(label, @"AWEPlayInteractionAuthorElement");
@@ -6772,8 +6792,7 @@ static NSString *const kDYYYLongPressCopyEnabledKey = @"DYYYLongPressCopyTextEna
     if (DYYYGetBool(@"DYYYHideHisShop")) {
         return;
     }
-    UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+    if (DYYYViewIsInsidePlayInteraction(self)) {
         DYYYApplyPlayInteractionElementLayout(self, @"AWEPlayInteractionECommerceEntryElement");
     }
 }
@@ -9098,8 +9117,7 @@ static void DYYYApplyAvatarFollowPromptSettingsWithRetry(id owner) {
         return;
     }
 
-    UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
-    if ([viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+    if (DYYYViewIsInsidePlayInteraction(self)) {
         DYYYApplyPlayInteractionElementLayout(self, @"AWEPlayInteractionDanmakuElement");
     }
 }
@@ -16453,8 +16471,11 @@ static void DYYYRemoveAppLifecycleObservers(void) {
 }
 
 - (void)layoutSubviews {
-    // 先清掉子元素上的 transform，让原始排版基于未变换的 frame 计算
-    DYYYResetPlayInteractionLeftStackElementTransforms(self);
+    BOOL insidePlayInteraction = DYYYViewIsInsidePlayInteraction(self);
+    // 只清理播放交互层左侧栏。全局 reset 会把作品详情等页面里 element hook 已写好的缩放清掉。
+    if (insidePlayInteraction) {
+        DYYYResetPlayInteractionLeftStackElementTransforms(self);
+    }
 
     %orig;
 
@@ -16464,7 +16485,7 @@ static void DYYYRemoveAppLifecycleObservers(void) {
         [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:viewController];
     }
 
-    if ([viewController isKindOfClass:%c(AWEPlayInteractionViewController)]) {
+    if (insidePlayInteraction) {
         NSString *label = self.accessibilityLabel ?: @"";
         BOOL hasAnchor = [DYYYUtils containsSubviewOfClass:NSClassFromString(@"AWEFeedAnchorContainerView") inContainer:self];
         BOOL hasAvatar = [DYYYUtils containsSubviewOfClass:NSClassFromString(@"AWEPlayInteractionUserAvatarView") inContainer:self];
