@@ -15103,6 +15103,56 @@ static void DYYYUpdateManagedPrivacyHalfScreenAppearance(AFDPrivacyHalfScreenVie
 
 %end
 
+static void DYYYHidePlusButtonOverlayView(id overlay) {
+    if (![overlay isKindOfClass:[UIView class]]) {
+        return;
+    }
+    UIView *overlayView = (UIView *)overlay;
+    overlayView.userInteractionEnabled = NO;
+    overlayView.hidden = YES;
+    overlayView.alpha = 0;
+}
+
+static void DYYYHidePlusButtonOverlays(UIView *plusButton) {
+    if (![plusButton isKindOfClass:[UIView class]]) {
+        return;
+    }
+    plusButton.userInteractionEnabled = NO;
+    plusButton.hidden = YES;
+
+    static const SEL overlaySelectors[] = {
+        @selector(animationImageView),
+        @selector(specialContentAnimationView),
+        @selector(plusBubble),
+        @selector(studioBubble),
+    };
+    for (size_t index = 0; index < sizeof(overlaySelectors) / sizeof(overlaySelectors[0]); index++) {
+        SEL selector = overlaySelectors[index];
+        if (![plusButton respondsToSelector:selector]) {
+            continue;
+        }
+        DYYYHidePlusButtonOverlayView(((id (*)(id, SEL))objc_msgSend)(plusButton, selector));
+    }
+}
+
+static void DYYYLogHidePlusOverlayOnce(NSString *target) {
+    static NSMutableSet<NSString *> *logged = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      logged = [NSMutableSet set];
+    });
+    if (target.length == 0) {
+        return;
+    }
+    @synchronized(logged) {
+        if ([logged containsObject:target]) {
+            return;
+        }
+        [logged addObject:target];
+    }
+    NSLog(@"[DYYY][HidePlusButton] overlay-skip %@", target);
+}
+
 // 底栏高度
 %hook AWENormalModeTabBarPlusButton
 
@@ -15111,7 +15161,7 @@ static void DYYYUpdateManagedPrivacyHalfScreenAppearance(AFDPrivacyHalfScreenVie
     %orig(hidePlus ? YES : hidden);
 
     if (hidePlus) {
-        self.userInteractionEnabled = NO;
+        DYYYHidePlusButtonOverlays(self);
     }
 }
 
@@ -15119,19 +15169,116 @@ static void DYYYUpdateManagedPrivacyHalfScreenAppearance(AFDPrivacyHalfScreenVie
     %orig;
 
     if (self.window && DYYYGetBool(@"DYYYHidePlusButton")) {
-        self.userInteractionEnabled = NO;
-        self.hidden = YES;
+        DYYYHidePlusButtonOverlays(self);
     }
 }
 
 - (void)layoutSubviews {
     %orig;
 
-    if (DYYYGetBool(@"DYYYHidePlusButton")) {
-        self.userInteractionEnabled = NO;
-        self.hidden = YES;
+    if (DYYYGetBoolCached(@"DYYYHidePlusButton")) {
+        DYYYHidePlusButtonOverlays(self);
     }
 }
+
+%end
+
+%group DYYYHidePlusButtonStickerOverlay
+
+%hook AWENormalModeTabBarPlusButton
+
+- (void)addStickerImageViewAnimationView {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        DYYYLogHidePlusOverlayOnce(@"addStickerImageViewAnimationView");
+        return;
+    }
+    %orig;
+}
+
+- (BOOL)canShowSpecialPlusBigAnimation {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        return NO;
+    }
+    return %orig;
+}
+
+- (BOOL)couldShowPlusBubble {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        return NO;
+    }
+    return %orig;
+}
+
+- (void)begainShowPlusAddImage {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        DYYYLogHidePlusOverlayOnce(@"begainShowPlusAddImage");
+        return;
+    }
+    %orig;
+}
+
+- (void)__showBubbleWithCustomView:(id)view duration:(NSTimeInterval)duration completion:(id)completion {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        DYYYLogHidePlusOverlayOnce(@"__showBubbleWithCustomView");
+        return;
+    }
+    %orig;
+}
+
+%end
+
+%end
+
+%group DYYYHidePlusButtonSpecialPlusManager
+
+%hook AWEStudioSpecialPlusManager
+
++ (BOOL)shouldShowStudioSpecialPlusIconWithAwemeModel:(id)model {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        return NO;
+    }
+    return %orig;
+}
+
++ (BOOL)shouldContinueCheckShowSpecialPlusButton {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        return NO;
+    }
+    return %orig;
+}
+
+%end
+
+%end
+
+%group DYYYHidePlusButtonBigAnimation
+
+%hook AWEStudioSpecialPlusBigAnimationManager
+
+- (BOOL)enableShowSpecialPlusBigAnimation {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        return NO;
+    }
+    return %orig;
+}
+
+%end
+
+%end
+
+%group DYYYHidePlusButtonInnerBubble
+
+%hook AWENormalModeTabBarGeneralPlusInnerButton
+
+- (void)showBubbleWithText:(id)text {
+    if (DYYYGetBool(@"DYYYHidePlusButton")) {
+        DYYYLogHidePlusOverlayOnce(@"showBubbleWithText:");
+        return;
+    }
+    %orig;
+}
+
+%end
 
 %end
 
@@ -17629,6 +17776,24 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
     DYYYStartFeedTagHookInstaller();
     DYYYStartHideFeedAnchorHookInstaller();
     DYYYStartHideShareContentViewHooks();
+
+    Class plusButtonOverlayClass = objc_getClass("AWENormalModeTabBarPlusButton");
+    if (plusButtonOverlayClass && class_getInstanceMethod(plusButtonOverlayClass, @selector(addStickerImageViewAnimationView))) {
+        %init(DYYYHidePlusButtonStickerOverlay);
+    }
+    Class specialPlusManagerClass = objc_getClass("AWEStudioSpecialPlusManager");
+    if (specialPlusManagerClass &&
+        class_getClassMethod(specialPlusManagerClass, @selector(shouldShowStudioSpecialPlusIconWithAwemeModel:))) {
+        %init(DYYYHidePlusButtonSpecialPlusManager);
+    }
+    Class plusBigAnimationClass = objc_getClass("AWEStudioSpecialPlusBigAnimationManager");
+    if (plusBigAnimationClass && class_getInstanceMethod(plusBigAnimationClass, @selector(enableShowSpecialPlusBigAnimation))) {
+        %init(DYYYHidePlusButtonBigAnimation);
+    }
+    Class plusInnerButtonClass = objc_getClass("AWENormalModeTabBarGeneralPlusInnerButton");
+    if (plusInnerButtonClass && class_getInstanceMethod(plusInnerButtonClass, @selector(showBubbleWithText:))) {
+        %init(DYYYHidePlusButtonInnerBubble);
+    }
 
     %init(DYYYLoginBypassCore);
     DYYYLoginRepairInstallHooks();

@@ -1868,9 +1868,23 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWENormalModeTabBarPlusButton : UIView
+- (UIView *)animationImageView;
+- (UIView *)specialContentAnimationView;
+- (UIView *)plusBubble;
+- (UIView *)studioBubble;
 @end
 
 @interface AWENormalModeTabBarGeneralPlusButton : AWENormalModeTabBarPlusButton
+@end
+
+@interface AWEStudioSpecialPlusManager : NSObject
++ (BOOL)shouldShowStudioSpecialPlusIconWithAwemeModel:(id)model;
++ (BOOL)shouldContinueCheckShowSpecialPlusButton;
+@end
+
+@interface AWEStudioSpecialPlusBigAnimationManager : NSObject
++ (instancetype)sharedManager;
+- (BOOL)enableShowSpecialPlusBigAnimation;
 @end
 
 @interface AWEMixVideoPanelMoreView : UIView
