@@ -15753,7 +15753,7 @@ static Class tabBarButtonClass = nil;
 
 - (void)didMoveToWindow {
     %orig;
-    if (!hideButton || !hideButton.isElementsHidden) {
+    if (!hideButton || !hideButton.isElementsHidden || DYYYShouldExemptClearTargetView(self)) {
         DYYYRestoreClearTargetViewStateIfNeeded(self);
     }
 }

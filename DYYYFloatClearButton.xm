@@ -111,8 +111,30 @@ static void DYYYCaptureClearTargetViewStateIfNeeded(UIView *view) {
     objc_setAssociatedObject(view, &dyyyClearOriginalHiddenKey, @(view.hidden), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
+BOOL DYYYShouldExemptClearTargetView(UIView *view) {
+    if (!view) {
+        return NO;
+    }
+
+    NSInteger depth = 0;
+    for (UIView *current = view.superview; current && depth < 16; current = current.superview, depth++) {
+        NSString *className = NSStringFromClass([current class]);
+        if ([className containsString:@"PlayInteraction"]) {
+            continue;
+        }
+        if ([className containsString:@"Comment"]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 void DYYYApplyClearTargetViewHiddenState(UIView *view) {
     if (!view) {
+        return;
+    }
+    if (DYYYShouldExemptClearTargetView(view)) {
+        DYYYRestoreClearTargetViewStateIfNeeded(view);
         return;
     }
 
@@ -983,6 +1005,10 @@ void reloadClearButtonConfiguration(void) {
                         if (![controller isKindOfClass:NSClassFromString(@"AWEFeedContainerViewController")]) {
                             continue;
                         }
+                    }
+                    if (DYYYShouldExemptClearTargetView(view)) {
+                        DYYYRestoreClearTargetViewStateIfNeeded(view);
+                        continue;
                     }
                     DYYYApplyClearTargetViewHiddenState(view);
                     if (![self.hiddenViewsList containsObject:view]) {
