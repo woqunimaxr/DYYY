@@ -65,6 +65,7 @@ DYYY_FILES = DYYY.xm \
 	Sources/Media/DYYYManager.m \
 	Sources/Core/DYYYUtils.m \
 	Sources/Features/DYYYLoginBypassManager.m \
+	Sources/Features/DYYYLoginRepairHooks.m \
 	Sources/Features/DYYYPrivacyRecordUploadGuard.m \
 	Sources/Core/CityManager.m \
 	Sources/Core/AWMSafeDispatchTimer.m \

@@ -4067,7 +4067,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           @"cellType" : @37,
           @"imageName" : kDYYYLoginBypassSVGIconName
       }];
-      loginBypassItem.detail = @"";
       [accountItems addObject:loginBypassItem];
 
       // 【长按面板设置】分类
