@@ -1306,6 +1306,23 @@ static void DYYYApplyDisplayLocationToLabel(UILabel *label, NSString *displayLoc
     return DYYYOpaqueColorByCompositingColor(inputOverlayColor, panelBackgroundColor, opaqueFallback);
 }
 
++ (UIColor *)douyinOpaqueInteractiveControlBackgroundColor {
+    BOOL usesLightBackground = [self usesDouyinLightBackground];
+    if (usesLightBackground) {
+        UIColor *panelBackgroundColor = [self douyinPanelBackgroundColor];
+        UIColor *cardOverlayFallback = [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:8.0 / 255.0];
+        UIColor *cardOverlayColor = [self douyinColorNamed:@"BGCard2" fallbackColor:cardOverlayFallback];
+        UIColor *opaqueFallback = [UIColor colorWithRed:245.0 / 255.0 green:245.0 / 255.0 blue:245.0 / 255.0 alpha:1.0];
+        return DYYYOpaqueColorByCompositingColor(cardOverlayColor, panelBackgroundColor, opaqueFallback);
+    }
+
+    UIColor *panelBackgroundColor = [self douyinPanelBackgroundColor];
+    UIColor *cardOverlayFallback = [UIColor colorWithWhite:1.0 alpha:15.0 / 255.0];
+    UIColor *cardOverlayColor = [self douyinColorNamed:@"BGCard2" fallbackColor:cardOverlayFallback];
+    UIColor *opaqueFallback = [UIColor colorWithWhite:48.0 / 255.0 alpha:1.0];
+    return DYYYOpaqueColorByCompositingColor(cardOverlayColor, panelBackgroundColor, opaqueFallback);
+}
+
 + (UIColor *)douyinInteractiveControlBackgroundColor {
     UIColor *fallbackColor = [self usesDouyinLightBackground]
                                  ? [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:8.0 / 255.0]
