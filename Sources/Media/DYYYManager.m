@@ -32,6 +32,9 @@
 /** 在原有条目基础上追加说明文字条目。 */
 + (NSArray<AVMetadataItem *> *)metadataItemsByAppendingDescription:(NSString *)albumDescription toItems:(NSArray<AVMetadataItem *> *)items;
 
+/** 替换视频资源中的原始创建日期，避免相册继续读取相同的容器时间。 */
++ (NSArray<AVMetadataItem *> *)metadataItemsBySettingCreationDate:(NSDate *)creationDate toItems:(NSArray<AVMetadataItem *> *)items;
+
 /** 取本次下载该带的说明文字。 */
 + (NSString *)currentAlbumDescription;
 
@@ -399,6 +402,39 @@
     commonItem.key = AVMetadataCommonKeyDescription;
     commonItem.value = albumDescription;
     [result addObject:commonItem];
+
+    return result;
+}
+
++ (NSArray<AVMetadataItem *> *)metadataItemsBySettingCreationDate:(NSDate *)creationDate toItems:(NSArray<AVMetadataItem *> *)items {
+    if (!creationDate) {
+        return items ?: @[];
+    }
+
+    NSMutableArray<AVMetadataItem *> *result = [NSMutableArray array];
+    for (AVMetadataItem *item in items) {
+        BOOL isCommonCreationDate = [item.keySpace isEqualToString:AVMetadataKeySpaceCommon] && [item.key isEqual:AVMetadataCommonKeyCreationDate];
+        BOOL isQuickTimeCreationDate = [item.keySpace isEqualToString:AVMetadataKeySpaceQuickTimeMetadata] && [item.key isEqual:@"com.apple.quicktime.creationdate"];
+        if (!isCommonCreationDate && !isQuickTimeCreationDate) {
+            [result addObject:item];
+        }
+    }
+
+    AVMutableMetadataItem *commonItem = [AVMutableMetadataItem metadataItem];
+    commonItem.keySpace = AVMetadataKeySpaceCommon;
+    commonItem.key = AVMetadataCommonKeyCreationDate;
+    commonItem.value = creationDate;
+    [result addObject:commonItem];
+
+    NSDateFormatter *quickTimeDateFormatter = [[NSDateFormatter alloc] init];
+    quickTimeDateFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    quickTimeDateFormatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ssZZZZZ";
+
+    AVMutableMetadataItem *quickTimeItem = [AVMutableMetadataItem metadataItem];
+    quickTimeItem.keySpace = AVMetadataKeySpaceQuickTimeMetadata;
+    quickTimeItem.key = @"com.apple.quicktime.creationdate";
+    quickTimeItem.value = [quickTimeDateFormatter stringFromDate:creationDate];
+    [result addObject:quickTimeItem];
 
     return result;
 }
@@ -1354,7 +1390,7 @@
               complete:(void (^)(BOOL success, NSString *photoFile, NSString *videoFile, NSError *error))complete {
     NSString *photoName = [photoURL lastPathComponent];
     NSString *photoFile = [self filePathFromTmp:photoName];
-    [self addMetadataToPhoto:photoURL outputFile:photoFile identifier:identifier albumDescription:albumDescription];
+    [self addMetadataToPhoto:photoURL outputFile:photoFile identifier:identifier albumDescription:albumDescription creationDate:nil];
     NSString *videoName = [videoURL lastPathComponent];
     NSString *videoFile = [self filePathFromTmp:videoName];
     [self addMetadataToVideo:videoURL outputFile:videoFile identifier:identifier albumDescription:albumDescription];
@@ -1371,7 +1407,7 @@
           complete(YES, photoFile, videoFile, nil);
     }];
 }
-- (void)addMetadataToPhoto:(NSURL *)photoURL outputFile:(NSString *)outputFile identifier:(NSString *)identifier albumDescription:(NSString *)albumDescription {
+- (void)addMetadataToPhoto:(NSURL *)photoURL outputFile:(NSString *)outputFile identifier:(NSString *)identifier albumDescription:(NSString *)albumDescription creationDate:(NSDate *)creationDate {
     NSMutableData *data = [NSData dataWithContentsOfURL:photoURL].mutableCopy;
     UIImage *image = [UIImage imageWithData:data];
     CGImageRef imageRef = image.CGImage;
@@ -1379,6 +1415,22 @@
     if (albumDescription.length > 0) {
         imageMetadata[(NSString *)kCGImagePropertyTIFFDictionary] = @{(NSString *)kCGImagePropertyTIFFImageDescription : albumDescription};
         imageMetadata[(NSString *)kCGImagePropertyIPTCDictionary] = @{(NSString *)kCGImagePropertyIPTCCaptionAbstract : albumDescription};
+    }
+    if (creationDate) {
+        NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
+        dateFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        dateFormatter.dateFormat = @"yyyy:MM:dd HH:mm:ss";
+        NSString *dateString = [dateFormatter stringFromDate:creationDate];
+
+        NSMutableDictionary *tiffMetadata = [imageMetadata[(NSString *)kCGImagePropertyTIFFDictionary] mutableCopy] ?: [NSMutableDictionary dictionary];
+        tiffMetadata[(NSString *)kCGImagePropertyTIFFDateTime] = dateString;
+        imageMetadata[(NSString *)kCGImagePropertyTIFFDictionary] = tiffMetadata;
+
+        NSMutableDictionary *exifMetadata = [imageMetadata[(NSString *)kCGImagePropertyExifDictionary] mutableCopy] ?: [NSMutableDictionary dictionary];
+        exifMetadata[(NSString *)kCGImagePropertyExifDateTimeOriginal] = dateString;
+        exifMetadata[(NSString *)kCGImagePropertyExifDateTimeDigitized] = dateString;
+        exifMetadata[(NSString *)kCGImagePropertyExifSubsecTimeOriginal] = @"000";
+        imageMetadata[(NSString *)kCGImagePropertyExifDictionary] = exifMetadata;
     }
     CGImageDestinationRef dest = CGImageDestinationCreateWithData((CFMutableDataRef)data, kUTTypeJPEG, 1, nil);
     CGImageDestinationAddImage(dest, imageRef, (CFDictionaryRef)imageMetadata);
@@ -1750,12 +1802,17 @@
 
               float progressPerItem = (float)(livePhotos.count * 2) / totalSteps;
               __block NSInteger processedCount = 0;
+              NSDate *batchCreationDate = [NSDate date];
+              NSTimeInterval creationDateOffset = 0;
 
               for (NSDictionary *fileInfo in downloadedFiles) {
                   NSString *imagePath = fileInfo[@"imagePath"];
                   NSString *videoPath = fileInfo[@"videoPath"];
 
                   if (![imagePath isKindOfClass:[NSNull class]] && ![videoPath isKindOfClass:[NSNull class]] && [fileManager fileExistsAtPath:imagePath] && [fileManager fileExistsAtPath:videoPath]) {
+                      // iOS 相册对间隔小于4秒的实况照片仍可能连续播放，因此按4秒递增。
+                      NSDate *assetCreationDate = [batchCreationDate dateByAddingTimeInterval:creationDateOffset];
+                      creationDateOffset += 4.0;
                       dispatch_group_enter(saveGroup);
 
                       dispatch_async(processQueue, ^{
@@ -1771,7 +1828,7 @@
                         // 处理照片和元数据
                         NSString *photoName = [imagePath lastPathComponent];
                         NSString *photoFile = [[DYYYManager shared] filePathFromTmp:photoName];
-                        [[DYYYManager shared] addMetadataToPhoto:[NSURL fileURLWithPath:imagePath] outputFile:photoFile identifier:identifier albumDescription:albumDescription];
+                        [[DYYYManager shared] addMetadataToPhoto:[NSURL fileURLWithPath:imagePath] outputFile:photoFile identifier:identifier albumDescription:albumDescription creationDate:assetCreationDate];
 
                         // 处理视频和元数据
                         NSString *videoName = [videoPath lastPathComponent];
@@ -1782,6 +1839,7 @@
                                                                    outputFile:videoFile
                                                                    identifier:identifier
                                                              albumDescription:albumDescription
+                                                                 creationDate:assetCreationDate
                                                                        reader:&localReader
                                                                        writer:&localWriter
                                                                         queue:localQueue
@@ -1794,6 +1852,7 @@
                                                                            [[PHPhotoLibrary sharedPhotoLibrary]
                                                                                performChanges:^{
                                                                                  PHAssetCreationRequest *request = [PHAssetCreationRequest creationRequestForAsset];
+                                                                                 request.creationDate = assetCreationDate;
                                                                                  [request addResourceWithType:PHAssetResourceTypePhoto fileURL:photo options:nil];
                                                                                  [request addResourceWithType:PHAssetResourceTypePairedVideo fileURL:video options:nil];
                                                                                }
@@ -1972,6 +2031,7 @@
                              outputFile:(NSString *)outputFile
                              identifier:(NSString *)identifier
                        albumDescription:(NSString *)albumDescription
+                           creationDate:(NSDate *)creationDate
                                  reader:(AVAssetReader **)readerPtr
                                  writer:(AVAssetWriter **)writerPtr
                                   queue:(dispatch_queue_t)queue
@@ -1991,6 +2051,7 @@
     NSMutableArray<AVMetadataItem *> *metadata = asset.metadata.mutableCopy;
     AVMetadataItem *item = [self createContentIdentifierMetadataItem:identifier];
     [metadata addObject:item];
+    metadata = [[DYYYManager metadataItemsBySettingCreationDate:creationDate toItems:metadata] mutableCopy];
     metadata = [[DYYYManager metadataItemsByAppendingDescription:albumDescription toItems:metadata] mutableCopy];
     NSURL *videoFileURL = [NSURL fileURLWithPath:outputFile];
     [self deleteFile:outputFile];
