@@ -1,8 +1,11 @@
 #import "DYYYHideCommentAIAnalysisHooks.h"
 
 #import "AwemeHeaders.h"
+#import "DYYYRuntimeHookInstaller.h"
+#import "DYYYUtils.h"
 
 #import <UIKit/UIKit.h>
+#import <mach/mach_time.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import <stdatomic.h>
@@ -47,9 +50,139 @@ typedef void (*DYYYSetNeedsUpdateIMP)(id, SEL, BOOL, id);
 typedef void (*DYYYSetTitleIMP)(id, SEL, id);
 typedef double (*DYYYDoubleNoArgIMP)(id, SEL);
 
+static const char *const kDYYYBoolObjectEncodings[] = { "B24@0:8@16", "c24@0:8@16" };
+static const char *const kDYYYBoolTwoObjectsEncodings[] = { "B32@0:8@16@24", "c32@0:8@16@24" };
+static const char *const kDYYYBoolObjectTypeEncodings[] = { "B32@0:8@16Q24", "c32@0:8@16Q24" };
+static const char *const kDYYYBoolTypeEncodings[] = { "B24@0:8Q16", "c24@0:8Q16" };
+static const char *const kDYYYBoolNoArgEncodings[] = { "B16@0:8", "c16@0:8" };
+static const char *const kDYYYObjectObjectEncodings[] = { "@24@0:8@16" };
+static const char *const kDYYYObjectTypeEncodings[] = { "@24@0:8Q16" };
+static const char *const kDYYYVoidObjectEncodings[] = { "v24@0:8@16" };
+static const char *const kDYYYVoidBoolBlockEncodings[] = {
+    "v28@0:8B16@?20",
+    "v28@0:8c16@?20",
+};
+static const char *const kDYYYDoubleNoArgEncodings[] = { "d16@0:8" };
+
+#define DYYY_ENCODING_COUNT(encodings) (sizeof(encodings) / sizeof((encodings)[0]))
+
 static atomic_bool gDYYYHideCommentAIAnalysisHooksStarted = false;
 static NSMutableSet<NSNumber *> *gHiddenCommentTabTypes = nil;
 static NSMutableDictionary<NSString *, NSValue *> *gOrigCommentTabSetNeedsUpdateIMPs = nil;
+
+typedef struct {
+    const char *category;
+    const char *identifier;
+    const char *status;
+    uint64_t elapsedTicks;
+} DYYYCommentInstallMetric;
+
+static DYYYCommentInstallMetric gDYYYCommentInstallMetrics[64];
+static NSUInteger gDYYYCommentInstallMetricCount = 0;
+
+static void DYYYRecordCommentInstallMetric(const char *category,
+                                           const char *identifier,
+                                           const char *status,
+                                           uint64_t startedAt) {
+    if (gDYYYCommentInstallMetricCount >= sizeof(gDYYYCommentInstallMetrics) / sizeof(gDYYYCommentInstallMetrics[0])) {
+        return;
+    }
+    gDYYYCommentInstallMetrics[gDYYYCommentInstallMetricCount++] = (DYYYCommentInstallMetric){
+        .category = category,
+        .identifier = identifier,
+        .status = status,
+        .elapsedTicks = mach_continuous_time() - startedAt,
+    };
+}
+
+static double DYYYCommentInstallMilliseconds(uint64_t ticks) {
+    static mach_timebase_info_data_t timebase;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+      mach_timebase_info(&timebase);
+    });
+    return ((double)ticks * (double)timebase.numer / (double)timebase.denom) / 1000000.0;
+}
+
+static BOOL DYYYCommentVersionCapability(const char *identifier, NSString *minimumVersion) {
+    uint64_t startedAt = mach_continuous_time();
+    NSString *appVersion = [NSBundle mainBundle].infoDictionary[@"CFBundleShortVersionString"];
+    BOOL supported = appVersion.length == 0 ||
+                     [DYYYUtils compareVersion:appVersion toVersion:minimumVersion] != NSOrderedAscending;
+    DYYYRecordCommentInstallMetric("version-capability",
+                                   identifier,
+                                   supported ? "supported" : "unsupported",
+                                   startedAt);
+    return supported;
+}
+
+static void DYYYLogCommentInstallMetrics(void) {
+    const NSUInteger metricsPerChunk = 6;
+    NSUInteger chunkCount =
+        (gDYYYCommentInstallMetricCount + metricsPerChunk - 1) / metricsPerChunk;
+    for (NSUInteger chunk = 0; chunk < chunkCount; chunk++) {
+        NSMutableString *payload = [NSMutableString string];
+        NSUInteger firstMetric = chunk * metricsPerChunk;
+        NSUInteger lastMetric = MIN(firstMetric + metricsPerChunk, gDYYYCommentInstallMetricCount);
+        for (NSUInteger index = firstMetric; index < lastMetric; index++) {
+            DYYYCommentInstallMetric metric = gDYYYCommentInstallMetrics[index];
+            if (index > firstMetric) {
+                [payload appendString:@";"];
+            }
+            [payload appendFormat:@"%s,%s,%s,%.3f",
+                                  metric.category,
+                                  metric.identifier,
+                                  metric.status,
+                                  DYYYCommentInstallMilliseconds(metric.elapsedTicks)];
+        }
+        NSLog(@"[DYYY][HookPerf][comment.extra-tabs] unit=ms chunk=%lu/%lu metrics=%@",
+              (unsigned long)(chunk + 1),
+              (unsigned long)chunkCount,
+              payload);
+    }
+}
+
+static BOOL DYYYRunMeasuredCommentInstaller(const char *identifier, BOOL (*installer)(void)) {
+    uint64_t startedAt = mach_continuous_time();
+    BOOL installed = installer();
+    DYYYRecordCommentInstallMetric("installer-step",
+                                   identifier,
+                                   installed ? "installed" : "unavailable",
+                                   startedAt);
+    return installed;
+}
+
+static Class DYYYLookupCommentHookClass(const char *className,
+                                        const char *category,
+                                        const char *identifier) {
+    uint64_t startedAt = mach_continuous_time();
+    Class cls = className ? objc_lookUpClass(className) : Nil;
+    DYYYRecordCommentInstallMetric(category,
+                                   identifier,
+                                   cls ? "present" : "missing",
+                                   startedAt);
+    return cls;
+}
+
+static Class DYYYResolveCommentHookClass(NSString *primaryName,
+                                         const char *fallbackName,
+                                         const char *identifier) {
+    Class cls = DYYYLookupCommentHookClass(primaryName.UTF8String, "class-primary", identifier);
+    if (!cls && fallbackName) {
+        cls = DYYYLookupCommentHookClass(fallbackName, "class-fallback", identifier);
+    }
+    return cls;
+}
+
+static Class DYYYResolveCommentHookClassFallbackFirst(NSString *primaryName,
+                                                      const char *fallbackName,
+                                                      const char *identifier) {
+    Class cls = DYYYLookupCommentHookClass(fallbackName, "class-fallback", identifier);
+    if (!cls) {
+        cls = DYYYLookupCommentHookClass(primaryName.UTF8String, "class-primary", identifier);
+    }
+    return cls;
+}
 
 static void DYYYCommentExtraTabSetNeedsUpdate(id self, SEL _cmd, BOOL needsUpdate, id completion);
 
@@ -276,91 +409,57 @@ static NSArray *DYYYFilterExtraCommentTabTypes(NSArray *types) {
     return filtered.count == types.count ? types : [filtered copy];
 }
 
-#pragma mark - Generic installer
+#pragma mark - Shared installer
 
-static BOOL DYYYInstallClassHook(Class cls,
-                                 SEL selector,
-                                 IMP replacement,
-                                 IMP *originalSlot,
-                                 BOOL isClassMethod,
-                                 BOOL requireBoolReturn) {
-    if (!cls || !selector || !replacement || !originalSlot) {
-        return NO;
+static const char *DYYYCommentHookInstallStatusName(DYYYRuntimeHookInstallResult result) {
+    if (result.status == DYYYRuntimeHookInstallStatusInstalled && result.methodWasInherited) {
+        return "installed-inherited";
     }
-    if (*originalSlot != NULL) {
-        return YES;
+    switch (result.status) {
+        case DYYYRuntimeHookInstallStatusInstalled: return "installed";
+        case DYYYRuntimeHookInstallStatusAlreadyInstalled: return "already-installed";
+        case DYYYRuntimeHookInstallStatusTargetClassMissing: return "class-missing";
+        case DYYYRuntimeHookInstallStatusTargetMethodMissing: return "method-missing";
+        case DYYYRuntimeHookInstallStatusTypeEncodingMismatch: return "encoding-mismatch";
+        case DYYYRuntimeHookInstallStatusReplacementMissing: return "replacement-missing";
+        case DYYYRuntimeHookInstallStatusReplacementSelfReference: return "replacement-self-reference";
+        case DYYYRuntimeHookInstallStatusConflict: return "conflict";
     }
-
-    Method existing = isClassMethod ? class_getClassMethod(cls, selector) : class_getInstanceMethod(cls, selector);
-    if (!existing) {
-        return NO;
-    }
-
-    const char *typeEncoding = method_getTypeEncoding(existing);
-    if (!typeEncoding) {
-        return NO;
-    }
-    if (requireBoolReturn && typeEncoding[0] != 'B' && typeEncoding[0] != 'c') {
-        return NO;
-    }
-
-    IMP existingIMP = method_getImplementation(existing);
-    if (existingIMP == replacement) {
-        return YES;
-    }
-
-    if (isClassMethod) {
-        if (!class_addMethod(object_getClass(cls), selector, replacement, typeEncoding)) {
-            IMP previous = method_setImplementation(existing, replacement);
-            if (!previous || previous == replacement) {
-                return NO;
-            }
-            *originalSlot = previous;
-            return YES;
-        }
-        *originalSlot = existingIMP;
-        return YES;
-    }
-
-    BOOL methodDefinedOnClass = NO;
-    unsigned int methodCount = 0;
-    Method *methods = class_copyMethodList(cls, &methodCount);
-    for (unsigned int index = 0; index < methodCount; index++) {
-        if (method_getName(methods[index]) == selector) {
-            methodDefinedOnClass = YES;
-            break;
-        }
-    }
-    free(methods);
-
-    if (!methodDefinedOnClass) {
-        if (!class_addMethod(cls, selector, replacement, typeEncoding)) {
-            return NO;
-        }
-        *originalSlot = existingIMP;
-        return YES;
-    }
-
-    IMP previous = method_setImplementation(existing, replacement);
-    if (!previous || previous == replacement) {
-        return NO;
-    }
-    *originalSlot = previous;
-    return YES;
+    return "unknown";
 }
 
-static BOOL DYYYInstallSetNeedsUpdateHookForClassName(NSString *className, NSString *mangledClassName) {
-    Class cls = NSClassFromString(className);
-    if (!cls && mangledClassName.length > 0) {
-        cls = objc_getClass(mangledClassName.UTF8String);
-    }
-    if (!cls) {
-        return NO;
-    }
+static BOOL DYYYInstallCommentRuntimeHook(const char *identifier,
+                                          Class cls,
+                                          SEL selector,
+                                          BOOL classMethod,
+                                          IMP replacement,
+                                          IMP *originalSlot,
+                                          const char *const *allowedTypeEncodings,
+                                          NSUInteger allowedTypeEncodingCount) {
+    uint64_t startedAt = mach_continuous_time();
+    DYYYRuntimeHookInstallResult result = DYYYInstallRuntimeHook((DYYYRuntimeHookRequest){
+        .identifier = identifier,
+        .targetClass = cls,
+        .selector = selector,
+        .classMethod = classMethod,
+        .replacement = replacement,
+        .allowedTypeEncodings = allowedTypeEncodings,
+        .allowedTypeEncodingCount = allowedTypeEncodingCount,
+        .originalImplementation = originalSlot,
+    });
+    DYYYRecordCommentInstallMetric("hook-install",
+                                   identifier,
+                                   DYYYCommentHookInstallStatusName(result),
+                                   startedAt);
+    return result.status == DYYYRuntimeHookInstallStatusInstalled ||
+           result.status == DYYYRuntimeHookInstallStatusAlreadyInstalled;
+}
 
-    SEL selector = @selector(setNeedsUpdate:completion:);
-    Method existing = class_getInstanceMethod(cls, selector);
-    if (!existing) {
+static BOOL DYYYInstallSetNeedsUpdateHookForClassName(NSString *className,
+                                                       const char *mangledClassName,
+                                                       const char *identifier) {
+    Class cls = DYYYResolveCommentHookClass(className, mangledClassName, identifier);
+    if (!cls) {
         return NO;
     }
 
@@ -369,42 +468,18 @@ static BOOL DYYYInstallSetNeedsUpdateHookForClassName(NSString *className, NSStr
         return YES;
     }
 
-    const char *typeEncoding = method_getTypeEncoding(existing);
-    if (!typeEncoding) {
+    IMP original = NULL;
+    BOOL installed = DYYYInstallCommentRuntimeHook(identifier,
+                                                   cls,
+                                                   @selector(setNeedsUpdate:completion:),
+                                                   NO,
+                                                   (IMP)DYYYCommentExtraTabSetNeedsUpdate,
+                                                   &original,
+                                                   kDYYYVoidBoolBlockEncodings,
+                                                   DYYY_ENCODING_COUNT(kDYYYVoidBoolBlockEncodings));
+    if (!installed || !original) {
         return NO;
     }
-
-    IMP existingIMP = method_getImplementation(existing);
-    IMP replacement = (IMP)DYYYCommentExtraTabSetNeedsUpdate;
-    if (existingIMP == replacement) {
-        return NO;
-    }
-
-    BOOL methodDefinedOnClass = NO;
-    unsigned int methodCount = 0;
-    Method *methods = class_copyMethodList(cls, &methodCount);
-    for (unsigned int index = 0; index < methodCount; index++) {
-        if (method_getName(methods[index]) == selector) {
-            methodDefinedOnClass = YES;
-            break;
-        }
-    }
-    free(methods);
-
-    IMP original = existingIMP;
-    if (!methodDefinedOnClass) {
-        // class_getInstanceMethod 会返回继承自父类的 Method。必须在 POI 子类上新增覆盖，
-        // 不能直接替换共享的父类 IMP，否则会连带拦截原生评论数组件。
-        if (!class_addMethod(cls, selector, replacement, typeEncoding)) {
-            return NO;
-        }
-    } else {
-        original = method_setImplementation(existing, replacement);
-        if (!original || original == replacement) {
-            return NO;
-        }
-    }
-
     if (!gOrigCommentTabSetNeedsUpdateIMPs) {
         gOrigCommentTabSetNeedsUpdateIMPs = [NSMutableDictionary dictionary];
     }
@@ -435,23 +510,29 @@ static BOOL DYYYCurrentVideoShouldShowAITab(id self, SEL _cmd, id aweme, id ente
 }
 
 static BOOL DYYYInstallFeedDoubleColumnAITabUtilHooks(void) {
-    Class cls = NSClassFromString(kDYYYFeedDoubleColumnAITabUtilClassName);
+    Class cls = DYYYResolveCommentHookClass(kDYYYFeedDoubleColumnAITabUtilClassName,
+                                            NULL,
+                                            "feed-ai-util");
     if (!cls) {
         return NO;
     }
 
-    BOOL sceneOK = DYYYInstallClassHook(cls,
-                                        @selector(shouldShowDCFeedAITabWithScene:),
-                                        (IMP)DYYYShouldShowDCFeedAITabWithScene,
-                                        (IMP *)&gOrigShouldShowDCFeedAITabWithScene,
-                                        YES,
-                                        YES);
-    BOOL videoOK = DYYYInstallClassHook(cls,
-                                        @selector(currentVideoShouldShowAITab:enterFrom:),
-                                        (IMP)DYYYCurrentVideoShouldShowAITab,
-                                        (IMP *)&gOrigCurrentVideoShouldShowAITab,
-                                        YES,
-                                        YES);
+    BOOL sceneOK = DYYYInstallCommentRuntimeHook("feed-ai-util.should-show-scene",
+                                                 cls,
+                                                 @selector(shouldShowDCFeedAITabWithScene:),
+                                                 YES,
+                                                 (IMP)DYYYShouldShowDCFeedAITabWithScene,
+                                                 (IMP *)&gOrigShouldShowDCFeedAITabWithScene,
+                                                 kDYYYBoolObjectEncodings,
+                                                 DYYY_ENCODING_COUNT(kDYYYBoolObjectEncodings));
+    BOOL videoOK = DYYYInstallCommentRuntimeHook("feed-ai-util.current-video",
+                                                 cls,
+                                                 @selector(currentVideoShouldShowAITab:enterFrom:),
+                                                 YES,
+                                                 (IMP)DYYYCurrentVideoShouldShowAITab,
+                                                 (IMP *)&gOrigCurrentVideoShouldShowAITab,
+                                                 kDYYYBoolTwoObjectsEncodings,
+                                                 DYYY_ENCODING_COUNT(kDYYYBoolTwoObjectsEncodings));
     return sceneOK || videoOK;
 }
 
@@ -478,29 +559,37 @@ static BOOL DYYYShouldShowProductCommentWithAwemeModel(id self, SEL _cmd, id awe
 }
 
 static BOOL DYYYInstallLocalLifeCommentBizServiceHooks(void) {
-    Class cls = NSClassFromString(kDYYYLocalLifeCommentBizServiceClassName);
+    Class cls = DYYYResolveCommentHookClass(kDYYYLocalLifeCommentBizServiceClassName,
+                                            NULL,
+                                            "local-life");
     if (!cls) {
         return NO;
     }
-    return DYYYInstallClassHook(cls,
-                                @selector(shouldShowRateTabInCommentWithAweme:),
-                                (IMP)DYYYShouldShowRateTabInCommentWithAweme,
-                                (IMP *)&gOrigShouldShowRateTabInCommentWithAweme,
-                                NO,
-                                YES);
+    return DYYYInstallCommentRuntimeHook("local-life.should-show-rate",
+                                         cls,
+                                         @selector(shouldShowRateTabInCommentWithAweme:),
+                                         NO,
+                                         (IMP)DYYYShouldShowRateTabInCommentWithAweme,
+                                         (IMP *)&gOrigShouldShowRateTabInCommentWithAweme,
+                                         kDYYYBoolObjectEncodings,
+                                         DYYY_ENCODING_COUNT(kDYYYBoolObjectEncodings));
 }
 
 static BOOL DYYYInstallECModuleServiceHooks(void) {
-    Class cls = NSClassFromString(kDYYYECModuleServiceClassName);
+    Class cls = DYYYResolveCommentHookClass(kDYYYECModuleServiceClassName,
+                                            NULL,
+                                            "ecommerce");
     if (!cls) {
         return NO;
     }
-    return DYYYInstallClassHook(cls,
-                                @selector(shouldShowProductCommentWithAwemeModel:),
-                                (IMP)DYYYShouldShowProductCommentWithAwemeModel,
-                                (IMP *)&gOrigShouldShowProductCommentWithAwemeModel,
-                                NO,
-                                YES);
+    return DYYYInstallCommentRuntimeHook("ecommerce.should-show-product",
+                                         cls,
+                                         @selector(shouldShowProductCommentWithAwemeModel:),
+                                         NO,
+                                         (IMP)DYYYShouldShowProductCommentWithAwemeModel,
+                                         (IMP *)&gOrigShouldShowProductCommentWithAwemeModel,
+                                         kDYYYBoolObjectEncodings,
+                                         DYYY_ENCODING_COUNT(kDYYYBoolObjectEncodings));
 }
 
 #pragma mark - AWECommentTabService / CommentTabManager
@@ -573,59 +662,72 @@ static void DYYYCommentTabManagerConfigSegmentedControl(id self, SEL _cmd, id se
 }
 
 static BOOL DYYYInstallCommentTabServiceHooks(void) {
-    Class cls = NSClassFromString(kDYYYCommentTabServiceClassName);
+    Class cls = DYYYResolveCommentHookClass(kDYYYCommentTabServiceClassName,
+                                            NULL,
+                                            "tab-service");
     if (!cls) {
         return NO;
     }
 
-    BOOL multiTabsOK = DYYYInstallClassHook(cls,
-                                            @selector(multiTabs:),
-                                            (IMP)DYYYCommentTabServiceMultiTabs,
-                                            (IMP *)&gOrigCommentTabServiceMultiTabs,
-                                            NO,
-                                            YES);
-    BOOL containsOK = DYYYInstallClassHook(cls,
-                                           @selector(containsTab:type:),
-                                           (IMP)DYYYCommentTabServiceContainsTab,
-                                           (IMP *)&gOrigCommentTabServiceContainsTab,
-                                           NO,
-                                           YES);
+    BOOL multiTabsOK = DYYYInstallCommentRuntimeHook("tab-service.multi-tabs",
+                                                     cls,
+                                                     @selector(multiTabs:),
+                                                     NO,
+                                                     (IMP)DYYYCommentTabServiceMultiTabs,
+                                                     (IMP *)&gOrigCommentTabServiceMultiTabs,
+                                                     kDYYYBoolObjectEncodings,
+                                                     DYYY_ENCODING_COUNT(kDYYYBoolObjectEncodings));
+    BOOL containsOK = DYYYInstallCommentRuntimeHook("tab-service.contains-tab",
+                                                    cls,
+                                                    @selector(containsTab:type:),
+                                                    NO,
+                                                    (IMP)DYYYCommentTabServiceContainsTab,
+                                                    (IMP *)&gOrigCommentTabServiceContainsTab,
+                                                    kDYYYBoolObjectTypeEncodings,
+                                                    DYYY_ENCODING_COUNT(kDYYYBoolObjectTypeEncodings));
     return multiTabsOK || containsOK;
 }
 
 static BOOL DYYYInstallCommentTabManagerHooks(void) {
-    Class cls = NSClassFromString(kDYYYCommentTabManagerClassName);
-    if (!cls) {
-        cls = objc_getClass("_TtC27AWECommentPanelTabSwiftImpl17CommentTabManager");
-    }
+    Class cls = DYYYResolveCommentHookClass(kDYYYCommentTabManagerClassName,
+                                            "_TtC27AWECommentPanelTabSwiftImpl17CommentTabManager",
+                                            "tab-manager");
     if (!cls) {
         return NO;
     }
 
-    BOOL containsOK = DYYYInstallClassHook(cls,
-                                           @selector(containsTab:),
-                                           (IMP)DYYYCommentTabManagerContainsTab,
-                                           (IMP *)&gOrigCommentTabManagerContainsTab,
-                                           NO,
-                                           YES);
-    BOOL typesOK = DYYYInstallClassHook(cls,
-                                        @selector(componentTypes:),
-                                        (IMP)DYYYCommentTabManagerComponentTypes,
-                                        (IMP *)&gOrigCommentTabManagerComponentTypes,
-                                        NO,
-                                        NO);
-    BOOL viewControllerOK = DYYYInstallClassHook(cls,
-                                                 @selector(viewControllerForType:),
-                                                 (IMP)DYYYCommentTabManagerViewControllerForType,
-                                                 (IMP *)&gOrigCommentTabManagerViewControllerForType,
+    BOOL containsOK = DYYYInstallCommentRuntimeHook("tab-manager.contains-tab",
+                                                    cls,
+                                                    @selector(containsTab:),
+                                                    NO,
+                                                    (IMP)DYYYCommentTabManagerContainsTab,
+                                                    (IMP *)&gOrigCommentTabManagerContainsTab,
+                                                    kDYYYBoolTypeEncodings,
+                                                    DYYY_ENCODING_COUNT(kDYYYBoolTypeEncodings));
+    BOOL typesOK = DYYYInstallCommentRuntimeHook("tab-manager.component-types",
+                                                 cls,
+                                                 @selector(componentTypes:),
                                                  NO,
-                                                 NO);
-    BOOL segmentedOK = DYYYInstallClassHook(cls,
-                                            @selector(configSegmentedControl:),
-                                            (IMP)DYYYCommentTabManagerConfigSegmentedControl,
-                                            (IMP *)&gOrigCommentTabManagerConfigSegmentedControl,
-                                            NO,
-                                            NO);
+                                                 (IMP)DYYYCommentTabManagerComponentTypes,
+                                                 (IMP *)&gOrigCommentTabManagerComponentTypes,
+                                                 kDYYYObjectObjectEncodings,
+                                                 DYYY_ENCODING_COUNT(kDYYYObjectObjectEncodings));
+    BOOL viewControllerOK = DYYYInstallCommentRuntimeHook("tab-manager.view-controller",
+                                                          cls,
+                                                          @selector(viewControllerForType:),
+                                                          NO,
+                                                          (IMP)DYYYCommentTabManagerViewControllerForType,
+                                                          (IMP *)&gOrigCommentTabManagerViewControllerForType,
+                                                          kDYYYObjectTypeEncodings,
+                                                          DYYY_ENCODING_COUNT(kDYYYObjectTypeEncodings));
+    BOOL segmentedOK = DYYYInstallCommentRuntimeHook("tab-manager.segmented-control",
+                                                     cls,
+                                                     @selector(configSegmentedControl:),
+                                                     NO,
+                                                     (IMP)DYYYCommentTabManagerConfigSegmentedControl,
+                                                     (IMP *)&gOrigCommentTabManagerConfigSegmentedControl,
+                                                     kDYYYVoidObjectEncodings,
+                                                     DYYY_ENCODING_COUNT(kDYYYVoidObjectEncodings));
     return containsOK || typesOK || viewControllerOK || segmentedOK;
 }
 
@@ -663,40 +765,48 @@ static double DYYYCommentContainerHeightForSegmentedControl(id self, SEL _cmd) {
 }
 
 static BOOL DYYYInstallCommentPanelTabBasicParamsHooks(void) {
-    Class cls = NSClassFromString(kDYYYCommentPanelTabBasicParamsClassName);
+    Class cls = DYYYResolveCommentHookClass(kDYYYCommentPanelTabBasicParamsClassName,
+                                            NULL,
+                                            "basic-params");
     if (!cls) {
         return NO;
     }
 
-    BOOL initOK = DYYYInstallClassHook(cls,
-                                       @selector(initWithPreNode:),
-                                       (IMP)DYYYCommentPanelTabBasicParamsInit,
-                                       (IMP *)&gOrigCommentPanelTabBasicParamsInit,
-                                       NO,
-                                       NO);
-    BOOL sceneOK = DYYYInstallClassHook(cls,
-                                        @selector(noTabScene),
-                                        (IMP)DYYYCommentPanelTabBasicParamsNoTabScene,
-                                        (IMP *)&gOrigCommentPanelTabBasicParamsNoTabScene,
-                                        NO,
-                                        YES);
+    BOOL initOK = DYYYInstallCommentRuntimeHook("basic-params.init",
+                                                cls,
+                                                @selector(initWithPreNode:),
+                                                NO,
+                                                (IMP)DYYYCommentPanelTabBasicParamsInit,
+                                                (IMP *)&gOrigCommentPanelTabBasicParamsInit,
+                                                kDYYYObjectObjectEncodings,
+                                                DYYY_ENCODING_COUNT(kDYYYObjectObjectEncodings));
+    BOOL sceneOK = DYYYInstallCommentRuntimeHook("basic-params.no-tab-scene",
+                                                 cls,
+                                                 @selector(noTabScene),
+                                                 NO,
+                                                 (IMP)DYYYCommentPanelTabBasicParamsNoTabScene,
+                                                 (IMP *)&gOrigCommentPanelTabBasicParamsNoTabScene,
+                                                 kDYYYBoolNoArgEncodings,
+                                                 DYYY_ENCODING_COUNT(kDYYYBoolNoArgEncodings));
     return initOK || sceneOK;
 }
 
 static BOOL DYYYInstallCommentContainerInnerHooks(void) {
     BOOL installed = NO;
 
-    Class viewControllerClass = NSClassFromString(kDYYYCommentContainerInnerViewControllerClassName);
-    if (!viewControllerClass) {
-        viewControllerClass = objc_getClass("_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController");
-    }
+    Class viewControllerClass =
+        DYYYResolveCommentHookClass(kDYYYCommentContainerInnerViewControllerClassName,
+                                    "_TtC33AWECommentPanelContainerSwiftImpl35CommentContainerInnerViewController",
+                                    "container-inner");
     if (viewControllerClass) {
-        installed |= DYYYInstallClassHook(viewControllerClass,
-                                          @selector(heightForSegmentedControl),
-                                          (IMP)DYYYCommentContainerHeightForSegmentedControl,
-                                          (IMP *)&gOrigCommentContainerHeightForSegmentedControl,
-                                          NO,
-                                          NO);
+        installed |= DYYYInstallCommentRuntimeHook("container-inner.height",
+                                                   viewControllerClass,
+                                                   @selector(heightForSegmentedControl),
+                                                   NO,
+                                                   (IMP)DYYYCommentContainerHeightForSegmentedControl,
+                                                   (IMP *)&gOrigCommentContainerHeightForSegmentedControl,
+                                                   kDYYYDoubleNoArgEncodings,
+                                                   DYYY_ENCODING_COUNT(kDYYYDoubleNoArgEncodings));
     }
 
     return installed;
@@ -721,14 +831,21 @@ static void DYYYCommentExtraTabSetNeedsUpdate(id self, SEL _cmd, BOOL needsUpdat
 
 static BOOL DYYYInstallExtraCommentTabComponentHooks(void) {
     BOOL installed = NO;
-    installed |= DYYYInstallSetNeedsUpdateHookForClassName(kDYYYCommentDCFeedAIParseTabComponentClassName,
-                                                           @"_TtC25AWECommentDCFeedSwiftImpl32CommentDCFeedAIParseTabComponent");
+    if (DYYYCommentVersionCapability("component.ai-parse", @"38.6.1")) {
+        installed |= DYYYInstallSetNeedsUpdateHookForClassName(
+            kDYYYCommentDCFeedAIParseTabComponentClassName,
+            "_TtC25AWECommentDCFeedSwiftImpl32CommentDCFeedAIParseTabComponent",
+            "component.ai-parse");
+    }
     installed |= DYYYInstallSetNeedsUpdateHookForClassName(kDYYYCommentTemplatePOITabComponentClassName,
-                                                           @"_TtC22AWECommentPOISwiftImpl30CommentTemplatePOITabComponent");
+                                                           "_TtC22AWECommentPOISwiftImpl30CommentTemplatePOITabComponent",
+                                                           "component.poi");
     installed |= DYYYInstallSetNeedsUpdateHookForClassName(kDYYYCommentEvaluateTabComponentClassName,
-                                                           @"_TtC27AWECommentCommerceSwiftImpl27CommentEvaluateTabComponent");
+                                                           "_TtC27AWECommentCommerceSwiftImpl27CommentEvaluateTabComponent",
+                                                           "component.evaluate");
     installed |= DYYYInstallSetNeedsUpdateHookForClassName(kDYYYCommentProductCommentTabComponentClassName,
-                                                           @"_TtC27AWECommentCommerceSwiftImpl33CommentProductCommentTabComponent");
+                                                           "_TtC27AWECommentCommerceSwiftImpl33CommentProductCommentTabComponent",
+                                                           "component.product");
     return installed;
 }
 
@@ -763,31 +880,42 @@ static void DYYYCommentContainerTabModelSetTitle(id self, SEL _cmd, NSString *ti
 static BOOL DYYYInstallCommentTabModelHooks(void) {
     BOOL installed = NO;
 
-    Class tabModelClass = NSClassFromString(kDYYYCommentTabModelClassName);
-    if (!tabModelClass) {
-        tabModelClass = objc_getClass("_TtC27AWECommentPanelTabSwiftImplP33_63C657C2E18159D394914B02AA302F2B15CommentTabModel");
-    }
-    if (tabModelClass) {
-        installed |= DYYYInstallClassHook(tabModelClass,
-                                          @selector(setTitle:),
-                                          (IMP)DYYYCommentTabModelSetTitle,
-                                          (IMP *)&gOrigCommentTabModelSetTitle,
-                                          NO,
-                                          NO);
+    if (!DYYYCommentVersionCapability("tab-model-path", @"39.5.0")) {
+        return NO;
     }
 
-    Class containerTabModelClass = NSClassFromString(kDYYYCommentContainerTabModelClassName);
+    Class containerTabModelClass =
+        DYYYLookupCommentHookClass(kDYYYCommentContainerTabModelClassName.UTF8String,
+                                   "class-capability",
+                                   "tab-model-path");
     if (!containerTabModelClass) {
-        containerTabModelClass = objc_getClass("_TtC33AWECommentPanelContainerSwiftImpl15CommentTabModel");
+        return NO;
     }
-    if (containerTabModelClass) {
-        installed |= DYYYInstallClassHook(containerTabModelClass,
-                                          @selector(setTitle:),
-                                          (IMP)DYYYCommentContainerTabModelSetTitle,
-                                          (IMP *)&gOrigCommentContainerTabModelSetTitle,
-                                          NO,
-                                          NO);
+
+    Class tabModelClass =
+        DYYYResolveCommentHookClassFallbackFirst(
+            kDYYYCommentTabModelClassName,
+            "_TtC27AWECommentPanelTabSwiftImplP33_63C657C2E18159D394914B02AA302F2B15CommentTabModel",
+            "tab-model");
+    if (tabModelClass) {
+        installed |= DYYYInstallCommentRuntimeHook("tab-model.set-title",
+                                                   tabModelClass,
+                                                   @selector(setTitle:),
+                                                   NO,
+                                                   (IMP)DYYYCommentTabModelSetTitle,
+                                                   (IMP *)&gOrigCommentTabModelSetTitle,
+                                                   kDYYYVoidObjectEncodings,
+                                                   DYYY_ENCODING_COUNT(kDYYYVoidObjectEncodings));
     }
+
+    installed |= DYYYInstallCommentRuntimeHook("container-tab-model.set-title",
+                                               containerTabModelClass,
+                                               @selector(setTitle:),
+                                               NO,
+                                               (IMP)DYYYCommentContainerTabModelSetTitle,
+                                               (IMP *)&gOrigCommentContainerTabModelSetTitle,
+                                               kDYYYVoidObjectEncodings,
+                                               DYYY_ENCODING_COUNT(kDYYYVoidObjectEncodings));
 
     return installed;
 }
@@ -798,15 +926,24 @@ void DYYYStartHideCommentAIAnalysisHooks(void) {
         return;
     }
 
-    BOOL utilHooked = DYYYInstallFeedDoubleColumnAITabUtilHooks();
-    BOOL localLifeHooked = DYYYInstallLocalLifeCommentBizServiceHooks();
-    BOOL ecomHooked = DYYYInstallECModuleServiceHooks();
-    BOOL basicParamsHooked = DYYYInstallCommentPanelTabBasicParamsHooks();
-    BOOL containerHooked = DYYYInstallCommentContainerInnerHooks();
-    BOOL serviceHooked = DYYYInstallCommentTabServiceHooks();
-    BOOL managerHooked = DYYYInstallCommentTabManagerHooks();
-    BOOL componentHooked = DYYYInstallExtraCommentTabComponentHooks();
-    BOOL modelHooked = DYYYInstallCommentTabModelHooks();
+    BOOL utilHooked =
+        DYYYRunMeasuredCommentInstaller("feed-ai-util", DYYYInstallFeedDoubleColumnAITabUtilHooks);
+    BOOL localLifeHooked =
+        DYYYRunMeasuredCommentInstaller("local-life", DYYYInstallLocalLifeCommentBizServiceHooks);
+    BOOL ecomHooked = DYYYRunMeasuredCommentInstaller("ecommerce", DYYYInstallECModuleServiceHooks);
+    BOOL basicParamsHooked =
+        DYYYRunMeasuredCommentInstaller("basic-params", DYYYInstallCommentPanelTabBasicParamsHooks);
+    BOOL containerHooked =
+        DYYYRunMeasuredCommentInstaller("container-inner", DYYYInstallCommentContainerInnerHooks);
+    BOOL serviceHooked =
+        DYYYRunMeasuredCommentInstaller("tab-service", DYYYInstallCommentTabServiceHooks);
+    BOOL managerHooked =
+        DYYYRunMeasuredCommentInstaller("tab-manager", DYYYInstallCommentTabManagerHooks);
+    BOOL componentHooked =
+        DYYYRunMeasuredCommentInstaller("extra-components", DYYYInstallExtraCommentTabComponentHooks);
+    BOOL modelHooked = DYYYRunMeasuredCommentInstaller("tab-models", DYYYInstallCommentTabModelHooks);
+
+    DYYYLogCommentInstallMetrics();
 
     NSLog(@"[DYYY][RuntimeHook][HideCommentExtraTabs] 安装完成 util=%@ localLife=%@ ecom=%@ basicParams=%@ container=%@ service=%@ manager=%@ component=%@ model=%@",
           utilHooked ? @"YES" : @"NO",
