@@ -433,36 +433,33 @@ void DYYYStartFPSOverlay(void) {
         return;
     }
 
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    gDYYYFPSOverlayBecomeActiveObserver =
+        [center addObserverForName:UIApplicationDidBecomeActiveNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:^(__unused NSNotification *note) {
+                          DYYYApplyFPSOverlaySettingChange();
+                        }];
+    gDYYYFPSOverlayResignActiveObserver =
+        [center addObserverForName:UIApplicationWillResignActiveNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:^(__unused NSNotification *note) {
+                          [gDYYYFPSOverlayView stopSampling];
+                        }];
+    gDYYYFPSOverlayOrientationObserver =
+        [center addObserverForName:UIApplicationDidChangeStatusBarOrientationNotification
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:^(__unused NSNotification *note) {
+                          if (DYYYFPSOverlayShouldShow()) {
+                              DYYYFPSOverlayEnsureOnMain();
+                              DYYYFPSOverlayLayoutPill();
+                          }
+                        }];
+
     dispatch_async(dispatch_get_main_queue(), ^{
-      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
-      gDYYYFPSOverlayBecomeActiveObserver =
-          [center addObserverForName:UIApplicationDidBecomeActiveNotification
-                              object:nil
-                               queue:nil
-                          usingBlock:^(__unused NSNotification *note) {
-                            DYYYApplyFPSOverlaySettingChange();
-                          }];
-      gDYYYFPSOverlayResignActiveObserver =
-          [center addObserverForName:UIApplicationWillResignActiveNotification
-                              object:nil
-                               queue:nil
-                          usingBlock:^(__unused NSNotification *note) {
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                              [gDYYYFPSOverlayView stopSampling];
-                            });
-                          }];
-      gDYYYFPSOverlayOrientationObserver =
-          [center addObserverForName:UIApplicationDidChangeStatusBarOrientationNotification
-                              object:nil
-                               queue:nil
-                          usingBlock:^(__unused NSNotification *note) {
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                              if (DYYYFPSOverlayShouldShow()) {
-                                  DYYYFPSOverlayEnsureOnMain();
-                                  DYYYFPSOverlayLayoutPill();
-                              }
-                            });
-                          }];
       DYYYApplyFPSOverlaySettingChange();
     });
 }

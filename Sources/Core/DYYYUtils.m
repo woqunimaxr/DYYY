@@ -8,7 +8,6 @@
 #import <os/log.h>
 #import <stdatomic.h>
 #import <stdarg.h>
-#import <unistd.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "AwemeHeaders.h"
@@ -75,20 +74,6 @@ static UIColor *DYYYOpaqueColorByCompositingColor(UIColor *foregroundColor, UICo
     return [UIColor colorWithRed:outputRed green:outputGreen blue:outputBlue alpha:1.0];
 }
 
-static NSString *DYYYRuntimeLogFilePath(void) {
-    static NSString *logPath = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-      NSString *logsDirectory = [NSTemporaryDirectory() stringByAppendingPathComponent:@"DYYYLogs"];
-      [[NSFileManager defaultManager] createDirectoryAtPath:logsDirectory
-                                withIntermediateDirectories:YES
-                                                 attributes:nil
-                                                      error:nil];
-      logPath = [logsDirectory stringByAppendingPathComponent:@"runtime.log"];
-    });
-    return logPath;
-}
-
 void DYYYNSLog(NSString *format, ...) {
     if (format.length == 0) {
         return;
@@ -110,8 +95,8 @@ void DYYYNSLog(NSString *format, ...) {
     });
     os_log_with_type(dyyyLogger, OS_LOG_TYPE_DEFAULT, "%{public}@", message);
 
-    // fflush 是同步系统调用，热路径上打日志会直接阻塞调用线程；
-    // 发布包只保留 os_log 与异步落盘，调试包仍输出到 stderr 便于终端观察。
+    // 发布包只保留 os_log；不在启动/热路径创建串行文件队列、NSDate、NSFileHandle
+    // 或同步磁盘写入。设备证据通过 unified log / USB syslog 收集。
 #if defined(DEBUG) && DEBUG
     const char *stderrMessage = message.UTF8String;
     if (stderrMessage) {
@@ -119,39 +104,6 @@ void DYYYNSLog(NSString *format, ...) {
         fflush(stderr);
     }
 #endif
-
-    static dispatch_queue_t logQueue = nil;
-    static dispatch_once_t queueOnceToken;
-    dispatch_once(&queueOnceToken, ^{
-      logQueue = dispatch_queue_create("com.dyyy.runtime-log.queue", DISPATCH_QUEUE_SERIAL);
-    });
-
-    dispatch_async(logQueue, ^{
-      @autoreleasepool {
-          NSString *line = [NSString stringWithFormat:@"[%@][pid:%d] %@\n", [NSDate date], getpid(), message];
-          NSData *lineData = [line dataUsingEncoding:NSUTF8StringEncoding];
-          if (lineData.length == 0) {
-              return;
-          }
-
-          NSString *logPath = DYYYRuntimeLogFilePath();
-          NSFileManager *fileManager = [NSFileManager defaultManager];
-          if (![fileManager fileExistsAtPath:logPath]) {
-              [fileManager createFileAtPath:logPath contents:nil attributes:nil];
-          }
-
-          NSFileHandle *fileHandle = [NSFileHandle fileHandleForWritingAtPath:logPath];
-          if (!fileHandle) {
-              return;
-          }
-          @try {
-              [fileHandle seekToEndOfFile];
-              [fileHandle writeData:lineData];
-          } @catch (NSException *exception) {
-          }
-          [fileHandle closeFile];
-      }
-    });
 }
 
 static inline CGFloat DYYYUtilsNormalizedDelay(CGFloat delay) {
@@ -450,13 +402,8 @@ uint32_t gDYYYSettingsGeneration = 0;
       __atomic_fetch_add(&gDYYYSettingsGeneration, 1, __ATOMIC_RELAXED);
     };
 
-    [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification
-                                                      object:[NSUserDefaults standardUserDefaults]
-                                                       queue:nil
-                                                  usingBlock:invalidate];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:invalidate];
-    });
+    [[NSNotificationCenter defaultCenter] addObserverForName:NSUserDefaultsDidChangeNotification object:nil queue:nil usingBlock:invalidate];
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationWillEnterForegroundNotification object:nil queue:nil usingBlock:invalidate];
 }
 
 #pragma mark - Public Model Filtering Utilities (公共模型过滤工具)
