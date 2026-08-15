@@ -345,6 +345,8 @@ static char kDYYYLivePreStreamTransformStateKey;
     CGFloat elementScale = [self scaleValueForKey:@"DYYYElementScale"];
     CGFloat nicknameOffset = [self verticalOffsetYForKey:@"DYYYNicknameVerticalOffset"];
     CGFloat descriptionOffset = [self verticalOffsetYForKey:@"DYYYDescriptionVerticalOffset"];
+    // 昵称文案区整体缩放：作用于直播预览页昵称/文案区（不含右侧互动栏，右侧由 DYYYElementScale 控制）
+    CGFloat elementsuofang = [self scaleValueForKey:@"DYYYElementsuofang"];
 
     NSMapTable<UIView *, NSValue *> *transforms = [NSMapTable strongToStrongObjectsMapTable];
     for (UIView *stackView in stackViews) {
@@ -389,6 +391,17 @@ static char kDYYYLivePreStreamTransformStateKey;
             scale = hasDescriptionScale ? descriptionScale : nicknameScale;
             tx = -boundsWidth * (1.0 - scale) / 2.0;
             ty = hasDescriptionOffset ? descriptionOffset : nicknameOffset;
+        }
+
+        // 昵称文案区整体缩放（DYYYElementsuofang）叠加在协调器自身缩放之上，
+        // 仅作用于左侧昵称/文案区，不作用于右侧互动栏（右侧由 DYYYElementScale 控制）。
+        if (!isRightStack) {
+            scale *= elementsuofang;
+            if (hasGuide || hasTag) {
+                // 重新以左缘为锚点，避免叠加缩放后文案向右漂
+                tx = -boundsWidth * (1.0 - scale) / 2.0;
+            }
+            // hasEnterLive 分支保持 tx = 0（水平居中），无需重算
         }
 
         if (!hasEnterLive) {

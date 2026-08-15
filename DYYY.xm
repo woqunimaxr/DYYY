@@ -15305,6 +15305,60 @@ static void DYYYLogHidePlusOverlayOnce(NSString *target) {
 
 %end
 
+// 底栏标题归一化：当 label 命中用户自定义标题时，还原为原始标题。
+// 底栏按钮识别逻辑（隐藏按钮、首页全屏、禁用首页刷新）均按原始标题匹配，
+// 修改标题后 accessibilityLabel 会变成自定义文案，匹配前先在此归一化，保证功能不受影响。
+static NSString *DYYYNormalizedTabBarLabel(NSString *label) {
+    if (label.length == 0) {
+        return label;
+    }
+
+    static uint32_t cachedGeneration = UINT32_MAX;
+    static NSString *indexTitle = nil;
+    static NSString *friendsTitle = nil;
+    static NSString *msgTitle = nil;
+    static NSString *selfTitle = nil;
+
+    uint32_t generation = gDYYYSettingsGeneration;
+    if (cachedGeneration != generation) {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        indexTitle = [defaults objectForKey:@"DYYYIndexTitle"];
+        friendsTitle = [defaults objectForKey:@"DYYYFriendsTitle"];
+        msgTitle = [defaults objectForKey:@"DYYYMsgTitle"];
+        selfTitle = [defaults objectForKey:@"DYYYSelfTitle"];
+        cachedGeneration = generation;
+    }
+
+    if (indexTitle.length > 0 && [label isEqualToString:indexTitle]) {
+        return @"首页";
+    }
+    if (friendsTitle.length > 0 && [label isEqualToString:friendsTitle]) {
+        return @"朋友";
+    }
+    if (msgTitle.length > 0 && [label isEqualToString:msgTitle]) {
+        return @"消息";
+    }
+    if (selfTitle.length > 0 && [label isEqualToString:selfTitle]) {
+        return @"我";
+    }
+
+    // 兼容 label 带后缀的情况（如“自定义标题，按钮”）；仅当不含原始标题时才替换，避免误伤。
+    NSString *normalized = label;
+    if (indexTitle.length > 0 && ![normalized containsString:@"首页"] && [normalized containsString:indexTitle]) {
+        normalized = [normalized stringByReplacingOccurrencesOfString:indexTitle withString:@"首页"];
+    }
+    if (friendsTitle.length > 0 && ![normalized containsString:@"朋友"] && [normalized containsString:friendsTitle]) {
+        normalized = [normalized stringByReplacingOccurrencesOfString:friendsTitle withString:@"朋友"];
+    }
+    if (msgTitle.length > 0 && ![normalized containsString:@"消息"] && [normalized containsString:msgTitle]) {
+        normalized = [normalized stringByReplacingOccurrencesOfString:msgTitle withString:@"消息"];
+    }
+    if (selfTitle.length > 0 && ![normalized containsString:@"我"] && [normalized containsString:selfTitle]) {
+        normalized = [normalized stringByReplacingOccurrencesOfString:selfTitle withString:@"我"];
+    }
+    return normalized;
+}
+
 %hook AWENormalModeTabBar
 
 static Class barBackgroundClass = nil;
@@ -15384,7 +15438,7 @@ static Class tabBarButtonClass = nil;
     for (UIView *subview in self.subviews) {
         if ([subview isKindOfClass:generalButtonClass] || [subview isKindOfClass:plusContainerButtonClass] || [subview isKindOfClass:plusButtonClass] ||
             [subview isKindOfClass:plusInnerButtonClass]) {
-            NSString *label = subview.accessibilityLabel;
+            NSString *label = DYYYNormalizedTabBarLabel(subview.accessibilityLabel);
             BOOL isPlusButton = [subview isKindOfClass:plusContainerButtonClass] || [subview isKindOfClass:plusButtonClass] || [subview isKindOfClass:plusInnerButtonClass] ||
                                 [label isEqualToString:@"拍摄"];
             BOOL shouldHide = (isPlusButton && hidePlus) || ([label containsString:@"商城"] && hideShop) || ([label containsString:@"消息"] && hideMsg) || ([label containsString:@"朋友"] && hideFri) ||
@@ -15429,7 +15483,7 @@ static Class tabBarButtonClass = nil;
         for (UIView *subview in self.subviews) {
             if ([subview isKindOfClass:generalButtonClass]) {
                 AWENormalModeTabBarGeneralButton *button = (AWENormalModeTabBarGeneralButton *)subview;
-                if ([button.accessibilityLabel isEqualToString:@"首页"]) {
+                if ([DYYYNormalizedTabBarLabel(button.accessibilityLabel) isEqualToString:@"首页"]) {
                     // status == 2 表示选中状态
                     button.userInteractionEnabled = (button.status != 2);
                 }
@@ -15454,9 +15508,9 @@ static Class tabBarButtonClass = nil;
                 if ([subview isKindOfClass:generalButtonClass]) {
                     AWENormalModeTabBarGeneralButton *button = (AWENormalModeTabBarGeneralButton *)subview;
                     if (button.status == 2) {
-                        if ([button.accessibilityLabel isEqualToString:@"首页"])
+                        if ([DYYYNormalizedTabBarLabel(button.accessibilityLabel) isEqualToString:@"首页"])
                             isHomeSelected = YES;
-                        else if ([button.accessibilityLabel containsString:@"朋友"])
+                        else if ([DYYYNormalizedTabBarLabel(button.accessibilityLabel) containsString:@"朋友"])
                             isFriendsSelected = YES;
                     }
                 }
@@ -15511,15 +15565,15 @@ static Class tabBarButtonClass = nil;
             AWENormalModeTabBarGeneralButton *button = (AWENormalModeTabBarGeneralButton *)subview;
 
             // 禁用首页刷新功能
-            if (disableHomeRefresh && [button.accessibilityLabel isEqualToString:@"首页"]) {
+            if (disableHomeRefresh && [DYYYNormalizedTabBarLabel(button.accessibilityLabel) isEqualToString:@"首页"]) {
                 button.userInteractionEnabled = (button.status != 2);
             }
 
             // 检查当前选中的页
             if (enableFullScreen && button.status == 2) {
-                if ([button.accessibilityLabel isEqualToString:@"首页"]) {
+                if ([DYYYNormalizedTabBarLabel(button.accessibilityLabel) isEqualToString:@"首页"]) {
                     isHomeSelected = YES;
-                } else if ([button.accessibilityLabel containsString:@"朋友"]) {
+                } else if ([DYYYNormalizedTabBarLabel(button.accessibilityLabel) containsString:@"朋友"]) {
                     isFriendsSelected = YES;
                 }
             }
@@ -15615,7 +15669,7 @@ static Class tabBarButtonClass = nil;
 %hook AWENormalModeTabBarGeneralButton
 
 - (BOOL)enableRefresh {
-    if ([self.accessibilityLabel isEqualToString:@"首页"]) {
+    if ([DYYYNormalizedTabBarLabel(self.accessibilityLabel) isEqualToString:@"首页"]) {
         if (DYYYGetBool(@"DYYYDisableHomeRefresh")) {
             return NO;
         }
@@ -17026,9 +17080,27 @@ static void DYYYRemoveAppLifecycleObservers(void) {
                 }
             }
         }
-        // 左侧昵称/文案元素按子元素分别缩放
+        // 左侧昵称/文案元素
         else if (hasScalableLeftElement) {
-            DYYYApplyPlayInteractionLeftStackElementTransforms(self);
+            NSString *suofangValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYElementsuofang"];
+            if (suofangValue.length > 0) {
+                // 昵称文案区整体缩放（按 DYYYElementsuofang 独立控制），锚定左下角
+                CGFloat s = [suofangValue floatValue];
+                if (s > 0 && s != 1.0) {
+                    CGFloat w = self.bounds.size.width;
+                    CGFloat h = self.bounds.size.height;
+                    // 绕左下角缩放：把被中心缩放带离原位的左下角平移回去
+                    CGFloat tx = (w / 2.0) * (s - 1.0);
+                    CGFloat ty = (h / 2.0) * (1.0 - s);
+                    CGAffineTransform t = CGAffineTransformMakeTranslation(tx, ty);
+                    self.transform = CGAffineTransformScale(t, s, s);
+                } else {
+                    self.transform = CGAffineTransformIdentity;
+                }
+            } else {
+                self.transform = CGAffineTransformIdentity;
+                DYYYApplyPlayInteractionLeftStackElementTransforms(self);
+            }
         }
     }
 }
@@ -17091,6 +17163,10 @@ static void DYYYRemoveAppLifecycleObservers(void) {
     UIViewController *viewController = [DYYYUtils firstAvailableViewControllerFromView:self];
 
     if ([viewController isKindOfClass:%c(AWELiveNewPreStreamViewController)]) {
+        // 昵称文案区整体缩放（DYYYElementsuofang）已注入 DYYYLivePreStreamLayoutCoordinator
+        // 的 localTransformsForStackViews，由协调器统一计算「缩放 + 全屏上移偏移」，
+        // 此处不再处理 transform，避免与协调器对 IESLiveStackView 的 transform 管理冲突（
+        // 否则会冲掉全屏上移偏移、并和协调器自带缩放相乘成双重缩放）。
         [DYYYLivePreStreamLayoutCoordinator scheduleUpdateForController:viewController];
     }
 }
@@ -17775,6 +17851,22 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
 %end
 
+// 隐藏共创头像（独立开关 DYYYHideGongChuang2）
+// 注意：AWEBaseElementView 是视频卡片上几乎所有元素视图的基类，若直接钩它并整体隐藏，
+// 会连音乐碟 / 点赞 / 评论 / 分享 / 昵称等一起干掉，导致整个视频卡片失效。
+// 头文件中真正的共创信息视图是 AWEPlayInteractionCoCreatorNewInfoView
+// （见 Sources/Core/AwemeHeaders.h:887，继承 UIView），这里钩它，由 DYYYHideGongChuang2 单独控制。
+%hook AWEPlayInteractionCoCreatorNewInfoView
+
+- (void)layoutSubviews {
+    %orig;
+    if (DYYYGetBool(@"DYYYHideGongChuang2")) {
+        self.hidden = YES;
+    }
+}
+
+%end
+
 %ctor {
     [DYYYLoginBypassManager configureInitialStateIfNeeded];
 
@@ -17976,3 +18068,4 @@ static NSString *const kHideRecentUsersKey = @"DYYYHideSidebarRecentUsers";
 
     }
 }
+
