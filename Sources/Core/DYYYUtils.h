@@ -231,6 +231,12 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (CALayer *)layerFromSchemeHexString:(NSString *)hexString frame:(CGRect)frame;
 
+/** 解析 RGBA 十六进制（6位RGB 或 8位RGBA，可带#）为 UIColor，解析失败返回白色。 */
++ (UIColor *)colorFromRGBAHexString:(NSString *)hexString;
+
+/** 将 UIColor 序列化为 8位 RGBA 十六进制字符串（无 #，大写）。 */
++ (NSString *)rgbaHexStringFromColor:(UIColor *)color;
+
 #pragma mark - Debug Utilities (调试工具)
 
 /**

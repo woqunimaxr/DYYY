@@ -13,6 +13,19 @@
 }
 @end
 
+@implementation DYYYSpeedColorPickerDelegate
+- (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)viewController {
+    if (self.colorChangeBlock) {
+        self.colorChangeBlock(viewController.selectedColor);
+    }
+}
+- (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)viewController {
+    if (self.completionBlock) {
+        self.completionBlock(viewController.selectedColor);
+    }
+}
+@end
+
 @implementation DYYYBackupPickerDelegate
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     if (urls.count > 0 && self.completionBlock) {

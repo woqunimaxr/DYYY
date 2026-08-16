@@ -25,6 +25,14 @@ static CGFloat DYYYSpeedButtonEdgeInsetValue(void) {
     }
     return [defaults floatForKey:@"DYYYSpeedButtonEdgeInset"];
 }
+
+static UIColor *DYYYSpeedButtonTitleUIColor(void) {
+    NSString *hex = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYSpeedButtonColor"];
+    if (hex.length > 0) {
+        return [DYYYUtils colorFromRGBAHexString:hex];
+    }
+    return [UIColor colorWithWhite:1.0 alpha:0.3];
+}
 static const CGFloat kDYYYSpeedButtonDefaultYFromBottomPercent = 0.65;
 static const CGFloat kDYYYSpeedButtonPressedScale = 0.75;
 
@@ -241,7 +249,7 @@ void updateSpeedButtonVisibility() {
         self.layer.borderWidth = 1.0;
         self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.2].CGColor;
 
-        [self setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.3] forState:UIControlStateNormal];
+        [self setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
         self.titleLabel.font = [UIFont boldSystemFontOfSize:15];
 
         self.layer.shadowColor = [UIColor blackColor].CGColor;

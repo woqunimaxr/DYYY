@@ -2136,6 +2136,52 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     label.attributedText = mutableAttributedText;
 }
 
++ (UIColor *)colorFromRGBAHexString:(NSString *)hexString {
+    if (!hexString || hexString.length == 0) {
+        return [UIColor whiteColor];
+    }
+    NSString *hex = [[hexString stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] uppercaseString];
+    if ([hex hasPrefix:@"#"]) {
+        hex = [hex substringFromIndex:1];
+    }
+    if (hex.length != 6 && hex.length != 8) {
+        return [UIColor whiteColor];
+    }
+    NSScanner *scanner = [NSScanner scannerWithString:hex];
+    unsigned long long value = 0;
+    if (![scanner scanHexLongLong:&value]) {
+        return [UIColor whiteColor];
+    }
+    CGFloat r = ((value >> 16) & 0xFF) / 255.0;
+    CGFloat g = ((value >> 8) & 0xFF) / 255.0;
+    CGFloat b = (value & 0xFF) / 255.0;
+    CGFloat a = (hex.length == 8) ? ((value >> 24) & 0xFF) / 255.0 : 1.0;
+    return [UIColor colorWithRed:r green:g blue:b alpha:a];
+}
+
++ (NSString *)rgbaHexStringFromColor:(UIColor *)color {
+    if (!color) {
+        return @"FFFFFF";
+    }
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    if (![color getRed:&r green:&g blue:&b alpha:&a]) {
+        const CGFloat *components = CGColorGetComponents(color.CGColor);
+        if (CGColorGetNumberOfComponents(color.CGColor) >= 4) {
+            r = components[0];
+            g = components[1];
+            b = components[2];
+            a = components[3];
+        } else {
+            return @"FFFFFFFF";
+        }
+    }
+    return [NSString stringWithFormat:@"%02X%02X%02X%02X",
+            (unsigned int)(MIN(MAX(lroundf(r * 255.0), 0), 255)),
+            (unsigned int)(MIN(MAX(lroundf(g * 255.0), 0), 255)),
+            (unsigned int)(MIN(MAX(lroundf(b * 255.0), 0), 255)),
+            (unsigned int)(MIN(MAX(lroundf(a * 255.0), 0), 255))];
+}
+
 + (UIColor *)colorFromSchemeHexString:(NSString *)hexString targetWidth:(CGFloat)targetWidth {
     if (!hexString || hexString.length == 0) {
         return [UIColor whiteColor];

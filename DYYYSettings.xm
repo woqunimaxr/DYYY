@@ -5216,6 +5216,54 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 @"imageName" : @"ic_xspeed_outlined"}];
       [speedButtonItems addObject:enableSpeedButton];
 
+      AWESettingItemModel *speedColorItem = [[%c(AWESettingItemModel) alloc] init];
+      speedColorItem.identifier = @"DYYYSpeedButtonColor";
+      speedColorItem.title = @"快捷倍速按钮字体颜色";
+      NSString *currentColorHex = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYSpeedButtonColor"];
+      speedColorItem.detail = (currentColorHex.length > 0) ? currentColorHex : @"FFFFFF4D";
+      speedColorItem.type = 0;
+      speedColorItem.svgIconImageName = @"ic_pensketch_outlined_20";
+      speedColorItem.cellType = 20;
+      speedColorItem.colorStyle = 2;
+      speedColorItem.isEnable = YES;
+      speedColorItem.cellTappedBlock = ^{
+        if (!speedColorItem.isEnable) {
+          return;
+        }
+        if (@available(iOS 14.0, *)) {
+          UIColorPickerViewController *colorPicker = [[UIColorPickerViewController alloc] init];
+          colorPicker.supportsAlpha = YES;
+          colorPicker.selectedColor = [DYYYUtils colorFromRGBAHexString:speedColorItem.detail];
+
+          DYYYSpeedColorPickerDelegate *pickerDelegate = [[DYYYSpeedColorPickerDelegate alloc] init];
+          pickerDelegate.colorChangeBlock = ^(UIColor *color) {
+            NSString *hex = [DYYYUtils rgbaHexStringFromColor:color];
+            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:@"DYYYSpeedButtonColor"];
+            speedColorItem.detail = hex;
+            [speedColorItem refreshCell];
+          };
+          pickerDelegate.completionBlock = ^(UIColor *color) {
+            NSString *hex = [DYYYUtils rgbaHexStringFromColor:color];
+            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:@"DYYYSpeedButtonColor"];
+            speedColorItem.detail = hex;
+            [speedColorItem refreshCell];
+            if (speedButton) {
+              [speedButton setTitleColor:[DYYYUtils colorFromRGBAHexString:hex] forState:UIControlStateNormal];
+            }
+          };
+
+          static char kSpeedColorPickerDelegateKey;
+          colorPicker.delegate = pickerDelegate;
+          objc_setAssociatedObject(colorPicker, &kSpeedColorPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+          UIViewController *topVC = topView();
+          [topVC presentViewController:colorPicker animated:YES completion:nil];
+        } else {
+          [DYYYUtils showToast:@"需要 iOS 14 及以上"];
+        }
+      };
+      [speedButtonItems addObject:speedColorItem];
+
       AWESettingItemModel *speedStickToEdgeItem = [DYYYSettingsHelper
           createSettingItem:@{
               @"identifier" : kDYYYSpeedButtonStickToEdgeSettingIdentifier,

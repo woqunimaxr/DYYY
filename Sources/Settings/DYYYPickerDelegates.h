@@ -8,3 +8,8 @@
 @property(nonatomic, copy) void (^completionBlock)(NSURL *url);
 @property(nonatomic, copy) NSString *tempFilePath;
 @end
+
+@interface DYYYSpeedColorPickerDelegate : NSObject <UIColorPickerViewControllerDelegate>
+@property(nonatomic, copy) void (^colorChangeBlock)(UIColor *color);
+@property(nonatomic, copy) void (^completionBlock)(UIColor *color);
+@end
