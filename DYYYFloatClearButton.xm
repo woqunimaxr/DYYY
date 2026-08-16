@@ -322,25 +322,6 @@ void updateClearButtonVisibility() {
     DYYYApplyClearButtonHiddenState(hideButton, DYYYShouldHideClearButton());
 }
 
-void DYYYRequestHideUIElementsIfNeeded(void) {
-    if (!hideButton || !hideButton.isElementsHidden || dyyyIsPerformingFloatClearOperation) {
-        return;
-    }
-
-    static BOOL coalesced = NO;
-    if (coalesced) {
-        return;
-    }
-    coalesced = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        coalesced = NO;
-        if (!hideButton || !hideButton.isElementsHidden || dyyyIsPerformingFloatClearOperation) {
-            return;
-        }
-        [hideButton hideUIElements];
-    });
-}
-
 static void forceResetAllUIElements(void) {
     DYYYPerformClearButtonMutation(^{
         initTargetClassNames();
@@ -856,7 +837,7 @@ void reloadClearButtonConfiguration(void) {
 
     if (!self.edgeIndicatorView) {
         self.edgeIndicatorView = [[UIView alloc] init];
-        self.edgeIndicatorView.backgroundColor = [UIColor blackColor];
+        self.edgeIndicatorView.backgroundColor = [UIColor systemGrayColor];
         self.edgeIndicatorView.layer.masksToBounds = YES;
         self.edgeIndicatorView.userInteractionEnabled = NO;
     }
@@ -976,9 +957,6 @@ void reloadClearButtonConfiguration(void) {
     }
 }
 - (void)hideUIElements {
-    if (dyyyClearButtonMutationDepth > 0) {
-        return;
-    }
     DYYYPerformClearButtonMutation(^{
         initTargetClassNames();
         [self findAndHideViews:targetClassNames];

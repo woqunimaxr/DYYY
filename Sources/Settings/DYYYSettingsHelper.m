@@ -78,7 +78,8 @@
           // 一些设置项依赖于多个其他设置项的复杂条件
           @"conditionalDependencies" : @{
               @"DYYYCommentBlurTransparent" : @{@"condition" : @"OR", @"settings" : @[ @"DYYYEnableCommentBlur", @"DYYYEnableNotificationTransparency" ]},
-              @"DYYYAutoHideSpeedButtonTime" : @{@"condition" : @"AND", @"settings" : @[ @"DYYYEnableFloatSpeedButton", @"DYYYAutoHideSpeedButton" ]},
+              @"DYYYAutoHideSpeedButton" : @{@"condition" : @"AND", @"settings" : @[ @"DYYYEnableFloatSpeedButton", DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY ]},
+              @"DYYYAutoHideSpeedButtonTime" : @{@"condition" : @"AND", @"settings" : @[ @"DYYYEnableFloatSpeedButton", DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY, @"DYYYAutoHideSpeedButton" ]},
           },
 
           // ===== 冲突配置 =====
@@ -94,8 +95,6 @@
               @"DYYYSkipAllLive" : @[ @"DYYYSkipLive" ],
               @"DYYYHideEntry" : @[ @"DYYYRemoveEntry" ],
               @"DYYYRemoveEntry" : @[ @"DYYYHideEntry" ],
-              DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY : @[ @"DYYYAutoHideSpeedButton" ],
-              @"DYYYAutoHideSpeedButton" : @[ DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY ],
           },
 
           // ===== 互斥激活配置 =====

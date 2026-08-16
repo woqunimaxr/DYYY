@@ -20,7 +20,8 @@
 
 #pragma mark - 相册说明文字
 /**
- * 记录当前作品，之后保存到相册的媒体会带上「抖音号 · 抖音用户 · 发布时间」说明。
+ * 记录当前作品，之后保存到相册的媒体会带上作者、作者 ID、主页 URL、作品文案、作品 URL 和发布时间说明。
+ * 主页和作品 URL 只保留精简网页地址的协议、域名和路径，不写入分享查询参数。
  * 在弹出下载菜单前调用即可；传 nil 表示本次保存不写说明。
  */
 + (void)setAlbumDescriptionContextWithAwemeModel:(AWEAwemeModel *)awemeModel;

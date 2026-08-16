@@ -87,6 +87,18 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
 
 }
 
+- (BOOL)isSpeedButtonSettingEnabledForKey:(NSString *)key {
+    if ([key isEqualToString:@"DYYYAutoHideSpeedButton"]) {
+        return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYEnableFloatSpeedButton"] &&
+               [[NSUserDefaults standardUserDefaults] boolForKey:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY];
+    }
+    if ([key isEqualToString:@"DYYYAutoHideSpeedButtonTime"]) {
+        return [self isSpeedButtonSettingEnabledForKey:@"DYYYAutoHideSpeedButton"] &&
+               [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoHideSpeedButton"];
+    }
+    return YES;
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
 
@@ -179,6 +191,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"收藏二次确认" key:@"DYYYCollectTips" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"默认直播画质" key:@"DYYYLiveQuality" type:DYYYSettingItemTypePicker],
             [DYYYSettingItem itemWithTitle:@"提高视频画质" key:@"DYYYEnableVideoHighestQuality" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"显示详细互动数" key:@"DYYYShowExactInteractionCounts" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"禁用直播PCDN功能" key:@"DYYYDisableLivePCDN" type:DYYYSettingItemTypeSwitch]
         ],
         @[
@@ -385,12 +398,12 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         @[
             [DYYYSettingItem itemWithTitle:@"启用快捷倍速按钮" key:@"DYYYEnableFloatSpeedButton" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"固定按钮贴边" key:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"自动隐藏快捷倍速按钮" key:@"DYYYAutoHideSpeedButton" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"隐藏快捷倍速按钮时间" key:@"DYYYAutoHideSpeedButtonTime" type:DYYYSettingItemTypeTextField placeholder:@"s"],
             [DYYYSettingItem itemWithTitle:@"重置按钮位置" key:DYYY_RESET_SPEED_BUTTON_POSITION_KEY type:DYYYSettingItemTypePicker],
             [DYYYSettingItem itemWithTitle:@"快捷倍速数值设置" key:@"DYYYSpeedSettings" type:DYYYSettingItemTypeTextField placeholder:@"逗号分隔"],
             [DYYYSettingItem itemWithTitle:@"自动恢复默认倍速" key:@"DYYYAutoRestoreSpeed" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"倍速按钮显示后缀" key:@"DYYYSpeedButtonShowX" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"自动隐藏快捷倍速按钮" key:@"DYYYAutoHideSpeedButton" type:DYYYSettingItemTypeSwitch],
-            [DYYYSettingItem itemWithTitle:@"隐藏快捷倍速按钮时间" key:@"DYYYAutoHideSpeedButtonTime" type:DYYYSettingItemTypeTextField placeholder:@"s"],
             [DYYYSettingItem itemWithTitle:@"快捷倍速按钮大小" key:@"DYYYSpeedButtonSize" type:DYYYSettingItemTypeTextField placeholder:@"20-60"],
             [DYYYSettingItem itemWithTitle:@"启用一键清屏按钮" key:@"DYYYEnableFloatClearButton" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"固定按钮贴边" key:DYYY_CLEAR_BUTTON_STICK_TO_EDGE_KEY type:DYYYSettingItemTypeSwitch],
@@ -637,7 +650,9 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     }
 
     cell.textLabel.text = item.title;
-    cell.textLabel.textColor = [UIColor whiteColor];
+    BOOL itemEnabled = [self isSpeedButtonSettingEnabledForKey:item.key];
+    cell.textLabel.textColor = itemEnabled ? [UIColor whiteColor] : [UIColor grayColor];
+    cell.selectionStyle = itemEnabled ? UITableViewCellSelectionStyleDefault : UITableViewCellSelectionStyleNone;
     cell.backgroundColor = [UIColor colorWithWhite:1 alpha:0.1];
 
     cell.backgroundView = nil;
@@ -654,6 +669,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
     if (item.type == DYYYSettingItemTypeSwitch) {
         UISwitch *switchView = [[UISwitch alloc] init];
         [switchView setOn:[[NSUserDefaults standardUserDefaults] boolForKey:item.key]];
+        switchView.enabled = itemEnabled;
         [switchView addTarget:self action:@selector(switchToggled:) forControlEvents:UIControlEventValueChanged];
         switchView.tag = indexPath.section * 1000 + indexPath.row;
         cell.accessoryView = switchView;
@@ -685,6 +701,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
         textField.textAlignment = NSTextAlignmentRight;
         textField.backgroundColor = [UIColor colorWithWhite:1 alpha:0.1];
         textField.textColor = [UIColor whiteColor];
+        textField.enabled = itemEnabled;
 
         [textField addTarget:self action:@selector(textFieldDidBeginEditing:) forControlEvents:UIControlEventEditingDidBegin];
         [textField addTarget:self action:@selector(textFieldDidChange:) forControlEvents:UIControlEventEditingDidEnd];
@@ -823,14 +840,20 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
                 [speedButton resetFadeTimer];
             }
         }
+        [self.tableView reloadData];
+    }
+    if ([item.key isEqualToString:@"DYYYEnableFloatSpeedButton"]) {
+        [self.tableView reloadData];
     }
     if ([item.key isEqualToString:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY]) {
         if (speedButton) {
-            if (sender.isOn && speedButton.isEdgeHidden && !speedButton.dyyyEdgeHiddenByClearMode) {
+            if (speedButton.isEdgeHidden && !speedButton.dyyyEdgeHiddenByClearMode) {
                 [speedButton dyyy_restoreFromEdgeHidden];
             }
             [speedButton loadSavedPosition];
+            [speedButton resetFadeTimer];
         }
+        [self.tableView reloadData];
     }
     if ([item.key isEqualToString:@"DYYYEnableFloatClearButton"] ||
         [item.key isEqualToString:@"DYYYHideDanmaku"] ||
@@ -852,10 +875,6 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             conflictingKey = @"DYYYHideFollowPromptView";
         } else if ([item.key isEqualToString:@"DYYYHideFollowPromptView"]) {
             conflictingKey = @"DYYYHideLOTAnimationView";
-        } else if ([item.key isEqualToString:DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY]) {
-            conflictingKey = @"DYYYAutoHideSpeedButton";
-        } else if ([item.key isEqualToString:@"DYYYAutoHideSpeedButton"]) {
-            conflictingKey = DYYY_SPEED_BUTTON_STICK_TO_EDGE_KEY;
         }
 
         if (conflictingKey) {
