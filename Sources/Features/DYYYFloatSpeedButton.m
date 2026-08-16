@@ -242,14 +242,17 @@ void updateSpeedButtonVisibility() {
 @implementation FloatingSpeedButton
 
 - (void)dyyyApplyTitleColor {
+    UIColor *savedColor = DYYYSpeedButtonTitleUIColor();
     if ([NSThread isMainThread]) {
-        [self setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
+        [self setTitleColor:savedColor forState:UIControlStateNormal];
+        self.layer.borderColor = savedColor.CGColor;
     } else {
         __weak FloatingSpeedButton *weakSelf = self;
         dispatch_async(dispatch_get_main_queue(), ^{
           FloatingSpeedButton *strongSelf = weakSelf;
           if (strongSelf) {
-              [strongSelf setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
+              [strongSelf setTitleColor:savedColor forState:UIControlStateNormal];
+              strongSelf.layer.borderColor = savedColor.CGColor;
           }
         });
     }
@@ -263,7 +266,7 @@ void updateSpeedButtonVisibility() {
         self.layer.cornerRadius = frame.size.width / 2;
         self.layer.masksToBounds = YES;
         self.layer.borderWidth = 1.0;
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.2].CGColor;
+        self.layer.borderColor = DYYYSpeedButtonTitleUIColor().CGColor;
 
         [self setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
         self.titleLabel.font = [UIFont boldSystemFontOfSize:15];
