@@ -3041,7 +3041,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             @"cellType" : @26,
             @"imageName" : @"ic_zoomin_outlined_20"},
           @{@"identifier" : @"DYYYElementsuofang",
-            @"title" : @"左侧整体缩放",
+            @"title" : @"昵称文案整体缩放",
             @"detail" : @"不填默认",
             @"cellType" : @26,
             @"imageName" : @"ic_zoomin_outlined_20"},
