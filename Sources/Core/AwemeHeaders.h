@@ -467,6 +467,14 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @end
 
 @interface AWEFeedVideoButton : UIButton
+- (void)setLabelString:(NSString *)labelString;
+@end
+
+@interface AWEPlayInteractionLikeViewSubElement : NSObject
+- (void)updateDiggCount;
+- (AWEAwemeModel *)model;
+- (AWEFeedVideoButton *)likeButton;
+- (AWEFeedVideoButton *)button;
 @end
 
 @interface AWEMusicCoverButton : UIButton

@@ -8,6 +8,7 @@
 #import "DYYYHideShareContentViewHooks.h"
 #import "DYYYHideTemplateCollectionHooks.h"
 #import "DYYYHighFPSHooks.h"
+#import "DYYYExactInteractionCountHooks.h"
 #import "DYYYLoginRepairHooks.h"
 #import "DYYYMiniProgramRewardBypass.h"
 #import "DYYYSearchKeyboardVoiceHooks.h"
@@ -41,6 +42,7 @@ static const DYYYHookDescriptor kDYYYHookDescriptors[] = {
     { "feed.template", DYYYHookPhaseAfterAgreement, DYYYStartHideTemplateCollectionHooks },
     { "search.keyboard-voice", DYYYHookPhaseAfterAgreement, DYYYStartSearchKeyboardVoiceHooks },
     { "performance.fps-overlay", DYYYHookPhaseAfterAgreement, DYYYStartFPSOverlay },
+    { "interaction-counts.exact", DYYYHookPhaseAfterAgreement, DYYYStartExactInteractionCountHooks },
 };
 
 static atomic_bool gDYYYLoaderSafePhaseStarted = false;

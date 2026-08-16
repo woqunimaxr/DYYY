@@ -79,6 +79,7 @@ DYYY_FILES = DYYY.xm \
 	Sources/Features/DYYYHighFPSHooks.m \
 	Sources/Features/DYYYFPSOverlay.m \
 	Sources/Features/DYYYFeedTagHooks.m \
+	Sources/Features/DYYYExactInteractionCountHooks.m \
 	Sources/Hooking/DYYYRuntimeHookInstaller.m \
 	Sources/Hooking/DYYYHookManager.m
 DYYY_CFLAGS = -fobjc-arc -w \

@@ -51,6 +51,8 @@ static BOOL DYYYSettingsSearchIndexBuilt = NO;
 static NSString *const kDYYYFeedNowPlayingSettingTitle = @"屏蔽灵动岛抖音播放信息";
 static NSString *const kDYYYFeedNowPlayingSettingIdentifier = @"DYYYDisableFeedNowPlayingInfo";
 static NSString *const kDYYYFeedNowPlayingSVGIconName = @"ic_liveactivityplayslash_dyyy_outlined_20";
+static NSString *const kDYYYExactInteractionCountsSettingIdentifier = DYYY_SHOW_EXACT_INTERACTION_COUNTS_KEY;
+static NSString *const kDYYYExactInteractionCountsSVGIconName = @"ic_numberformat_dyyy_outlined_20";
 static NSString *const kDYYYEnableHighFPSSettingTitle = @"开启最高可用帧率";
 static NSString *const kDYYYEnableHighFPSSettingIdentifier = @"DYYYEnableHighFPS";
 static NSString *const kDYYYEnableHighFPSSVGIconName = @"ic_highfps_dyyy_outlined_20";
@@ -372,6 +374,37 @@ static UIImage *DYYYStickToEdgeIcon(CGSize requestedSize) {
     });
 }
 
+static UIImage *DYYYExactInteractionCountsIcon(CGSize requestedSize) {
+    return DYYYRenderGeneratedSettingTemplateIcon(@"exact-interaction-counts", requestedSize, ^(CGContextRef context, CGSize targetSize) {
+      CGContextScaleCTM(context, targetSize.width / 20.0, targetSize.height / 20.0);
+      UIColor *iconColor = [UIColor colorWithRed:22.0 / 255.0 green:24.0 / 255.0 blue:35.0 / 255.0 alpha:1.0];
+      [iconColor setStroke];
+      CGContextSetLineWidth(context, 1.55);
+      CGContextSetLineCap(context, kCGLineCapRound);
+      CGContextSetLineJoin(context, kCGLineJoinRound);
+
+      UIBezierPath *frame = [UIBezierPath bezierPathWithRoundedRect:CGRectMake(2.55, 3.0, 14.9, 14.0) cornerRadius:2.2];
+      frame.lineWidth = 1.55;
+      [frame stroke];
+
+      UIBezierPath *bars = [UIBezierPath bezierPath];
+      [bars moveToPoint:CGPointMake(5.6, 13.9)];
+      [bars addLineToPoint:CGPointMake(5.6, 11.25)];
+      [bars moveToPoint:CGPointMake(9.95, 13.9)];
+      [bars addLineToPoint:CGPointMake(9.95, 8.95)];
+      [bars moveToPoint:CGPointMake(14.3, 13.9)];
+      [bars addLineToPoint:CGPointMake(14.3, 6.65)];
+      bars.lineWidth = 1.7;
+      [bars stroke];
+
+      UIBezierPath *baseline = [UIBezierPath bezierPath];
+      [baseline moveToPoint:CGPointMake(4.7, 13.9)];
+      [baseline addLineToPoint:CGPointMake(15.2, 13.9)];
+      baseline.lineWidth = 1.35;
+      [baseline stroke];
+    });
+}
+
 @interface AWESettingsTableViewCell : UITableViewCell
 @property(nonatomic, strong) AWESettingItemModel *itemModel;
 @property(nonatomic, strong) UILabel *titleLabel;
@@ -394,6 +427,7 @@ static BOOL DYYYIsGeneratedSettingIconIdentifier(NSString *identifier) {
            [identifier isEqualToString:kDYYYShowFPSOverlaySettingIdentifier] ||
            [identifier isEqualToString:kDYYYCommentPausePlaybackSettingIdentifier] ||
            [identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier] ||
+           [identifier isEqualToString:kDYYYExactInteractionCountsSettingIdentifier] ||
            [identifier isEqualToString:kDYYYSpeedButtonStickToEdgeSettingIdentifier] ||
            [identifier isEqualToString:kDYYYClearButtonStickToEdgeSettingIdentifier];
 }
@@ -413,6 +447,9 @@ static UIImage *DYYYGeneratedSettingIconForIdentifier(NSString *identifier, CGSi
     }
     if ([identifier isEqualToString:kDYYYMiniProgramJumpingAdsSettingIdentifier]) {
         return DYYYMiniProgramJumpingAdsIcon(targetSize);
+    }
+    if ([identifier isEqualToString:kDYYYExactInteractionCountsSettingIdentifier]) {
+        return DYYYExactInteractionCountsIcon(targetSize);
     }
     if ([identifier isEqualToString:kDYYYSpeedButtonStickToEdgeSettingIdentifier] ||
         [identifier isEqualToString:kDYYYClearButtonStickToEdgeSettingIdentifier]) {
@@ -4827,6 +4864,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       // 【交互增强】分类
       NSMutableArray<AWESettingItemModel *> *interactionItems = [NSMutableArray array];
       NSArray *interactionSettings = @[
+          @{
+              @"identifier" : kDYYYExactInteractionCountsSettingIdentifier,
+              @"title" : @"显示详细互动数",
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : kDYYYExactInteractionCountsSVGIconName
+          },
           @{
               @"identifier" : @"DYYYDisableSettingsGesture",
               @"title" : @"禁用双指长按入口",

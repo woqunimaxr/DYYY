@@ -23,6 +23,9 @@
 
 #define DYYY_DISABLE_FEED_NOW_PLAYING_INFO_KEY @"DYYYDisableFeedNowPlayingInfo"
 
+// 互动数超过一万时显示完整整数，关闭后恢复宿主的万字缩写
+#define DYYY_SHOW_EXACT_INTERACTION_COUNTS_KEY @"DYYYShowExactInteractionCounts"
+
 // 开启设备最高可用帧率（ProMotion 门闩 + 抖音 AWEProMotionFPSBooster / 关闭 DisplayLink 降帧；负载过重时自动降档）
 #define DYYY_ENABLE_HIGH_FPS_KEY @"DYYYEnableHighFPS"
 

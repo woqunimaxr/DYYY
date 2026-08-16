@@ -179,6 +179,7 @@ typedef NS_ENUM(NSInteger, DYYYSettingItemType) { DYYYSettingItemTypeSwitch, DYY
             [DYYYSettingItem itemWithTitle:@"收藏二次确认" key:@"DYYYCollectTips" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"默认直播画质" key:@"DYYYLiveQuality" type:DYYYSettingItemTypePicker],
             [DYYYSettingItem itemWithTitle:@"提高视频画质" key:@"DYYYEnableVideoHighestQuality" type:DYYYSettingItemTypeSwitch],
+            [DYYYSettingItem itemWithTitle:@"显示详细互动数" key:@"DYYYShowExactInteractionCounts" type:DYYYSettingItemTypeSwitch],
             [DYYYSettingItem itemWithTitle:@"禁用直播PCDN功能" key:@"DYYYDisableLivePCDN" type:DYYYSettingItemTypeSwitch]
         ],
         @[
