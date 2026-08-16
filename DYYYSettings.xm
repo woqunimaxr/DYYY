@@ -5191,6 +5191,32 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           }];
       [speedButtonItems addObject:speedStickToEdgeItem];
 
+      AWESettingItemModel *autoHideSpeedButtonItem = [DYYYSettingsHelper
+          createSettingItem:@{
+              @"identifier" : @"DYYYAutoHideSpeedButton",
+              @"title" : @"自动隐藏快捷倍速按钮",
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : @"ic_eyeslash_outlined_16"
+          }];
+      [speedButtonItems addObject:autoHideSpeedButtonItem];
+
+      AWESettingItemModel *autoHideSpeedTimeItem = [[%c(AWESettingItemModel) alloc] init];
+      autoHideSpeedTimeItem.identifier = @"DYYYAutoHideSpeedButtonTime";
+      autoHideSpeedTimeItem.title = @"隐藏快捷倍速按钮时间";
+      CGFloat currentAutoHideTime = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYAutoHideSpeedButtonTime"];
+      if (currentAutoHideTime <= 0.0) {
+          currentAutoHideTime = 30.0;
+      }
+      autoHideSpeedTimeItem.detail = [NSString stringWithFormat:@"%.0f", currentAutoHideTime];
+      autoHideSpeedTimeItem.type = 0;
+      autoHideSpeedTimeItem.svgIconImageName = @"ic_speed_outlined_20";
+      autoHideSpeedTimeItem.cellType = 26;
+      autoHideSpeedTimeItem.colorStyle = 2;
+      autoHideSpeedTimeItem.isEnable = YES;
+      autoHideSpeedTimeItem.cellTappedBlock = nil;
+      [speedButtonItems addObject:autoHideSpeedTimeItem];
+
       AWESettingItemModel *speedResetPositionItem = [[%c(AWESettingItemModel) alloc] init];
       speedResetPositionItem.identifier = kDYYYSpeedButtonResetPositionSettingIdentifier;
       speedResetPositionItem.title = kDYYYResetButtonPositionSettingTitle;
@@ -5266,32 +5292,6 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       };
       [speedButtonItems addObject:showXItem];
 
-      AWESettingItemModel *autoHideSpeedButtonItem = [DYYYSettingsHelper
-          createSettingItem:@{
-              @"identifier" : @"DYYYAutoHideSpeedButton",
-              @"title" : @"自动隐藏快捷倍速按钮",
-              @"detail" : @"",
-              @"cellType" : @6,
-              @"imageName" : @"ic_eyeslash_outlined_16"
-          }];
-      [speedButtonItems addObject:autoHideSpeedButtonItem];
-
-      AWESettingItemModel *autoHideSpeedTimeItem = [[%c(AWESettingItemModel) alloc] init];
-      autoHideSpeedTimeItem.identifier = @"DYYYAutoHideSpeedButtonTime";
-      autoHideSpeedTimeItem.title = @"隐藏快捷倍速按钮时间";
-      CGFloat currentAutoHideTime = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYAutoHideSpeedButtonTime"];
-      if (currentAutoHideTime <= 0.0) {
-          currentAutoHideTime = 30.0;
-      }
-      autoHideSpeedTimeItem.detail = [NSString stringWithFormat:@"%.0f", currentAutoHideTime];
-      autoHideSpeedTimeItem.type = 0;
-      autoHideSpeedTimeItem.svgIconImageName = @"ic_speed_outlined_20";
-      autoHideSpeedTimeItem.cellType = 26;
-      autoHideSpeedTimeItem.colorStyle = 2;
-      autoHideSpeedTimeItem.isEnable = YES;
-      autoHideSpeedTimeItem.cellTappedBlock = nil;
-      [speedButtonItems addObject:autoHideSpeedTimeItem];
-
       AWESettingItemModel *buttonSizeItem = [[%c(AWESettingItemModel) alloc] init];
       buttonSizeItem.identifier = @"DYYYSpeedButtonSize";
       buttonSizeItem.title = @"快捷倍速按钮大小";
@@ -5346,6 +5346,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                 [speedButton dyyy_restoreFromEdgeHidden];
             }
             [speedButton loadSavedPosition];
+            [speedButton resetFadeTimer];
         }
         refreshSpeedDependentItems();
       };
@@ -5955,7 +5956,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                           @"Telegram\n"
                                           @"• huami：@huamidev\n"
                                           @"• 维他：@vita_app\n"
-                                          @"• VexCove：@VexCove1\n\n"
+                                          @"• VexCove：@VexLabs1\n\n"
                                           @"GitHub\n"
                                           @"• 原始开源仓库：huami1314/DYYY\n"
                                           @"• 上游仓库：Wtrwx/DYYY\n"

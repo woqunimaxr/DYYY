@@ -99,7 +99,7 @@ static void DYYYApplyLinkForAllOccurrences(NSMutableAttributedString *attributed
 
         DYYYApplyLinkForAllOccurrences(attributedString, @"@huamidev", @"https://t.me/huamidev");
         DYYYApplyLinkForAllOccurrences(attributedString, @"@vita_app", @"https://t.me/vita_app");
-        DYYYApplyLinkForAllOccurrences(attributedString, @"@VexCove1", @"https://t.me/VexCove1");
+        DYYYApplyLinkForAllOccurrences(attributedString, @"@VexLabs1", @"https://t.me/VexLabs1");
         DYYYApplyLinkForAllOccurrences(attributedString, @"huami1314/DYYY", @"https://github.com/huami1314/DYYY");
         DYYYApplyLinkForAllOccurrences(attributedString, @"Wtrwx/DYYY", @"https://github.com/Wtrwx/DYYY");
         DYYYApplyLinkForAllOccurrences(attributedString, @"VexCove/DYYY", @"https://github.com/VexCove/DYYY");

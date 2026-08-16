@@ -837,7 +837,7 @@ void reloadClearButtonConfiguration(void) {
 
     if (!self.edgeIndicatorView) {
         self.edgeIndicatorView = [[UIView alloc] init];
-        self.edgeIndicatorView.backgroundColor = [UIColor blackColor];
+        self.edgeIndicatorView.backgroundColor = [UIColor systemGrayColor];
         self.edgeIndicatorView.layer.masksToBounds = YES;
         self.edgeIndicatorView.userInteractionEnabled = NO;
     }

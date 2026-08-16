@@ -32,7 +32,7 @@ static BOOL DYYYSpeedButtonStickToEdgeEnabled(void) {
 }
 
 static BOOL DYYYAutoHideSpeedButtonEnabled(void) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoHideSpeedButton"] && !DYYYSpeedButtonStickToEdgeEnabled();
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"DYYYAutoHideSpeedButton"] && DYYYSpeedButtonStickToEdgeEnabled();
 }
 
 static NSTimeInterval DYYYAutoHideSpeedButtonInterval(void) {
@@ -572,7 +572,7 @@ void updateSpeedButtonVisibility() {
 
     if (!self.edgeIndicatorView) {
         self.edgeIndicatorView = [[UIView alloc] init];
-        self.edgeIndicatorView.backgroundColor = [UIColor blackColor];
+        self.edgeIndicatorView.backgroundColor = [UIColor systemGrayColor];
         self.edgeIndicatorView.userInteractionEnabled = NO;
         self.edgeIndicatorView.layer.masksToBounds = YES;
     }
