@@ -6143,6 +6143,11 @@ static void DYYYApplyPlayInteractionElementLayout(UIView *view, NSString *fallba
         return;
     }
 
+    // 左侧整体缩放生效时，昵称/文案/属地缩放与 Y 轴细粒度控制全部让位（互斥）
+    if ([DYYYUtils isLeftOverallScaleActive]) {
+        return;
+    }
+
     UIView *arranged = nil;
     UIView *elementBlock = nil;
     DYYYResolveElementLayoutTargets(view, &arranged, &elementBlock);
@@ -16879,9 +16884,9 @@ static void DYYYRemoveAppLifecycleObservers(void) {
         }
         // 左侧昵称/文案元素
         else if (hasScalableLeftElement) {
-            NSString *suofangValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYElementsuofang"];
-            if (suofangValue.length > 0) {
-                // 昵称文案区整体缩放（按 DYYYElementsuofang 独立控制），锚定左下角
+            if ([DYYYUtils isLeftOverallScaleActive]) {
+                // 左侧整体缩放（按 DYYYElementsuofang 独立控制），锚定左下角；与昵称/文案/属地缩放及 Y 轴互斥
+                NSString *suofangValue = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYElementsuofang"];
                 CGFloat s = [suofangValue floatValue];
                 if (s > 0 && s != 1.0) {
                     CGFloat w = self.bounds.size.width;

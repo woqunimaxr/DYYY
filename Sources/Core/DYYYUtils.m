@@ -388,6 +388,25 @@ static BOOL DYYYUtilsWriteStaticImageToGIF(UIImage *image, NSURL *gifURL) {
 
 static const void *kCurrentIPRequestCityCodeKey = &kCurrentIPRequestCityCodeKey;
 
++ (BOOL)isLeftOverallScaleActive {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString *overall = [defaults objectForKey:@"DYYYElementsuofang"];
+    if (overall.length == 0) {
+        return NO;
+    }
+    NSArray<NSString *> *fineKeys = @[
+        @"DYYYNicknameScale", @"DYYYDescriptionScale", @"DYYYIPLabelScale",
+        @"DYYYNicknameVerticalOffset", @"DYYYDescriptionVerticalOffset", @"DYYYIPLabelVerticalOffset",
+    ];
+    for (NSString *key in fineKeys) {
+        NSString *value = [defaults objectForKey:key];
+        if (value.length > 0) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
 #pragma mark - Settings Generation (设置项代际号)
 
 // 供 DYYYGetBoolCached 等热路径缓存判断是否需要回源查询 NSUserDefaults。

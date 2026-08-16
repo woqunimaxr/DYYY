@@ -338,13 +338,15 @@ static char kDYYYLivePreStreamTransformStateKey;
     Class tagClass = NSClassFromString(@"AWELiveFeedLabelTagView");
     Class enterLiveClass = NSClassFromString(@"AWELiveFeedStatusLabel");
 
-    CGFloat nicknameScale = [self scaleValueForKey:@"DYYYNicknameScale"];
-    CGFloat descriptionScale = [self scaleValueForKey:@"DYYYDescriptionScale"];
+    // 左侧整体缩放与昵称/文案/属地缩放及 Y 轴互斥：整体缩放生效时细粒度控制不生效，反之亦然
+    BOOL leftOverallActive = [DYYYUtils isLeftOverallScaleActive];
+    CGFloat nicknameScale = leftOverallActive ? 1.0 : [self scaleValueForKey:@"DYYYNicknameScale"];
+    CGFloat descriptionScale = leftOverallActive ? 1.0 : [self scaleValueForKey:@"DYYYDescriptionScale"];
     CGFloat elementScale = [self scaleValueForKey:@"DYYYElementScale"];
-    CGFloat nicknameOffset = [self verticalOffsetYForKey:@"DYYYNicknameVerticalOffset"];
-    CGFloat descriptionOffset = [self verticalOffsetYForKey:@"DYYYDescriptionVerticalOffset"];
-    // 昵称文案区整体缩放：作用于直播预览页昵称/文案区（不含右侧互动栏，右侧由 DYYYElementScale 控制）
-    CGFloat elementsuofang = [self scaleValueForKey:@"DYYYElementsuofang"];
+    CGFloat nicknameOffset = leftOverallActive ? 0.0 : [self verticalOffsetYForKey:@"DYYYNicknameVerticalOffset"];
+    CGFloat descriptionOffset = leftOverallActive ? 0.0 : [self verticalOffsetYForKey:@"DYYYDescriptionVerticalOffset"];
+    // 左侧整体缩放：作用于直播预览页昵称/文案区（不含右侧互动栏，右侧由 DYYYElementScale 控制）
+    CGFloat elementsuofang = leftOverallActive ? [self scaleValueForKey:@"DYYYElementsuofang"] : 1.0;
 
     NSMapTable<UIView *, NSValue *> *transforms = [NSMapTable strongToStrongObjectsMapTable];
     for (UIView *stackView in stackViews) {

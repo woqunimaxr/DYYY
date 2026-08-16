@@ -13,6 +13,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Public Model Filtering Utilities (公共模型过滤工具)
 
+/** 左侧整体缩放是否生效：DYYYElementsuofang 有值，且昵称/文案/属地缩放与 Y 轴细粒度控制均未设置（互斥）。 */
++ (BOOL)isLeftOverallScaleActive;
+
 /** 使用抖音模型自身的广告判定及明确广告字段识别广告作品。 */
 + (BOOL)isAdvertisementAwemeModel:(id)model;
 
