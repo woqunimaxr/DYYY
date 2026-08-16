@@ -5,11 +5,114 @@
 #import <MobileCoreServices/MobileCoreServices.h>
 #import <MobileCoreServices/UTCoreTypes.h>
 #import <Photos/Photos.h>
-#import <objc/runtime.h>
 
 #import "DYYYMediaChooserSheet.h"
+#import "DYYYConstants.h"
 #import "DYYYToast.h"
 #import "DYYYUtils.h"
+
+static NSString *DYYYAuthorProfileURL(AWEUserModel *author) {
+    if (!author) {
+        return nil;
+    }
+
+    if ([author respondsToSelector:@selector(secUserID)]) {
+        NSString *secUserID = author.secUserID;
+        if ([secUserID isKindOfClass:[NSString class]] && secUserID.length > 0) {
+            return [NSString stringWithFormat:@"https://www.douyin.com/user/%@", secUserID];
+        }
+    }
+
+    return nil;
+}
+
+static NSString *DYYYCompactAlbumURL(NSString *rawURL) {
+    if (![rawURL isKindOfClass:[NSString class]] || rawURL.length == 0) {
+        return nil;
+    }
+
+    NSURLComponents *components = [NSURLComponents componentsWithString:rawURL];
+    NSString *scheme = components.scheme.lowercaseString;
+    NSString *host = components.host.lowercaseString;
+    NSString *path = components.percentEncodedPath.length > 0 ? components.percentEncodedPath : components.path;
+    if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) {
+        return nil;
+    }
+    if (host.length == 0 || path.length == 0 || ![path hasPrefix:@"/"]) {
+        return nil;
+    }
+
+    // 只保留协议、域名和路径，明确丢弃 query 与 fragment，避免把分享追踪参数写入相册。
+    return [NSString stringWithFormat:@"%@://%@%@", scheme, host, path];
+}
+
+static NSString *DYYYAlbumDescriptionForAwemeModel(AWEAwemeModel *awemeModel, NSString *authorProfileURL, NSString *workURL) {
+    if (!awemeModel) {
+        return nil;
+    }
+
+    NSMutableArray<NSString *> *fields = [NSMutableArray array];
+    AWEUserModel *author = awemeModel.author;
+    NSString *nickname = author.nickname;
+    if ([nickname isKindOfClass:[NSString class]] && nickname.length > 0) {
+        [fields addObject:[NSString stringWithFormat:@"抖音作者：%@", nickname]];
+    }
+
+    NSString *displayID = nil;
+    if ([author respondsToSelector:@selector(uniqueIDForShow)]) {
+        displayID = [author uniqueIDForShow];
+    }
+    if (![displayID isKindOfClass:[NSString class]] || displayID.length == 0) {
+        if ([author respondsToSelector:@selector(tiktokDisplayID)]) {
+            displayID = [author tiktokDisplayID];
+        }
+    }
+    if (![displayID isKindOfClass:[NSString class]] || displayID.length == 0) {
+        displayID = author.shortID;
+    }
+    if ([displayID isKindOfClass:[NSString class]] && displayID.length > 0) {
+        [fields addObject:[NSString stringWithFormat:@"作者 ID：%@", displayID]];
+    }
+
+    NSString *resolvedAuthorProfileURL = authorProfileURL.length > 0 ? authorProfileURL : DYYYAuthorProfileURL(author);
+    if ([resolvedAuthorProfileURL isKindOfClass:[NSString class]] && resolvedAuthorProfileURL.length > 0) {
+        [fields addObject:[NSString stringWithFormat:@"作者主页：%@", resolvedAuthorProfileURL]];
+    }
+
+    NSString *caption = nil;
+    if ([awemeModel respondsToSelector:@selector(caption)]) {
+        caption = awemeModel.caption;
+    }
+    if (![caption isKindOfClass:[NSString class]] || caption.length == 0) {
+        caption = awemeModel.descriptionString;
+    }
+    if ([caption isKindOfClass:[NSString class]] && caption.length > 0) {
+        [fields addObject:[NSString stringWithFormat:@"作品文案：%@", caption]];
+    }
+
+    NSString *resolvedWorkURL = DYYYCompactAlbumURL(workURL.length > 0 ? workURL : awemeModel.shareURL);
+    if ([resolvedWorkURL isKindOfClass:[NSString class]] && resolvedWorkURL.length > 0) {
+        [fields addObject:[NSString stringWithFormat:@"作品链接：%@", resolvedWorkURL]];
+    }
+
+    NSNumber *createTime = awemeModel.createTime;
+    if ([createTime isKindOfClass:[NSNumber class]] && createTime.doubleValue > 0) {
+        static NSDateFormatter *formatter = nil;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+          formatter = [[NSDateFormatter alloc] init];
+          formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
+          formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        });
+        NSDate *date = [NSDate dateWithTimeIntervalSince1970:createTime.doubleValue];
+        [fields addObject:[NSString stringWithFormat:@"发布时间：%@", [formatter stringFromDate:date]]];
+    }
+
+    if (fields.count == 0) {
+        return nil;
+    }
+    return [fields componentsJoinedByString:@"\n"];
+}
 
 @interface DYYYManager () {
     AVAssetExportSession *session;
@@ -111,48 +214,29 @@
         return nil;
     }
 
-    NSMutableArray<NSString *> *fields = [NSMutableArray array];
-
-    AWEUserModel *author = awemeModel.author;
-    NSString *shortID = author.shortID;
-    if ([shortID isKindOfClass:[NSString class]] && shortID.length > 0) {
-        [fields addObject:[NSString stringWithFormat:@"抖音号: %@", shortID]];
-    }
-
-    NSString *nickname = author.nickname;
-    if ([nickname isKindOfClass:[NSString class]] && nickname.length > 0) {
-        [fields addObject:[NSString stringWithFormat:@"抖音用户: %@", nickname]];
-    }
-
-    NSNumber *createTime = awemeModel.createTime;
-    if ([createTime isKindOfClass:[NSNumber class]] && createTime.doubleValue > 0) {
-        static NSDateFormatter *formatter = nil;
-        static dispatch_once_t onceToken;
-        dispatch_once(&onceToken, ^{
-          formatter = [[NSDateFormatter alloc] init];
-          formatter.dateFormat = @"yyyy-MM-dd HH:mm:ss";
-          formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
-        });
-        NSDate *date = [NSDate dateWithTimeIntervalSince1970:createTime.doubleValue];
-        [fields addObject:[NSString stringWithFormat:@"发布时间: %@", [formatter stringFromDate:date]]];
-    }
-
-    if (fields.count == 0) {
-        return nil;
-    }
-    return [fields componentsJoinedByString:@" · "];
+    return DYYYAlbumDescriptionForAwemeModel(awemeModel,
+                                             DYYYAuthorProfileURL(awemeModel.author),
+                                             DYYYCompactAlbumURL(awemeModel.shareURL));
 }
 
 + (void)setAlbumDescriptionContextWithAwemeModel:(AWEAwemeModel *)awemeModel {
-    // 键不存在按开启处理：这是默认行为，不需要用户先去设置里打开。
-    id stored = [[NSUserDefaults standardUserDefaults] objectForKey:@"DYYYAlbumMediaDescription"];
-    BOOL enabled = stored ? [stored boolValue] : YES;
+    // 键不存在按关闭处理：默认不向相册写入作品说明，用户可在设置中主动开启。
+    id stored = [[NSUserDefaults standardUserDefaults] objectForKey:DYYY_ALBUM_MEDIA_DESCRIPTION_KEY];
+    BOOL enabled = stored ? [stored boolValue] : NO;
+    DYYYManager *manager = [DYYYManager shared];
+    NSString *authorProfileURL = DYYYAuthorProfileURL(awemeModel.author);
+    NSString *workURL = DYYYCompactAlbumURL(awemeModel.shareURL);
 
-    [DYYYManager shared].pendingAlbumDescription = enabled ? [self albumDescriptionForAwemeModel:awemeModel] : nil;
+    @synchronized(manager) {
+        manager.pendingAlbumDescription = enabled ? DYYYAlbumDescriptionForAwemeModel(awemeModel, authorProfileURL, workURL) : nil;
+    }
 }
 
 + (NSString *)currentAlbumDescription {
-    return [DYYYManager shared].pendingAlbumDescription;
+    DYYYManager *manager = [DYYYManager shared];
+    @synchronized(manager) {
+        return manager.pendingAlbumDescription;
+    }
 }
 
 + (void)saveMedia:(NSURL *)mediaURL mediaType:(MediaType)mediaType completion:(void (^)(BOOL success))completion {
@@ -2168,7 +2252,10 @@
 + (void)handleVideoData:(NSDictionary *)dataDict albumDescription:(NSString *)albumDescription {
     // 弹窗是模态的，展示期间用户翻不动作品，所以在这里把说明文字挂回去，
     // 各行 handler 触发下载时取到的就是这次解析对应的那条。
-    [DYYYManager shared].pendingAlbumDescription = albumDescription;
+    DYYYManager *manager = [DYYYManager shared];
+    @synchronized(manager) {
+        manager.pendingAlbumDescription = albumDescription;
+    }
 
     // 首先检查videos和images数组
     NSArray *videoList = dataDict[@"video_list"];

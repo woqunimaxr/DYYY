@@ -59,6 +59,7 @@ static NSString *const kDYYYShowFPSOverlaySettingIdentifier = @"DYYYShowFPSOverl
 static NSString *const kDYYYShowFPSOverlaySVGIconName = @"ic_fpsoverlay_dyyy_outlined_20";
 static NSString *const kDYYYCommentPausePlaybackSettingIdentifier = @"DYYYCommentPausePlayback";
 static NSString *const kDYYYCommentPausePlaybackSVGIconName = @"ic_commentpause_dyyy_outlined_20";
+static NSString *const kDYYYAlbumMediaDescriptionSettingIdentifier = DYYY_ALBUM_MEDIA_DESCRIPTION_KEY;
 static NSString *const kDYYYLoginBypassSVGIconName = @"ic_unlocknew_outlined_20";
 static NSString *const kDYYYHideRecommendAppDownloadSettingIdentifier = @"DYYYHideRecommendAppDownload";
 static NSString *const kDYYYMiniProgramJumpingAdsSettingIdentifier = @"DYYYEnableMiniProgramJumpingAds";
@@ -4185,6 +4186,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       NSMutableArray<AWESettingItemModel *> *downloadItems = [NSMutableArray array];
       NSArray *downloadSettings = @[
           @{
+              @"identifier" : kDYYYAlbumMediaDescriptionSettingIdentifier,
+              @"title" : @"保存作品信息",
+              @"detail" : @"",
+              @"cellType" : @6,
+              @"imageName" : @"ic_cloudarrowdown_outlined_20"
+          },
+          @{
               @"identifier" : @"DYYYInterfaceDownload",
               @"title" : @"接口解析保存媒体",
               @"subTitle" : @"填入自定义的解析接口，标准格式请查阅 Github 仓库内的 README 文件",
@@ -4260,6 +4268,14 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       for (NSDictionary *dict in downloadSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
+
+          // 相册作品信息默认关闭；首次展示设置页时同步默认值，
+          // 避免 UI 和保存链路对缺少 key 的默认判断不一致。
+          if ([item.identifier isEqualToString:kDYYYAlbumMediaDescriptionSettingIdentifier] &&
+              ![[NSUserDefaults standardUserDefaults] objectForKey:kDYYYAlbumMediaDescriptionSettingIdentifier]) {
+              [DYYYSettingsHelper setUserDefaults:@NO forKey:kDYYYAlbumMediaDescriptionSettingIdentifier];
+              item.isSwitchOn = NO;
+          }
 
           // 特殊处理接口解析保存媒体选项
           if ([item.identifier isEqualToString:@"DYYYInterfaceDownload"]) {

@@ -132,9 +132,12 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @interface AWEUserModel : NSObject
 @property(copy, nonatomic) NSString *nickname;
 @property(copy, nonatomic) NSString *shortID;
+@property(retain, nonatomic) NSString *secUserID;
 @property(copy, nonatomic) NSString *signature;
 @property(retain, nonatomic) NSString *userID;
 @property(copy, nonatomic) AWEURLModel *avatarMedium;
+- (NSString *)uniqueIDForShow;
+- (NSString *)tiktokDisplayID;
 @end
 
 @interface AWEUserService : NSObject
@@ -182,6 +185,7 @@ typedef NS_ENUM(NSUInteger, DYEdgeMode) {
 @property(nonatomic, strong) NSString *ipAttribution;
 @property(nonatomic, strong) id currentAweme;
 @property(nonatomic, copy) NSString *descriptionString;
+@property(nonatomic, copy) NSString *caption;
 @property(nonatomic, copy) NSString *globalVisionTitle;
 @property(nonatomic, assign) BOOL isAds;
 @property(nonatomic, assign) BOOL isLive;
