@@ -5236,20 +5236,23 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           colorPicker.selectedColor = [DYYYUtils colorFromRGBAHexString:speedColorItem.detail];
 
           DYYYSpeedColorPickerDelegate *pickerDelegate = [[DYYYSpeedColorPickerDelegate alloc] init];
-          pickerDelegate.colorChangeBlock = ^(UIColor *color) {
+          void (^applyColor)(UIColor *) = ^(UIColor *color) {
             NSString *hex = [DYYYUtils rgbaHexStringFromColor:color];
-            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:@"DYYYSpeedButtonColor"];
-            speedColorItem.detail = hex;
-            [speedColorItem refreshCell];
-          };
-          pickerDelegate.completionBlock = ^(UIColor *color) {
-            NSString *hex = [DYYYUtils rgbaHexStringFromColor:color];
-            [[NSUserDefaults standardUserDefaults] setObject:hex forKey:@"DYYYSpeedButtonColor"];
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults setObject:hex forKey:@"DYYYSpeedButtonColor"];
+            [defaults synchronize];
             speedColorItem.detail = hex;
             [speedColorItem refreshCell];
             if (speedButton) {
               [speedButton setTitleColor:[DYYYUtils colorFromRGBAHexString:hex] forState:UIControlStateNormal];
             }
+          };
+          pickerDelegate.colorChangeBlock = ^(UIColor *color) {
+            applyColor(color);
+          };
+          pickerDelegate.completionBlock = ^(UIColor *color) {
+            applyColor(color);
+            [DYYYUtils showToast:@"倍速按钮文字颜色已保存"];
           };
 
           static char kSpeedColorPickerDelegateKey;
