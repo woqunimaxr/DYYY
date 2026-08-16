@@ -5244,7 +5244,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             speedColorItem.detail = hex;
             [speedColorItem refreshCell];
             if (speedButton) {
-              [speedButton setTitleColor:[DYYYUtils colorFromRGBAHexString:hex] forState:UIControlStateNormal];
+              [speedButton dyyyApplyTitleColor];
             }
           };
           pickerDelegate.colorChangeBlock = ^(UIColor *color) {

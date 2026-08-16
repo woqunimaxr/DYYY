@@ -142,6 +142,20 @@ void setCurrentSpeedIndex(NSInteger index) {
     [[NSUserDefaults standardUserDefaults] setInteger:index forKey:@"DYYYCurrentSpeedIndex"];
 }
 
+- (void)dyyyApplyTitleColor {
+    if ([NSThread isMainThread]) {
+        [self setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
+    } else {
+        __weak FloatingSpeedButton *weakSelf = self;
+        dispatch_async(dispatch_get_main_queue(), ^{
+          FloatingSpeedButton *strongSelf = weakSelf;
+          if (strongSelf) {
+              [strongSelf setTitleColor:DYYYSpeedButtonTitleUIColor() forState:UIControlStateNormal];
+          }
+        });
+    }
+}
+
 void updateSpeedButtonUI() {
     if (!speedButton)
         return;
@@ -165,6 +179,7 @@ void updateSpeedButtonUI() {
     }
 
     if ([NSThread isMainThread]) {
+        [speedButton dyyyApplyTitleColor];
         [speedButton setTitle:formattedSpeed forState:UIControlStateNormal];
     } else {
         __weak FloatingSpeedButton *weakButton = speedButton;
@@ -173,6 +188,7 @@ void updateSpeedButtonUI() {
           if (!strongButton) {
               return;
           }
+          [strongButton dyyyApplyTitleColor];
           [strongButton setTitle:formattedSpeed forState:UIControlStateNormal];
         });
     }

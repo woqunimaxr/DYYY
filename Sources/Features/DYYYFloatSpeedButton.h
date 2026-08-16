@@ -25,6 +25,7 @@
 - (void)dyyy_restoreFromEdgeHidden;
 - (void)dyyy_hideToEdgeForClearMode;
 - (void)dyyy_restoreFromClearMode;
+- (void)dyyyApplyTitleColor;
 @end
 
 #ifdef __cplusplus
