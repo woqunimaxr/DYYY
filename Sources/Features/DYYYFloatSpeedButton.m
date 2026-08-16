@@ -16,7 +16,15 @@ BOOL isFloatSpeedButtonEnabled = NO;
 BOOL speedButtonForceHidden = NO;
 BOOL dyyyInteractionViewVisible = NO;
 
-static const CGFloat kDYYYSpeedButtonEdgeInset = 10.0;
+static const CGFloat kDYYYSpeedButtonDefaultEdgeInset = 0.0;
+
+static CGFloat DYYYSpeedButtonEdgeInsetValue(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"DYYYSpeedButtonEdgeInset"] == nil) {
+        return kDYYYSpeedButtonDefaultEdgeInset;
+    }
+    return [defaults floatForKey:@"DYYYSpeedButtonEdgeInset"];
+}
 static const CGFloat kDYYYSpeedButtonDefaultYFromBottomPercent = 0.65;
 static const CGFloat kDYYYSpeedButtonPressedScale = 0.75;
 
@@ -691,7 +699,7 @@ void updateSpeedButtonVisibility() {
                           maxAlongEdgeX:(CGFloat *)maxAlongEdgeX
                           minAlongEdgeY:(CGFloat *)minAlongEdgeY
                           maxAlongEdgeY:(CGFloat *)maxAlongEdgeY {
-    CGFloat inset = kDYYYSpeedButtonEdgeInset;
+    CGFloat inset = DYYYSpeedButtonEdgeInsetValue();
     *leftCenterX = hw + inset;
     *rightCenterX = size.width - hw - inset;
     *topCenterY = hh + inset;

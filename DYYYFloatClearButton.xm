@@ -46,7 +46,15 @@ HideUIButton *hideButton = nil;
 BOOL isAppInTransition = NO;
 NSArray *targetClassNames;
 static NSUInteger dyyyTargetClassConfiguration = NSUIntegerMax;
-static const CGFloat kDYYYClearButtonEdgeInset = 8.0;
+static const CGFloat kDYYYClearButtonDefaultEdgeInset = 0.0;
+
+static CGFloat DYYYClearButtonEdgeInsetValue(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"DYYYClearButtonEdgeInset"] == nil) {
+        return kDYYYClearButtonDefaultEdgeInset;
+    }
+    return [defaults floatForKey:@"DYYYClearButtonEdgeInset"];
+}
 static const CGFloat kDYYYClearButtonDefaultYFromBottomPercent = 0.75;
 
 typedef NS_ENUM(NSInteger, DYYYClearButtonEdge) {
@@ -569,14 +577,14 @@ void reloadClearButtonConfiguration(void) {
     CGSize size = self.superview.bounds.size;
     CGFloat halfWidth = CGRectGetWidth(self.bounds) * 0.5;
     CGFloat halfHeight = CGRectGetHeight(self.bounds) * 0.5;
-    *leftX = halfWidth + kDYYYClearButtonEdgeInset;
-    *rightX = size.width - halfWidth - kDYYYClearButtonEdgeInset;
-    *topY = halfHeight + kDYYYClearButtonEdgeInset;
-    *bottomY = size.height - halfHeight - kDYYYClearButtonEdgeInset;
-    *minX = halfWidth + kDYYYClearButtonEdgeInset;
-    *maxX = size.width - halfWidth - kDYYYClearButtonEdgeInset;
-    *minY = halfHeight + kDYYYClearButtonEdgeInset;
-    *maxY = size.height - halfHeight - kDYYYClearButtonEdgeInset;
+    *leftX = halfWidth + DYYYClearButtonEdgeInsetValue();
+    *rightX = size.width - halfWidth - DYYYClearButtonEdgeInsetValue();
+    *topY = halfHeight + DYYYClearButtonEdgeInsetValue();
+    *bottomY = size.height - halfHeight - DYYYClearButtonEdgeInsetValue();
+    *minX = halfWidth + DYYYClearButtonEdgeInsetValue();
+    *maxX = size.width - halfWidth - DYYYClearButtonEdgeInsetValue();
+    *minY = halfHeight + DYYYClearButtonEdgeInsetValue();
+    *maxY = size.height - halfHeight - DYYYClearButtonEdgeInsetValue();
     return YES;
 }
 

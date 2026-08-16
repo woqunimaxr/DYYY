@@ -685,7 +685,8 @@ static NSSet<NSString *> *DYYYInlineTextInputIdentifiers(void) {
           @"DYYYSelfTitle",
           @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
           @"DYYYVideoBGColor", @"DYYYDanmuColor", @"DYYYLabelColor", @"DYYYProgressLabelColor",
-          @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", @"DYYYAutoHideSpeedButtonTime"
+          @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", @"DYYYAutoHideSpeedButtonTime",
+          @"DYYYSpeedButtonEdgeInset", @"DYYYClearButtonEdgeInset"
       ]];
     });
     return identifiers;
@@ -699,6 +700,8 @@ static NSString *DYYYInlineTextInputPlaceholder(NSString *identifier) {
         @"DYYYSpeedButtonSize" : @"20-60",
         @"DYYYSpeedSettings" : @"逗号分隔",
         @"DYYYAutoHideSpeedButtonTime" : @"s",
+        @"DYYYSpeedButtonEdgeInset" : @"0-100，0=贴死边",
+        @"DYYYClearButtonEdgeInset" : @"0-100，0=贴死边",
         @"DYYYCommentContent" : @"不填则默认",
         @"DYYYVideoBGColor" : @"十六进制", @"DYYYDanmuColor" : @"十六进制或 random",
         @"DYYYLabelColor" : @"十六进制", @"DYYYProgressLabelColor" : @"十六进制"
@@ -725,7 +728,7 @@ static UIKeyboardType DYYYInlineTextInputKeyboardType(NSString *identifier) {
     NSSet<NSString *> *decimalIdentifiers = [NSSet setWithArray:@[
         @"DYYYAvatarViewTransparency", @"DYYYCommentBlurTransparent", @"DYYYGlobalTransparency", @"DYYYNotificationCornerRadius",
         @"DYYYSheetBlurTransparent", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent", @"DYYYEnableFloatClearButtonSize",
-        @"DYYYSpeedButtonSize", @"DYYYAutoHideSpeedButtonTime"
+        @"DYYYSpeedButtonSize", @"DYYYAutoHideSpeedButtonTime", @"DYYYSpeedButtonEdgeInset", @"DYYYClearButtonEdgeInset"
     ]];
     if ([identifier isEqualToString:@"DYYYFilterLowLikes"] || [identifier isEqualToString:@"DYYYFilterTimeLimit"]) {
         return UIKeyboardTypeNumberPad;
@@ -746,6 +749,9 @@ static NSString *DYYYInlineTextInputCurrentValue(NSString *identifier) {
     }
     if ([identifier isEqualToString:@"DYYYSpeedButtonSize"]) {
         return @"35";
+    }
+    if ([identifier isEqualToString:@"DYYYSpeedButtonEdgeInset"] || [identifier isEqualToString:@"DYYYClearButtonEdgeInset"]) {
+        return [NSString stringWithFormat:@"%.0f", [NSUserDefaults.standardUserDefaults floatForKey:identifier]];
     }
     if ([identifier isEqualToString:@"DYYYSpeedSettings"]) {
         NSString *saved = [NSUserDefaults.standardUserDefaults stringForKey:identifier];
@@ -769,7 +775,8 @@ static CGFloat DYYYInlineTextInputPreferredWidth(NSString *identifier, CGFloat c
         @"DYYYElementScale", @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYAutoHideSpeedButtonTime",
         @"DYYYFilterLowLikes", @"DYYYFilterTimeLimit", @"DYYYGlobalTransparency",
         @"DYYYIPLabelScale", @"DYYYIPLabelVerticalOffset", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius",
-        @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent"
+        @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
+        @"DYYYSpeedButtonEdgeInset", @"DYYYClearButtonEdgeInset"
     ]];
     NSSet<NSString *> *longIdentifiers = [NSSet setWithArray:@[
         @"DYYYCommentContent", @"DYYYInterfaceDownload", @"DYYYRemoteConfigURL", @"DYYYSpeedSettings"
@@ -816,6 +823,24 @@ static NSString *DYYYCommitInlineTextInput(AWESettingItemModel *itemModel, NSStr
         value = [NSString stringWithFormat:@"%ld", (long)size];
         speedButtonSize = size;
         DYYYRefreshFloatSpeedButton();
+    } else if ([identifier isEqualToString:@"DYYYSpeedButtonEdgeInset"] || [identifier isEqualToString:@"DYYYClearButtonEdgeInset"]) {
+        if (value.length == 0) {
+            [DYYYUtils showToast:@"请输入有效的贴边距离"];
+            return nil;
+        }
+        NSScanner *scanner = [NSScanner scannerWithString:value];
+        CGFloat inset = 0.0;
+        if (![scanner scanDouble:&inset] || inset < 0.0 || inset > 100.0 || !scanner.isAtEnd) {
+            [DYYYUtils showToast:@"请输入0-100之间的有效数值"];
+            return nil;
+        }
+        [NSUserDefaults.standardUserDefaults setFloat:inset forKey:identifier];
+        value = [NSString stringWithFormat:@"%.0f", inset];
+        if ([identifier isEqualToString:@"DYYYSpeedButtonEdgeInset"]) {
+            DYYYRefreshFloatSpeedButton();
+        } else {
+            reloadClearButtonConfiguration();
+        }
     } else if ([identifier isEqualToString:@"DYYYSpeedSettings"]) {
         if (value.length == 0) {
             [DYYYUtils showToast:@"请输入有效的倍速数值"];
@@ -5314,6 +5339,19 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       buttonSizeItem.isEnable = YES;
       buttonSizeItem.cellTappedBlock = nil;
       [speedButtonItems addObject:buttonSizeItem];
+
+      AWESettingItemModel *speedEdgeInsetItem = [[%c(AWESettingItemModel) alloc] init];
+      speedEdgeInsetItem.identifier = @"DYYYSpeedButtonEdgeInset";
+      speedEdgeInsetItem.title = @"快捷倍速按钮贴边距离";
+      CGFloat currentSpeedInset = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYSpeedButtonEdgeInset"];
+      speedEdgeInsetItem.detail = [NSString stringWithFormat:@"%.0f", currentSpeedInset];
+      speedEdgeInsetItem.type = 0;
+      speedEdgeInsetItem.svgIconImageName = @"ic_sticktoedge_dyyy_outlined_20";
+      speedEdgeInsetItem.cellType = 26;
+      speedEdgeInsetItem.colorStyle = 2;
+      speedEdgeInsetItem.isEnable = YES;
+      speedEdgeInsetItem.cellTappedBlock = nil;
+      [speedButtonItems addObject:speedEdgeInsetItem];
       [speedButtonItems addObject:speedSettingsItem];
 
       NSMutableArray<AWESettingItemModel *> *speedDependentItems = [NSMutableArray array];
@@ -5446,6 +5484,19 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       clearButtonSizeItem.isEnable = YES;
       clearButtonSizeItem.cellTappedBlock = nil;
       [clearButtonItems addObject:clearButtonSizeItem];
+
+      AWESettingItemModel *clearEdgeInsetItem = [[%c(AWESettingItemModel) alloc] init];
+      clearEdgeInsetItem.identifier = @"DYYYClearButtonEdgeInset";
+      clearEdgeInsetItem.title = @"清屏按钮贴边距离";
+      CGFloat currentClearInset = [[NSUserDefaults standardUserDefaults] floatForKey:@"DYYYClearButtonEdgeInset"];
+      clearEdgeInsetItem.detail = [NSString stringWithFormat:@"%.0f", currentClearInset];
+      clearEdgeInsetItem.type = 0;
+      clearEdgeInsetItem.svgIconImageName = @"ic_sticktoedge_dyyy_outlined_20";
+      clearEdgeInsetItem.cellType = 26;
+      clearEdgeInsetItem.colorStyle = 2;
+      clearEdgeInsetItem.isEnable = YES;
+      clearEdgeInsetItem.cellTappedBlock = nil;
+      [clearButtonItems addObject:clearEdgeInsetItem];
 
       // 添加清屏按钮自定义图标选项
       AWESettingItemModel *clearButtonIcon = [DYYYSettingsHelper createIconCustomizationItemWithIdentifier:@"DYYYClearButtonIcon"
