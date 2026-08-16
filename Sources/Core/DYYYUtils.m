@@ -2152,10 +2152,18 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     if (![scanner scanHexLongLong:&value]) {
         return [UIColor whiteColor];
     }
-    CGFloat r = ((value >> 16) & 0xFF) / 255.0;
-    CGFloat g = ((value >> 8) & 0xFF) / 255.0;
-    CGFloat b = (value & 0xFF) / 255.0;
-    CGFloat a = (hex.length == 8) ? ((value >> 24) & 0xFF) / 255.0 : 1.0;
+    CGFloat r, g, b, a;
+    if (hex.length == 8) {
+        r = ((value >> 24) & 0xFF) / 255.0;
+        g = ((value >> 16) & 0xFF) / 255.0;
+        b = ((value >> 8) & 0xFF) / 255.0;
+        a = (value & 0xFF) / 255.0;
+    } else {
+        r = ((value >> 16) & 0xFF) / 255.0;
+        g = ((value >> 8) & 0xFF) / 255.0;
+        b = (value & 0xFF) / 255.0;
+        a = 1.0;
+    }
     return [UIColor colorWithRed:r green:g blue:b alpha:a];
 }
 
