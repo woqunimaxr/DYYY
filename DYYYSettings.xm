@@ -1046,6 +1046,23 @@ static void DYYYSetInlineCellChrome(AWESettingsTableViewCell *cell) {
     } else if (!usesInlineControl && (cellType == 20 || cellType == 26) && cell.itemModel.cellTappedBlock != nil) {
         arrow.hidden = NO;
         arrow.alpha = 1.0;
+        // 为“详情文本 + 右侧箭头”预留空间，避免 16 进制文本与箭头重叠
+        if (detailLabel) {
+            detailLabel.numberOfLines = 1;
+            CGFloat arrowMinX = CGRectGetMinX(arrow.frame);
+            if (arrowMinX > 0) {
+                CGFloat maxTextX = arrowMinX - 6.0;
+                CGRect lf = detailLabel.frame;
+                if (CGRectGetMaxX(lf) > maxTextX) {
+                    CGFloat minX = CGRectGetMinX(lf);
+                    CGFloat width = MAX(maxTextX - minX, 1.0);
+                    lf.origin.x = maxTextX - width; // 右对齐，右边界不越过箭头
+                    lf.size.width = width;
+                    detailLabel.frame = lf;
+                    detailLabel.lineBreakMode = NSLineBreakByTruncatingHead;
+                }
+            }
+        }
     }
 }
 
