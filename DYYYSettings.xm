@@ -2514,6 +2514,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       // 【弹幕】
       NSMutableArray<AWESettingItemModel *> *danmuItems = [NSMutableArray array];
+      __weak NSMutableArray<AWESettingItemModel *> *weakDanmuItems = danmuItems;
       NSArray *danmuSettings = @[
           @{@"identifier" : @"DYYYEnableDanmuColor",
             @"title" : @"启用弹幕改色",
@@ -2551,7 +2552,13 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           if ([item.identifier isEqualToString:@"DYYYDanmuColor"]) {
               item.detail = @"";
               item.cellTappedBlock = DYYYColorPickerTapBlock(item, @"DYYYDanmuColor", @"自定弹幕颜色已保存");
-          } else if ([item.identifier isEqualToString:@"DYYYDanmuRandom"]) {
+          }
+          [danmuItems addObject:item];
+      }
+
+      // 弹幕开关互斥联动：弹幕随机颜色 <-> 旋转彩虹弹幕
+      for (AWESettingItemModel *item in danmuItems) {
+          if ([item.identifier isEqualToString:@"DYYYDanmuRandom"]) {
               __weak AWESettingItemModel *weakRandomItem = item;
               item.switchChangedBlock = ^{
                   AWESettingItemModel *strongRandomItem = weakRandomItem;
@@ -2563,6 +2570,15 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                   [DYYYSettingsHelper setUserDefaults:@(isRandomOn) forKey:@"DYYYDanmuRandom"];
                   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
                   if (isRandomOn) {
+                      // 互斥：关闭旋转彩虹弹幕
+                      [defaults setObject:@(NO) forKey:@"DYYYDanmuRainbowRotating"];
+                      for (AWESettingItemModel *di in weakDanmuItems) {
+                          if ([di.identifier isEqualToString:@"DYYYDanmuRainbowRotating"]) {
+                              di.isSwitchOn = NO;
+                              [di refreshCell];
+                          }
+                      }
+                      // 备份当前自定颜色并写入 random
                       NSString *currentColor = [defaults stringForKey:@"DYYYDanmuColor"];
                       if (currentColor.length == 0 || [currentColor isEqualToString:@"random"]) {
                           currentColor = @"FFFFFF";
@@ -2577,8 +2593,38 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                   [DYYYSettingsHelper handleConflictsAndDependenciesForSetting:@"DYYYDanmuRandom" isEnabled:isRandomOn];
                   [strongRandomItem refreshCell];
               };
+          } else if ([item.identifier isEqualToString:@"DYYYDanmuRainbowRotating"]) {
+              __weak AWESettingItemModel *weakRainbowItem = item;
+              item.switchChangedBlock = ^{
+                  AWESettingItemModel *strongRainbowItem = weakRainbowItem;
+                  if (!strongRainbowItem || !strongRainbowItem.isEnable) {
+                      return;
+                  }
+                  BOOL isRainbowOn = !strongRainbowItem.isSwitchOn;
+                  strongRainbowItem.isSwitchOn = isRainbowOn;
+                  [DYYYSettingsHelper setUserDefaults:@(isRainbowOn) forKey:@"DYYYDanmuRainbowRotating"];
+                  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+                  if (isRainbowOn) {
+                      // 互斥：关闭弹幕随机颜色
+                      [defaults setObject:@(NO) forKey:@"DYYYDanmuRandom"];
+                      for (AWESettingItemModel *di in weakDanmuItems) {
+                          if ([di.identifier isEqualToString:@"DYYYDanmuRandom"]) {
+                              di.isSwitchOn = NO;
+                              [di refreshCell];
+                          }
+                      }
+                      // 若自定颜色被 random 覆盖，恢复原 hex
+                      NSString *danmuColor = [defaults stringForKey:@"DYYYDanmuColor"];
+                      if ([danmuColor isEqualToString:@"random"]) {
+                          NSString *storedColor = [defaults stringForKey:@"DYYYDanmuColorStored"];
+                          [defaults setObject:(storedColor.length > 0 ? storedColor : @"FFFFFF") forKey:@"DYYYDanmuColor"];
+                      }
+                  }
+                  [defaults synchronize];
+                  [DYYYSettingsHelper handleConflictsAndDependenciesForSetting:@"DYYYDanmuRainbowRotating" isEnabled:isRainbowOn];
+                  [strongRainbowItem refreshCell];
+              };
           }
-          [danmuItems addObject:item];
       }
 
       // 【属地标签】
