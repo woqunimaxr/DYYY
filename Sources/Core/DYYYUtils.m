@@ -2433,9 +2433,9 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     NSScanner *scanner = [NSScanner scannerWithString:colorString];
 
     BOOL scanSuccess = NO;
-    if (colorString.length == 8) {  // AARRGGBB
+    if (colorString.length == 8) {  // RRGGBBAA（与取色器 rgbaHexStringFromColor 输出一致）
         if ([scanner scanHexInt:&hexValue]) {
-            alpha = ((hexValue & 0xFF000000) >> 24) / 255.0;
+            alpha = (hexValue & 0x000000FF) / 255.0;
             scanSuccess = YES;
         }
     } else if (colorString.length == 6) {  // RRGGBB

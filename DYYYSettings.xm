@@ -684,7 +684,7 @@ static NSSet<NSString *> *DYYYInlineTextInputIdentifiers(void) {
           @"DYYYMsgTitle", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius", @"DYYYRemoteConfigURL",
           @"DYYYSelfTitle",
           @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
-          @"DYYYVideoBGColor", @"DYYYDanmuColor", @"DYYYLabelColor", @"DYYYProgressLabelColor",
+          @"DYYYDanmuColor",
           @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", @"DYYYAutoHideSpeedButtonTime",
           @"DYYYSpeedButtonEdgeInset", @"DYYYClearButtonEdgeInset"
       ]];
@@ -984,6 +984,49 @@ static BOOL DYYYCellUsesInlineControl(AWESettingsTableViewCell *cell) {
     return options.superview != nil || textField != nil;
 }
 
+// 生成“弹出系统取色器”的 cellTappedBlock：选中后把 RRGGBBAA 写入偏好，刷新单元格
+static void (^DYYYColorPickerTapBlock(AWESettingItemModel *item, NSString *prefKey, NSString *toastMessage))(void) {
+    return ^{
+        if (!item.isEnable) {
+            return;
+        }
+        if (!(@available(iOS 14.0, *))) {
+            [DYYYUtils showToast:@"需要 iOS 14 及以上"];
+            return;
+        }
+        NSString *currentHex = [[NSUserDefaults standardUserDefaults] stringForKey:prefKey];
+        UIColorPickerViewController *colorPicker = [[UIColorPickerViewController alloc] init];
+        colorPicker.supportsAlpha = YES;
+        colorPicker.selectedColor = [DYYYUtils colorFromRGBAHexString:currentHex];
+
+        DYYYSpeedColorPickerDelegate *pickerDelegate = [[DYYYSpeedColorPickerDelegate alloc] init];
+        void (^applyColor)(UIColor *) = ^(UIColor *color) {
+            NSString *hex = [DYYYUtils rgbaHexStringFromColor:color];
+            NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+            [defaults setObject:hex forKey:prefKey];
+            [defaults synchronize];
+            item.detail = @""; // 不在界面显示十六进制码（颜色保存在偏好中），避免与右侧箭头重叠
+            [item refreshCell];
+        };
+        pickerDelegate.colorChangeBlock = ^(UIColor *color) {
+            applyColor(color);
+        };
+        pickerDelegate.completionBlock = ^(UIColor *color) {
+            applyColor(color);
+            if (toastMessage.length > 0) {
+                [DYYYUtils showToast:toastMessage];
+            }
+        };
+
+        static char kDYYYColorPickerDelegateKey;
+        colorPicker.delegate = pickerDelegate;
+        objc_setAssociatedObject(colorPicker, &kDYYYColorPickerDelegateKey, pickerDelegate, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        UIViewController *topVC = topView();
+        [topVC presentViewController:colorPicker animated:YES completion:nil];
+    };
+}
+
 static void DYYYSetInlineCellChrome(AWESettingsTableViewCell *cell) {
     BOOL usesInlineControl = DYYYCellUsesInlineControl(cell);
     NSString *identifier = cell.itemModel.identifier ?: @"";
@@ -1046,23 +1089,6 @@ static void DYYYSetInlineCellChrome(AWESettingsTableViewCell *cell) {
     } else if (!usesInlineControl && (cellType == 20 || cellType == 26) && cell.itemModel.cellTappedBlock != nil) {
         arrow.hidden = NO;
         arrow.alpha = 1.0;
-        // 为“详情文本 + 右侧箭头”预留空间，避免 16 进制文本与箭头重叠
-        if (detailLabel) {
-            detailLabel.numberOfLines = 1;
-            CGFloat arrowMinX = CGRectGetMinX(arrow.frame);
-            if (arrowMinX > 0) {
-                CGFloat maxTextX = arrowMinX - 6.0;
-                CGRect lf = detailLabel.frame;
-                if (CGRectGetMaxX(lf) > maxTextX) {
-                    CGFloat minX = CGRectGetMinX(lf);
-                    CGFloat width = MAX(maxTextX - minX, 1.0);
-                    lf.origin.x = maxTextX - width; // 右对齐，右边界不越过箭头
-                    lf.size.width = width;
-                    detailLabel.frame = lf;
-                    detailLabel.lineBreakMode = NSLineBreakByTruncatingHead;
-                }
-            }
-        }
     }
 }
 
@@ -2480,6 +2506,10 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                                }];
               };
           }
+          if ([item.identifier isEqualToString:@"DYYYProgressLabelColor"]) {
+              item.detail = @"";
+              item.cellTappedBlock = DYYYColorPickerTapBlock(item, @"DYYYProgressLabelColor", @"进度标签颜色已保存");
+          }
           [progressItems addObject:item];
       }
 
@@ -2568,6 +2598,10 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
                                                  [item refreshCell];
                                                }];
               };
+          }
+          if ([item.identifier isEqualToString:@"DYYYLabelColor"]) {
+              item.detail = @"";
+              item.cellTappedBlock = DYYYColorPickerTapBlock(item, @"DYYYLabelColor", @"属地标签颜色已保存");
           }
           [areaLabelItems addObject:item];
       }
@@ -3001,6 +3035,10 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       for (NSDictionary *dict in homeLayoutSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
+          if ([item.identifier isEqualToString:@"DYYYVideoBGColor"]) {
+              item.detail = @"";
+              item.cellTappedBlock = DYYYColorPickerTapBlock(item, @"DYYYVideoBGColor", @"视频背景颜色已保存");
+          }
           [homeLayoutItems addObject:item];
       }
 
@@ -5236,8 +5274,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
       AWESettingItemModel *speedColorItem = [[%c(AWESettingItemModel) alloc] init];
       speedColorItem.identifier = @"DYYYSpeedButtonColor";
       speedColorItem.title = @"快捷倍速按钮字体颜色";
-      NSString *currentColorHex = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYSpeedButtonColor"];
-      speedColorItem.detail = (currentColorHex.length > 0) ? currentColorHex : @"FFFFFF4D";
+      speedColorItem.detail = @""; // 不显示十六进制码，避免与右侧箭头重叠（颜色实际保存在偏好中）
       speedColorItem.type = 0;
       speedColorItem.svgIconImageName = @"ic_pensketch_outlined_20";
       speedColorItem.cellType = 20;
@@ -5250,7 +5287,8 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
         if (@available(iOS 14.0, *)) {
           UIColorPickerViewController *colorPicker = [[UIColorPickerViewController alloc] init];
           colorPicker.supportsAlpha = YES;
-          colorPicker.selectedColor = [DYYYUtils colorFromRGBAHexString:speedColorItem.detail];
+          NSString *pickerHex = [[NSUserDefaults standardUserDefaults] stringForKey:@"DYYYSpeedButtonColor"];
+          colorPicker.selectedColor = [DYYYUtils colorFromRGBAHexString:pickerHex];
 
           DYYYSpeedColorPickerDelegate *pickerDelegate = [[DYYYSpeedColorPickerDelegate alloc] init];
           void (^applyColor)(UIColor *) = ^(UIColor *color) {
@@ -5258,7 +5296,7 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
             NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
             [defaults setObject:hex forKey:@"DYYYSpeedButtonColor"];
             [defaults synchronize];
-            speedColorItem.detail = hex;
+            speedColorItem.detail = @"";
             [speedColorItem refreshCell];
             if (speedButton) {
               [speedButton dyyyApplyTitleColor];
