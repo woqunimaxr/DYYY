@@ -2425,24 +2425,19 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
     return NO;
 }
 
-/** 私有：解析单个十六进制颜色（支持 #RGB / #RRGGBB / #AARRGGBB，# 可省略），无效返回 nil。 */
+/** 私有：解析单个十六进制颜色（支持 #RGB / #RRGGBB / #RRGGBBAA，# 可省略），无效返回 nil。 */
 + (UIColor *)_colorFromHexString:(NSString *)hexString {
     NSString *colorString = [[hexString stringByReplacingOccurrencesOfString:@"#" withString:@""] uppercaseString];
-    CGFloat alpha = 1.0;
     unsigned int hexValue = 0;
     NSScanner *scanner = [NSScanner scannerWithString:colorString];
 
     BOOL scanSuccess = NO;
-    if (colorString.length == 8) {  // RRGGBBAA（与取色器 rgbaHexStringFromColor 输出一致）
-        if ([scanner scanHexInt:&hexValue]) {
-            alpha = (hexValue & 0x000000FF) / 255.0;
-            scanSuccess = YES;
-        }
-    } else if (colorString.length == 6) {  // RRGGBB
+    NSUInteger length = colorString.length;
+    if (length == 8 || length == 6) {  // 8 位 RRGGBBAA / 6 位 RRGGBB
         if ([scanner scanHexInt:&hexValue]) {
             scanSuccess = YES;
         }
-    } else if (colorString.length == 3) {  // RGB (简写)
+    } else if (length == 3) {  // RGB (简写)
         NSString *r = [colorString substringWithRange:NSMakeRange(0, 1)];
         NSString *g = [colorString substringWithRange:NSMakeRange(1, 1)];
         NSString *b = [colorString substringWithRange:NSMakeRange(2, 1)];
@@ -2450,16 +2445,25 @@ static os_unfair_lock _staticColorCreationLock = OS_UNFAIR_LOCK_INIT;
         NSScanner *expandedScanner = [NSScanner scannerWithString:expandedColorString];
         if ([expandedScanner scanHexInt:&hexValue]) {
             scanSuccess = YES;
+            length = 6;
         }
     }
     if (!scanSuccess) {
         return nil;  // 返回 nil 表示解析失败
     }
-    CGFloat red = ((hexValue & 0x00FF0000) >> 16) / 255.0;
-    CGFloat green = ((hexValue & 0x0000FF00) >> 8) / 255.0;
-    CGFloat blue = (hexValue & 0x000000FF) / 255.0;
-
-    return [UIColor colorWithRed:red green:green blue:blue alpha:alpha];
+    CGFloat r, g, b, a;
+    if (length == 8) {  // RRGGBBAA（与取色器 rgbaHexStringFromColor 输出一致）
+        r = ((hexValue >> 24) & 0xFF) / 255.0;
+        g = ((hexValue >> 16) & 0xFF) / 255.0;
+        b = ((hexValue >> 8) & 0xFF) / 255.0;
+        a = (hexValue & 0xFF) / 255.0;
+    } else {  // 6 位 RRGGBB
+        r = ((hexValue >> 16) & 0xFF) / 255.0;
+        g = ((hexValue >> 8) & 0xFF) / 255.0;
+        b = (hexValue & 0xFF) / 255.0;
+        a = 1.0;
+    }
+    return [UIColor colorWithRed:r green:g blue:b alpha:a];
 }
 
 /** 私有：生成一个随机颜色。 */
