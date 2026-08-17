@@ -99,7 +99,7 @@
 
           // ===== 互斥激活配置 =====
           // 当源设置项关闭时，目标设置项才能激活
-          @"mutualExclusions" : @{@"DYYYDanmuRainbowRotating" : @[ @"DYYYDanmuColor" ], @"DYYYEnableRandomGradient" : @[ @"DYYYLabelColor" ], @"DYYYSkipPhoto": @[@"DYYYSkipPhotoText"], @"DYYYElementsuofang": @[ @"DYYYNicknameScale", @"DYYYDescriptionScale", @"DYYYIPLabelScale", @"DYYYNicknameVerticalOffset", @"DYYYDescriptionVerticalOffset", @"DYYYIPLabelVerticalOffset" ]},
+          @"mutualExclusions" : @{@"DYYYDanmuRainbowRotating" : @[ @"DYYYDanmuColor" ], @"DYYYDanmuRandom" : @[ @"DYYYDanmuColor" ], @"DYYYEnableRandomGradient" : @[ @"DYYYLabelColor" ], @"DYYYSkipPhoto": @[@"DYYYSkipPhotoText"], @"DYYYElementsuofang": @[ @"DYYYNicknameScale", @"DYYYDescriptionScale", @"DYYYIPLabelScale", @"DYYYNicknameVerticalOffset", @"DYYYDescriptionVerticalOffset", @"DYYYIPLabelVerticalOffset" ]},
 
           // ===== 值依赖配置 =====
           // 基于字符串值的依赖关系

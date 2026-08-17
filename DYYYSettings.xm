@@ -684,7 +684,6 @@ static NSSet<NSString *> *DYYYInlineTextInputIdentifiers(void) {
           @"DYYYMsgTitle", @"DYYYNicknameScale", @"DYYYNicknameVerticalOffset", @"DYYYNotificationCornerRadius", @"DYYYRemoteConfigURL",
           @"DYYYSelfTitle",
           @"DYYYSheetBlurTransparent", @"DYYYTabBarHeight", @"DYYYTimelineVerticalPosition", @"DYYYTopBarTransparent",
-          @"DYYYDanmuColor",
           @"DYYYEnableFloatClearButtonSize", @"DYYYSpeedButtonSize", @"DYYYSpeedSettings", @"DYYYAutoHideSpeedButtonTime",
           @"DYYYSpeedButtonEdgeInset", @"DYYYClearButtonEdgeInset"
       ]];
@@ -2524,9 +2523,17 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
           @{
               @"identifier" : @"DYYYDanmuColor",
               @"title" : @"自定弹幕颜色",
-              @"subTitle" : @"填入 random 使用随机颜色弹幕",
-              @"detail" : @"十六进制",
+              @"subTitle" : @"点击使用颜色选择器设置弹幕颜色",
+              @"detail" : @"",
               @"cellType" : @20,
+              @"imageName" : @"ic_dansquarenut_outlined_20"
+          },
+          @{
+              @"identifier" : @"DYYYDanmuRandom",
+              @"title" : @"弹幕随机颜色",
+              @"subTitle" : @"勾选后自定弹幕颜色使用随机颜色（不可编辑）",
+              @"detail" : @"",
+              @"cellType" : @37,
               @"imageName" : @"ic_dansquarenut_outlined_20"
           },
           @{
@@ -2541,6 +2548,36 @@ void showDYYYSettingsVC(UIViewController *rootVC, BOOL hasAgreed) {
 
       for (NSDictionary *dict in danmuSettings) {
           AWESettingItemModel *item = [DYYYSettingsHelper createSettingItem:dict cellTapHandlers:cellTapHandlers];
+          if ([item.identifier isEqualToString:@"DYYYDanmuColor"]) {
+              item.detail = @"";
+              item.cellTappedBlock = DYYYColorPickerTapBlock(item, @"DYYYDanmuColor", @"自定弹幕颜色已保存");
+          } else if ([item.identifier isEqualToString:@"DYYYDanmuRandom"]) {
+              __weak AWESettingItemModel *weakRandomItem = item;
+              item.switchChangedBlock = ^{
+                  AWESettingItemModel *strongRandomItem = weakRandomItem;
+                  if (!strongRandomItem || !strongRandomItem.isEnable) {
+                      return;
+                  }
+                  BOOL isRandomOn = !strongRandomItem.isSwitchOn;
+                  strongRandomItem.isSwitchOn = isRandomOn;
+                  [DYYYSettingsHelper setUserDefaults:@(isRandomOn) forKey:@"DYYYDanmuRandom"];
+                  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+                  if (isRandomOn) {
+                      NSString *currentColor = [defaults stringForKey:@"DYYYDanmuColor"];
+                      if (currentColor.length == 0 || [currentColor isEqualToString:@"random"]) {
+                          currentColor = @"FFFFFF";
+                      }
+                      [defaults setObject:currentColor forKey:@"DYYYDanmuColorStored"];
+                      [defaults setObject:@"random" forKey:@"DYYYDanmuColor"];
+                  } else {
+                      NSString *storedColor = [defaults stringForKey:@"DYYYDanmuColorStored"];
+                      [defaults setObject:(storedColor.length > 0 ? storedColor : @"FFFFFF") forKey:@"DYYYDanmuColor"];
+                  }
+                  [defaults synchronize];
+                  [DYYYSettingsHelper handleConflictsAndDependenciesForSetting:@"DYYYDanmuRandom" isEnabled:isRandomOn];
+                  [strongRandomItem refreshCell];
+              };
+          }
           [danmuItems addObject:item];
       }
 
